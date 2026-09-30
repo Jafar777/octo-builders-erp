@@ -1,23 +1,29 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Mail, Phone, MapPin } from "lucide-react";
+import { AtSign, Globe, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
+import { contactLinks } from "@/lib/contactLinks";
+
+const ICONS = {
+  email: Mail,
+  phone: Phone,
+  whatsapp: MessageCircle,
+  website: Globe,
+  instagram: AtSign,
+  address: MapPin,
+};
 
 export default function Contact({ data }) {
-  const { lang } = useLanguage();
+  const { t, lang } = useLanguage();
   const title = data?.title?.[lang] || "";
   const body = data?.body?.[lang] || "";
-
-  const items = [
-    { icon: Mail, value: data?.email, href: data?.email ? `mailto:${data.email}` : null },
-    { icon: Phone, value: data?.phone, href: data?.phone ? `tel:${data.phone}` : null },
-    { icon: MapPin, value: data?.address?.[lang], href: null },
-  ].filter((i) => i.value);
+  const items = contactLinks(data, lang);
 
   return (
-    <section id="contact" className="bg-brand-navy-light py-24 sm:py-32">
-      <div className="mx-auto max-w-3xl px-6 text-center lg:px-8">
+    <section id="contact" className="relative overflow-hidden bg-brand-navy py-24 sm:py-32">
+      <div className="pointer-events-none absolute -top-40 start-1/2 h-80 w-[40rem] -translate-x-1/2 rounded-full bg-brand-orange/10 blur-3xl rtl:translate-x-1/2" />
+      <div className="relative mx-auto max-w-5xl px-6 text-center lg:px-8">
         <motion.h2
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -32,43 +38,49 @@ export default function Contact({ data }) {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.5 }}
           transition={{ duration: 0.7, delay: 0.1 }}
-          className="mt-4 text-lg text-white/60"
+          className="mx-auto mt-4 max-w-2xl text-lg text-white/60"
         >
           {body}
         </motion.p>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.5 }}
-          transition={{ duration: 0.7, delay: 0.2 }}
-          className="mt-10 flex flex-wrap items-center justify-center gap-4"
-        >
-          {items.map(({ icon: Icon, value, href }, i) => {
-            const content = (
-              <>
-                <Icon size={18} className="text-white/50" />
-                <span>{value}</span>
-              </>
-            );
-            return href ? (
-              <a
-                key={i}
-                href={href}
-                className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm text-white/80 transition-colors hover:border-white/30 hover:text-white"
+        <div className="mt-12 flex flex-wrap justify-center gap-4">
+          {items.map(({ key, value, href }, i) => {
+            const Icon = ICONS[key];
+            const Tag = href ? "a" : "div";
+            return (
+              <motion.div
+                key={key}
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.4 }}
+                transition={{ duration: 0.6, delay: i * 0.07, ease: [0.22, 1, 0.36, 1] }}
+                className="w-full sm:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.667rem)]"
               >
-                {content}
-              </a>
-            ) : (
-              <span
-                key={i}
-                className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm text-white/80"
-              >
-                {content}
-              </span>
+                <Tag
+                  {...(href
+                    ? { href, target: href.startsWith("http") ? "_blank" : undefined, rel: "noopener noreferrer" }
+                    : {})}
+                  className="group flex h-full items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-start transition-colors hover:border-brand-orange/40 hover:bg-white/[0.06]"
+                >
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-orange/15 text-brand-orange transition-transform group-hover:scale-110">
+                    <Icon size={20} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-xs uppercase tracking-wider text-white/40">
+                      {t(`sections.${key}`)}
+                    </span>
+                    <span
+                      className="mt-0.5 block truncate text-sm text-white"
+                      dir={key === "address" ? undefined : "ltr"}
+                    >
+                      {value}
+                    </span>
+                  </span>
+                </Tag>
+              </motion.div>
             );
           })}
-        </motion.div>
+        </div>
       </div>
     </section>
   );

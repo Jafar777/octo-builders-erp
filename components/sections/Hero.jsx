@@ -69,7 +69,7 @@ export default function Hero({ data }) {
         animate={{ opacity: 1 }}
         transition={{ delay: 1.2, duration: 0.8 }}
         aria-label={t("nav.about")}
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/70 transition-colors hover:text-white"
+        className="absolute bottom-24 left-1/2 -translate-x-1/2 text-white/70 transition-colors hover:text-white"
       >
         <ChevronDown size={28} className="animate-bounce-y" />
       </motion.button>

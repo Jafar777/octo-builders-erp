@@ -3,9 +3,10 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
-import { Mail, Phone, MapPin } from "lucide-react";
+import { AtSign, Globe, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { scrollToSection, scrollToTop } from "@/lib/scrollNav";
+import { contactLinks } from "@/lib/contactLinks";
 
 const SECTION_LINKS = [
   { key: "about", id: "about" },
@@ -13,6 +14,15 @@ const SECTION_LINKS = [
   { key: "projects", id: "projects" },
   { key: "contact", id: "contact" },
 ];
+
+const CONTACT_ICONS = {
+  email: Mail,
+  phone: Phone,
+  whatsapp: MessageCircle,
+  website: Globe,
+  instagram: AtSign,
+  address: MapPin,
+};
 
 export default function FooterClient({ contact }) {
   const { t, lang } = useLanguage();
@@ -83,28 +93,27 @@ export default function FooterClient({ contact }) {
             {t("footer.contact")}
           </h3>
           <ul className="mt-4 space-y-3 text-sm text-white/70">
-            {contact?.email && (
-              <li className="flex items-center gap-2">
-                <Mail size={16} className="shrink-0 text-white/40" />
-                <a href={`mailto:${contact.email}`} className="hover:text-white">
-                  {contact.email}
-                </a>
-              </li>
-            )}
-            {contact?.phone && (
-              <li className="flex items-center gap-2">
-                <Phone size={16} className="shrink-0 text-white/40" />
-                <a href={`tel:${contact.phone}`} className="hover:text-white">
-                  {contact.phone}
-                </a>
-              </li>
-            )}
-            {contact?.address?.[lang] && (
-              <li className="flex items-center gap-2">
-                <MapPin size={16} className="shrink-0 text-white/40" />
-                <span>{contact.address[lang]}</span>
-              </li>
-            )}
+            {contactLinks(contact, lang).map(({ key, value, href }) => {
+              const Icon = CONTACT_ICONS[key];
+              return (
+                <li key={key} className="flex items-center gap-2">
+                  <Icon size={16} className="shrink-0 text-white/40" />
+                  {href ? (
+                    <a
+                      href={href}
+                      target={href.startsWith("http") ? "_blank" : undefined}
+                      rel="noopener noreferrer"
+                      className="hover:text-white"
+                      dir={key === "address" ? undefined : "ltr"}
+                    >
+                      {value}
+                    </a>
+                  ) : (
+                    <span>{value}</span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       </div>

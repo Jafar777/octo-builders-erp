@@ -2,41 +2,12 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import SiteContent from "@/models/SiteContent";
 import { requireAdmin } from "@/lib/requireAdmin";
-
-const DEFAULTS = {
-  hero: {
-    mediaType: "image",
-    mediaUrl: "",
-    title: { ar: "نبني رؤيتك بإتقان", en: "We build your vision with precision" },
-    subtitle: { ar: "شركة مقاولات وتشييد رائدة", en: "A leading construction & contracting company" },
-  },
-  about: {
-    title: { ar: "من نحن", en: "About Us" },
-    body: { ar: "", en: "" },
-    imageUrl: "",
-  },
-  contact: {
-    title: { ar: "تواصل معنا", en: "Contact Us" },
-    body: { ar: "", en: "" },
-    email: "",
-    phone: "",
-    address: { ar: "", en: "" },
-  },
-};
-
-const SECTIONS = ["hero", "about", "contact"];
+import { getSiteContent } from "@/lib/siteData";
+import { SECTIONS } from "@/lib/siteContentDefaults";
+import { hasPartialBilingual } from "@/lib/validateBilingual";
 
 export async function GET() {
-  await connectDB();
-  const docs = await SiteContent.find({ key: { $in: SECTIONS } }).lean();
-
-  const result = {};
-  for (const section of SECTIONS) {
-    const doc = docs.find((d) => d.key === section);
-    result[section] = doc ? doc[section] : DEFAULTS[section];
-  }
-
-  return NextResponse.json(result);
+  return NextResponse.json(await getSiteContent());
 }
 
 export async function PUT(request) {
@@ -49,6 +20,9 @@ export async function PUT(request) {
 
   if (!SECTIONS.includes(section)) {
     return NextResponse.json({ error: "invalid_section" }, { status: 400 });
+  }
+  if (!data || typeof data !== "object" || hasPartialBilingual(data)) {
+    return NextResponse.json({ error: "bilingual_required" }, { status: 400 });
   }
 
   await connectDB();

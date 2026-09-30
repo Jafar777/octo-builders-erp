@@ -2,30 +2,39 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import Project from "@/models/Project";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { getProjects } from "@/lib/siteData";
+import { projectPayload } from "@/lib/itemPayload";
 
 export async function GET() {
-  await connectDB();
-  const projects = await Project.find().sort({ order: 1, createdAt: 1 }).lean();
-  return NextResponse.json({
-    projects: projects.map((p) => ({ ...p, id: p._id.toString(), _id: undefined })),
-  });
+  return NextResponse.json({ projects: await getProjects() });
 }
 
 export async function POST(request) {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const body = await request.json();
+  const data = projectPayload(await request.json());
+  if (!data) return NextResponse.json({ error: "bilingual_required" }, { status: 400 });
+
   await connectDB();
-
   const count = await Project.countDocuments();
-  const project = await Project.create({
-    title: body.title,
-    description: body.description,
-    imageUrl: body.imageUrl || "",
-    link: body.link || "",
-    order: count,
-  });
+  const doc = await Project.create({ ...data, order: count });
 
-  return NextResponse.json({ id: project._id.toString() }, { status: 201 });
+  return NextResponse.json({ id: doc._id.toString() }, { status: 201 });
+}
+
+// Body: { ids: [...] } in the new display order.
+export async function PATCH(request) {
+  const session = await requireAdmin();
+  if (!session) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+
+  const { ids } = await request.json();
+  if (!Array.isArray(ids)) return NextResponse.json({ error: "invalid_order" }, { status: 400 });
+
+  await connectDB();
+  await Project.bulkWrite(
+    ids.map((id, order) => ({ updateOne: { filter: { _id: id }, update: { order } } }))
+  );
+
+  return NextResponse.json({ ok: true });
 }
