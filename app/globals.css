@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
+/* Octo Builders brand palette, sampled from the client's brand board. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0f2331;
+  --foreground: #f4f4f4;
 }
 
 @theme inline {
@@ -12,15 +13,57 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@theme {
+  --color-brand-navy: #0f2331;
+  --color-brand-navy-light: #16324a;
+  --color-brand-orange: #f37b20;
+  --color-brand-peach: #ef9957;
+  --color-brand-brown: #834618;
+  --color-brand-beige: #e1d9cc;
+  --color-brand-offwhite: #f4f4f4;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+html[dir="rtl"] body {
+  font-family: var(--font-tajawal), var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+::selection {
+  background: rgba(243, 123, 32, 0.35);
+}
+
+@keyframes kenburns {
+  0% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(1.12);
+  }
+}
+
+.animate-kenburns {
+  animation: kenburns 20s ease-in-out infinite alternate;
+}
+
+@keyframes bounce-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(8px);
+  }
+}
+
+.animate-bounce-y {
+  animation: bounce-y 1.8s ease-in-out infinite;
 }
