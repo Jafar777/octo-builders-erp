@@ -6,6 +6,7 @@ import { formatDateTime } from "@/lib/formatTime";
 import Avatar from "@/components/erp/ui/Avatar";
 import { formatDuration, liveActiveMs, PRIORITY_STYLE, revisionLabel, STATUS_STYLE } from "@/components/erp/tasks/taskUi";
 import { PlanningBadges } from "@/components/erp/tasks/TaskPlanning";
+import Stars from "@/components/erp/tasks/Stars";
 
 export function StatusBadge({ status }) {
   const { t } = useLanguage();
@@ -77,6 +78,8 @@ export default function TaskRow({ task, lookups, now, onOpen, showAssignee = fal
           {formatDuration(liveActiveMs(task, now))}
         </span>
       )}
+
+      {task.stars > 0 && <Stars value={task.stars} size={13} />}
 
       <StatusBadge status={task.status} />
     </button>

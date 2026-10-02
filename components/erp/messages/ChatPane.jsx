@@ -29,7 +29,7 @@ import {
 } from "@/context/RealtimeContext";
 import { api, errorText } from "@/lib/clientApi";
 import { formatClock, formatDate } from "@/lib/formatTime";
-import { uploadFileToImageKit } from "@/lib/uploadFile";
+import { CHAT_UPLOAD_FOLDER, uploadFileToImageKit } from "@/lib/uploadFile";
 import Avatar from "@/components/erp/ui/Avatar";
 import ConversationInfo from "@/components/erp/messages/ConversationInfo";
 import { Skeleton } from "@/components/erp/ui/Loading";
@@ -305,7 +305,7 @@ export default function ChatPane({
     setUploading((n) => n + files.length);
     const results = await Promise.allSettled(
       files.map((file) =>
-        uploadFileToImageKit(file)
+        uploadFileToImageKit(file, { folder: CHAT_UPLOAD_FOLDER })
           .then((r) => ({ url: r.url, name: file.name, mime: file.type, size: file.size }))
           .finally(() => setUploading((n) => n - 1))
       )
@@ -385,7 +385,7 @@ export default function ChatPane({
   const byId = Object.fromEntries(messages.map((m) => [m.id, m]));
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* Header */}
       <div className="flex h-16 shrink-0 items-center gap-3 border-b border-white/10 px-3 sm:px-4">
         {onBack && (

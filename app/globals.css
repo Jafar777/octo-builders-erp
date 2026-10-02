@@ -41,6 +41,40 @@ html {
   background: rgba(243, 123, 32, 0.35);
 }
 
+/* Scrollbars: slim, rounded and translucent on the dark theme; orange while dragged. */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.16);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(255 255 255 / 0.32);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: rgb(243 123 32 / 0.8);
+}
+
+/* Firefox has no ::-webkit-scrollbar; setting these elsewhere would override the above. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(255 255 255 / 0.2) transparent;
+  }
+}
+
 @keyframes kenburns {
   0% {
     transform: scale(1);

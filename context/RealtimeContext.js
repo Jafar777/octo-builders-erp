@@ -50,7 +50,10 @@ export function RealtimeProvider({ children }) {
     (name) => {
       if (!client || !name) return null;
       counts.current.set(name, (counts.current.get(name) || 0) + 1);
-      return client.channel(name) || client.subscribe(name);
+      // Always subscribe() (it returns the existing channel): a release → acquire
+      // while the channel is still authorizing leaves it cancelled, and only
+      // subscribe() reinstates it. Otherwise Pusher drops it once it is authorized.
+      return client.subscribe(name);
     },
     [client]
   );

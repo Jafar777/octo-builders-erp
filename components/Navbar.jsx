@@ -11,6 +11,7 @@ import { useAuth } from "@/context/AuthContext";
 import { scrollToSection, scrollToTop } from "@/lib/scrollNav";
 import LanguageSwitch from "@/components/LanguageSwitch";
 import NotificationBell from "@/components/NotificationBell";
+import MessagesButton from "@/components/MessagesButton";
 
 const SECTION_LINKS = [
   { key: "about", id: "about" },
@@ -116,6 +117,7 @@ export default function Navbar() {
 
         <div className="hidden items-center gap-3 lg:flex">
           <LanguageSwitch groupId="lang-pill-desktop" />
+          {!loading && user && <MessagesButton />}
           {!loading && user && <NotificationBell />}
           {!loading && user && (
             <Link
@@ -176,7 +178,12 @@ export default function Navbar() {
 
               <div className="mt-2 flex items-center justify-between border-t border-white/10 px-4 py-3">
                 <LanguageSwitch compact groupId="lang-pill-mobile" />
-                {!loading && user && <NotificationBell />}
+                {!loading && user && (
+                  <span className="flex items-center gap-1">
+                    <MessagesButton linkOnly />
+                    <NotificationBell />
+                  </span>
+                )}
               </div>
 
               {!loading && user && (

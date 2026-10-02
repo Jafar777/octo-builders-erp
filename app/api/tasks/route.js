@@ -15,6 +15,7 @@ import {
   logActivity,
   nextRevisionFor,
   publishTaskChange,
+  starSummary,
   taskTitle,
 } from "@/lib/tasks";
 import { nextNumber } from "@/models/Counter";
@@ -67,7 +68,11 @@ export async function GET(request) {
   if (isObjectId(assignee) && view !== "mine") query.assignee = assignee;
 
   const tasks = await Task.find(query).sort({ updatedAt: -1 }).limit(500).lean();
-  return NextResponse.json({ tasks: await enrichTasks(tasks) });
+  return NextResponse.json({
+    tasks: await enrichTasks(tasks),
+    // My overall star rating, shown at the top of "My tasks".
+    rating: view === "mine" ? await starSummary(user.id) : undefined,
+  });
 }
 
 function parseDate(v) {

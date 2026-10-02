@@ -12,6 +12,7 @@ import { Button, PageHeader } from "@/components/erp/ui/fields";
 import TaskRow from "@/components/erp/tasks/TaskRow";
 import TaskForm from "@/components/erp/tasks/TaskForm";
 import TaskDrawer from "@/components/erp/tasks/TaskDrawer";
+import Stars from "@/components/erp/tasks/Stars";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { useNow } from "@/components/erp/tasks/taskUi";
 import { SkeletonList } from "@/components/erp/ui/Loading";
@@ -25,6 +26,7 @@ export default function MyTasks({ meId }) {
   const searchParams = useSearchParams();
   const lookups = useTaskLookups();
   const [tasks, setTasks] = useState([]);
+  const [rating, setRating] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("active");
   const [creating, setCreating] = useState(false);
@@ -32,7 +34,10 @@ export default function MyTasks({ meId }) {
 
   const load = useCallback(async () => {
     const data = await api("/api/tasks?view=mine").catch(() => null);
-    if (data) setTasks(data.tasks);
+    if (data) {
+      setTasks(data.tasks);
+      setRating(data.rating || null);
+    }
     setLoaded(true);
   }, []);
 
@@ -88,6 +93,24 @@ export default function MyTasks({ meId }) {
           </Button>
         }
       />
+
+      {rating && (
+        <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-4">
+          <span className="text-sm text-white/60">{t("erp.tasks.myRating")}</span>
+          {rating.count > 0 ? (
+            <>
+              <span className="flex items-center gap-2" dir="ltr">
+                <span className="text-2xl font-bold">{rating.average.toFixed(1)}</span>
+                <span className="text-sm text-white/40">/ 5</span>
+              </span>
+              <Stars value={rating.average} size={20} />
+              <span className="text-xs text-white/45">{t("erp.tasks.ratedTasks", { n: rating.count })}</span>
+            </>
+          ) : (
+            <span className="text-sm text-white/40">{t("erp.tasks.noRating")}</span>
+          )}
+        </div>
+      )}
 
       <div className="relative mb-6 flex gap-1 border-b border-white/10">
         {TABS.map((key) => (

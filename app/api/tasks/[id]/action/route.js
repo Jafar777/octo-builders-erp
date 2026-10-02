@@ -26,7 +26,7 @@ const ASSIGNEE_ACTIONS = ["start", "pause", "resume", "help", "submit", "cancel"
 //   start | pause | resume | cancel
 //   help    { helperId, note }                 → creates a help task for the colleague
 //   submit  { deliveryLink, employeeNotes }    → to the head (or done for meetings)
-//   review  { decision: approve|reject, ratings[], notes, rejectCause, newDueAt }
+//   review  { decision: approve|reject, stars, ratings[], notes, rejectCause, newDueAt }
 export async function POST(request, { params }) {
   const user = await requireStaff();
   if (!user) return forbidden();
@@ -132,7 +132,12 @@ async function review(user, task, body, now) {
   const validTags = new Set(settings.ratingTags.map((r) => r.key));
   const ratings = [...new Set((Array.isArray(body.ratings) ? body.ratings : []).filter((r) => validTags.has(r)))];
   const approve = body.decision === "approve";
+  // Every approved task carries a 1–5 star rating; on a rejection it is optional.
+  const stars = Math.round(Number(body.stars));
+  const validStars = stars >= 1 && stars <= 5;
+  if (approve && !validStars) return fail("stars_required");
 
+  task.stars = validStars ? stars : 0;
   task.status = approve ? "approved" : "rejected";
   task.reviewedBy = user.id;
   task.reviewedAt = now;
@@ -140,7 +145,7 @@ async function review(user, task, body, now) {
   task.headNotes = String(body.notes || "").slice(0, 2000);
   task.rejectCause = approve ? "" : ["employee", "management", "project"].includes(body.rejectCause) ? body.rejectCause : "employee";
   await task.save();
-  await logActivity(task._id, user, approve ? "approved" : "rejected", task.headNotes, { ratings, rejectCause: task.rejectCause });
+  await logActivity(task._id, user, approve ? "approved" : "rejected", task.headNotes, { ratings, stars: task.stars, rejectCause: task.rejectCause });
   await audit(user, approve ? "task.approved" : "task.rejected", { entityType: "task", entityId: task._id, summary: `#${task.number}` });
 
   const enriched = await enrichTask(task);

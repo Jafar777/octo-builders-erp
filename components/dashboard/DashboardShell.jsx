@@ -35,6 +35,7 @@ import { useAuth } from "@/context/AuthContext";
 import { usePollingFallback, useRealtime, useRealtimeEvent, userChannelName } from "@/context/RealtimeContext";
 import LanguageSwitch from "@/components/LanguageSwitch";
 import NotificationBell from "@/components/NotificationBell";
+import MessagesButton from "@/components/MessagesButton";
 import Avatar from "@/components/erp/ui/Avatar";
 import TopProgress from "@/components/erp/ui/TopProgress";
 import MiniChat from "@/components/erp/messages/MiniChat";
@@ -216,6 +217,7 @@ export default function DashboardShell({ user, children }) {
               className={`h-2.5 w-2.5 rounded-full ${connected ? "bg-emerald-400" : "bg-white/25"}`}
             />
             <LanguageSwitch compact />
+            <MessagesButton />
             <NotificationBell />
           </div>
         </header>

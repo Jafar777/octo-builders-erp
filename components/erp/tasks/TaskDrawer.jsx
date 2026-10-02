@@ -25,6 +25,7 @@ import Avatar from "@/components/erp/ui/Avatar";
 import { Button, ErrorText, Input, Label, Select } from "@/components/erp/ui/fields";
 import { StatusBadge, taskHeading } from "@/components/erp/tasks/TaskRow";
 import TaskForm from "@/components/erp/tasks/TaskForm";
+import Stars from "@/components/erp/tasks/Stars";
 import { DependencyPicker, recurrenceText } from "@/components/erp/tasks/TaskPlanning";
 import { Skeleton, SkeletonText } from "@/components/erp/ui/Loading";
 import {
@@ -51,6 +52,7 @@ function ReviewForm({ task, lookups, onDone }) {
   const { t, lang } = useLanguage();
   const [decision, setDecision] = useState("approve");
   const [ratings, setRatings] = useState([]);
+  const [stars, setStars] = useState(0);
   const [notes, setNotes] = useState("");
   const [cause, setCause] = useState("employee");
   const [newDueAt, setNewDueAt] = useState("");
@@ -68,6 +70,7 @@ function ReviewForm({ task, lookups, onDone }) {
         body: {
           action: "review",
           decision,
+          stars,
           ratings,
           notes,
           rejectCause: cause,
@@ -103,6 +106,11 @@ function ReviewForm({ task, lookups, onDone }) {
             {t(`erp.tasks.${d}`)}
           </button>
         ))}
+      </div>
+
+      <div>
+        <Label>{t("erp.tasks.stars")}</Label>
+        <Stars value={stars} onChange={setStars} size={26} />
       </div>
 
       <div>
@@ -159,7 +167,7 @@ function ReviewForm({ task, lookups, onDone }) {
       )}
 
       <ErrorText>{error}</ErrorText>
-      <Button onClick={submit} disabled={busy} className="w-full">
+      <Button onClick={submit} disabled={busy || (decision === "approve" && !stars)} className="w-full">
         {busy && <Loader2 size={16} className="animate-spin" />}
         {t("erp.tasks.confirmReview")}
       </Button>
@@ -466,6 +474,7 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
               <p className="font-semibold">
                 {t(`erp.tasks.status.${s}`)} · {task.reviewedBy?.name} · {formatDateTime(task.reviewedAt, lang)}
               </p>
+              {task.stars > 0 && <Stars value={task.stars} size={18} className="mt-2" />}
               {task.ratings.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {task.ratings.map((r) => (

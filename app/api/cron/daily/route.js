@@ -5,7 +5,7 @@ import { runDailyJobs } from "@/lib/dailyJobs";
 // Called once a day by Vercel Cron (see vercel.json) with
 // "Authorization: Bearer <CRON_SECRET>": task reminders, repeating tasks, missing
 // check-outs, contracts ending, offline fingerprint devices, project risk, budgets,
-// and the email digest.
+// the email digest, and removing chat messages and files older than 24 hours.
 export async function GET(request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {

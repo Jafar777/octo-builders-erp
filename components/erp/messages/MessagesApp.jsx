@@ -43,6 +43,13 @@ export default function MessagesApp({ meId, canAnnounce }) {
   }, [load]);
   usePollingFallback(load, 15000);
 
+  // Follow ?c= when it changes from outside (header messages button, notification links).
+  const paramId = searchParams.get("c");
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setActiveId(paramId);
+  }, [paramId]);
+
   // Many events can arrive at once (e.g. a busy channel); reload the list once.
   useRealtimeEvent(userChannelName(meId), "conversation:updated", () => {
     clearTimeout(reloadTimer.current);

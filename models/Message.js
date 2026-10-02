@@ -25,4 +25,10 @@ const MessageSchema = new mongoose.Schema(
 
 MessageSchema.index({ conversation: 1, createdAt: -1 });
 
+// Messages are kept for 24 hours to save storage: MongoDB removes them through this
+// TTL index, and the daily job (purgeExpiredMessages in lib/messaging.js) removes
+// their uploaded files.
+export const MESSAGE_TTL_SECONDS = 24 * 60 * 60;
+MessageSchema.index({ createdAt: 1 }, { expireAfterSeconds: MESSAGE_TTL_SECONDS });
+
 export default mongoose.models.Message || mongoose.model("Message", MessageSchema);

@@ -65,6 +65,7 @@ const TaskSchema = new mongoose.Schema(
     reviewedBy: { type: ObjectId, ref: "User", default: null },
     reviewedAt: { type: Date, default: null },
     ratings: [{ type: String }], // settings.tasks.ratingTags keys
+    stars: { type: Number, min: 0, max: 5, default: 0 }, // 1–5 from the head; 0 = not rated
     headNotes: { type: String, default: "" },
     rejectCause: { type: String, enum: ["", "employee", "management", "project"], default: "" },
 
