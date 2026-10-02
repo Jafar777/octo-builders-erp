@@ -5,6 +5,9 @@ import OtpCode from "@/models/OtpCode";
 import { isValidEmail } from "@/lib/emailWhitelist";
 import { hashOtpCode, OTP_MAX_ATTEMPTS } from "@/lib/otp";
 import { createSessionToken, setSessionCookie } from "@/lib/auth";
+import { ensureErpSeeded } from "@/lib/erpSeed";
+import { notify, usersWithPermission } from "@/lib/notify";
+import { audit } from "@/lib/audit";
 
 export async function POST(request) {
   try {
@@ -39,16 +42,34 @@ export async function POST(request) {
       return NextResponse.json({ error: "invalid_code" }, { status: 400 });
     }
 
+    await ensureErpSeeded();
     let user = await User.findOne({ email });
 
     if (purpose === "signup") {
       if (!user) {
+        // The very first account becomes the general manager; everyone else waits
+        // for the GM to assign a role.
         const isFirstUser = (await User.countDocuments()) === 0;
         user = await User.create({
           email,
           name: otp.name || "",
-          role: isFirstUser ? "admin" : "user",
+          role: isFirstUser ? "gm" : "user",
         });
+        await audit(user._id, "user.signed_up", {
+          entityType: "user",
+          entityId: user._id,
+          summary: email,
+        });
+        if (!isFirstUser) {
+          await notify({
+            type: "user.signup",
+            recipients: await usersWithPermission("users.manage"),
+            params: { name: user.name || email },
+            link: "/dashboard/staff?filter=pending",
+            entityType: "user",
+            entityId: user._id,
+          });
+        }
       }
     } else if (!user) {
       return NextResponse.json({ error: "account_not_found" }, { status: 404 });

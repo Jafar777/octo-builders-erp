@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --experimental-detect-module tests/hr-engine.test.mjs && node --experimental-detect-module tests/finance-engine.test.mjs"
   },
   "dependencies": {
     "framer-motion": "^13.4.4",
@@ -15,6 +16,8 @@
     "lucide-react": "^1.48.0",
     "mongoose": "^9.10.2",
     "next": "16.3.6",
+    "pusher": "^5.3.4",
+    "pusher-js": "^8.6.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "resend": "^6.30.0"

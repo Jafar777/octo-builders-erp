@@ -1,47 +1,23 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
-import { connectDB } from "@/lib/db";
+import { getCurrentUser, publicUser } from "@/lib/currentUser";
+import { forbidden, readJson } from "@/lib/apiUtils";
 import User from "@/models/User";
 
 export async function GET() {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ user: null });
-
-  await connectDB();
-  const user = await User.findById(session.sub).lean();
-  if (!user) return NextResponse.json({ user: null });
-
-  return NextResponse.json({
-    user: {
-      id: user._id.toString(),
-      email: user.email,
-      name: user.name,
-      avatarUrl: user.avatarUrl,
-      role: user.role,
-    },
-  });
+  const user = await getCurrentUser();
+  return NextResponse.json({ user: publicUser(user) });
 }
 
 export async function PATCH(request) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const user = await getCurrentUser();
+  if (!user) return forbidden();
 
-  const { name, avatarUrl } = await request.json();
-  await connectDB();
-
+  const { name, avatarUrl, phone } = await readJson(request);
   const update = {};
   if (typeof name === "string") update.name = name.trim().slice(0, 80);
   if (typeof avatarUrl === "string") update.avatarUrl = avatarUrl;
+  if (typeof phone === "string") update.phone = phone.trim().slice(0, 30);
 
-  const user = await User.findByIdAndUpdate(session.sub, update, { new: true }).lean();
-
-  return NextResponse.json({
-    user: {
-      id: user._id.toString(),
-      email: user.email,
-      name: user.name,
-      avatarUrl: user.avatarUrl,
-      role: user.role,
-    },
-  });
+  await User.findByIdAndUpdate(user.id, update);
+  return NextResponse.json({ user: publicUser({ ...user, ...update }) });
 }

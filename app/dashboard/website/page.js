@@ -1,17 +1,10 @@
-import { getSession } from "@/lib/auth";
+import { requirePermission } from "@/lib/currentUser";
 import { getSiteContent, getServices, getProjects } from "@/lib/siteData";
 import WebsiteManager from "@/components/dashboard/WebsiteManager";
+import NoAccess from "@/components/erp/NoAccess";
 
 export default async function WebsitePage() {
-  const session = await getSession();
-
-  if (session?.role !== "admin") {
-    return (
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-center text-white/60">
-        Admins only.
-      </div>
-    );
-  }
+  if (!(await requirePermission("website.manage"))) return <NoAccess />;
 
   const [content, services, projects] = await Promise.all([
     getSiteContent(),

@@ -1,0 +1,178 @@
+import { NextResponse } from "next/server";
+import { hasPermission, requireStaff } from "@/lib/currentUser";
+import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
+import { notify } from "@/lib/notify";
+import { projectAccess } from "@/lib/projects";
+import { getTaskSettings } from "@/lib/settings";
+import { inScope } from "@/lib/scope";
+import {
+  canManageTask,
+  canViewTask,
+  cleanDependsOn,
+  cleanRecurrence,
+  enrichTask,
+  enrichTasks,
+  logActivity,
+  nextRevisionFor,
+  publishTaskChange,
+  taskTitle,
+} from "@/lib/tasks";
+import { nextNumber } from "@/models/Counter";
+import Task, { TASK_STATUSES } from "@/models/Task";
+import User from "@/models/User";
+import WorkProject from "@/models/WorkProject";
+
+// Views:
+//   ?view=mine            my tasks (default)
+//   ?view=review          submitted tasks I may review
+//   ?view=project&project=<id>
+//   ?view=all             everything in my scope (managers)
+//   ?view=subtasks&parent=<id>
+// Optional: &status=a,b  &assignee=<id>
+export async function GET(request) {
+  const user = await requireStaff();
+  if (!user) return forbidden();
+
+  const params = new URL(request.url).searchParams;
+  const view = params.get("view") || "mine";
+  const query = {};
+
+  if (view === "mine") {
+    query.assignee = user.id;
+  } else if (view === "review") {
+    if (!hasPermission(user, "tasks.review")) return forbidden();
+    query.status = "submitted";
+    query.assignee = { $ne: user.id };
+    if (user.scope !== "all") query.department = user.department;
+  } else if (view === "project") {
+    const projectId = params.get("project");
+    if (!isObjectId(projectId)) return fail("invalid_request");
+    const project = await WorkProject.findById(projectId).lean();
+    if (!projectAccess(user, project)) return forbidden();
+    query.project = projectId;
+  } else if (view === "subtasks") {
+    const parent = isObjectId(params.get("parent")) ? await Task.findById(params.get("parent")).lean() : null;
+    if (!parent || !canViewTask(user, parent)) return forbidden();
+    query.parentTask = parent._id;
+  } else if (view === "all") {
+    if (!hasPermission(user, "projects.view") && !hasPermission(user, "tasks.assign")) return forbidden();
+    if (user.scope !== "all") query.department = user.department;
+  } else {
+    return fail("invalid_request");
+  }
+
+  const statuses = (params.get("status") || "").split(",").filter((s) => TASK_STATUSES.includes(s));
+  if (statuses.length && !query.status) query.status = { $in: statuses };
+  const assignee = params.get("assignee");
+  if (isObjectId(assignee) && view !== "mine") query.assignee = assignee;
+
+  const tasks = await Task.find(query).sort({ updatedAt: -1 }).limit(500).lean();
+  return NextResponse.json({ tasks: await enrichTasks(tasks) });
+}
+
+function parseDate(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+// Create a task. Staff create tasks for themselves (the Excel "manual entry");
+// people with tasks.assign may assign to others in their scope.
+export async function POST(request) {
+  const user = await requireStaff();
+  if (!user) return forbidden();
+  const body = await readJson(request);
+  const settings = await getTaskSettings();
+
+  const kind = ["task", "meeting", "personal"].includes(body.kind) ? body.kind : "task";
+  const assigneeId = isObjectId(body.assigneeId) ? body.assigneeId : user.id;
+  const assignee = await User.findOne({ _id: assigneeId, status: "active", role: { $ne: "user" } }).lean();
+  if (!assignee) return fail("invalid_assignee");
+
+  // Sub-task: belongs to a parent task and inherits its project.
+  let parent = null;
+  if (body.parentTaskId) {
+    parent = isObjectId(body.parentTaskId) ? await Task.findById(body.parentTaskId).lean() : null;
+    if (!parent || !canViewTask(user, parent)) return fail("invalid_parent");
+    if (parent.parentTask) return fail("nested_subtask");
+    body.projectId = parent.project ? parent.project.toString() : "";
+    body.itemId = "";
+    body.stage = "";
+  }
+
+  let project = null;
+  let item = null;
+  let stage = null;
+  if (isObjectId(body.projectId)) {
+    project = await WorkProject.findById(body.projectId).lean();
+    if (!project || !projectAccess(user, project)) return fail("invalid_project");
+    if (["finished", "archived"].includes(project.status)) return fail("project_closed");
+    if (body.itemId || body.stage) {
+      item = project.items.find((i) => i._id.toString() === body.itemId);
+      stage = project.stages.find((s) => s.key === body.stage);
+      if (!item || !stage) return fail("invalid_cell");
+    }
+  } else if (kind === "task" && !parent) {
+    return fail("project_required");
+  }
+
+  const department = parent?.department || project?.department || assignee.department || user.department || null;
+  if (assigneeId !== user.id && !(hasPermission(user, "tasks.assign") && inScope(user, department))) {
+    return forbidden();
+  }
+
+  const type = settings.taskTypes.some((t) => t.key === body.type) ? body.type : stage?.taskType || "other";
+  const dueAt = parseDate(body.dueAt);
+  const plannedStart = parseDate(body.plannedStart);
+  if (dueAt === undefined || plannedStart === undefined) return fail("invalid_date");
+  if (kind === "task" && !dueAt) return fail("due_required");
+
+  const deps = await cleanDependsOn(body.dependsOn);
+  if (deps.error) return fail(deps.error);
+  // Board-cell tasks follow the revision chain, so they can't repeat.
+  const recurrence = item ? cleanRecurrence(null) : cleanRecurrence(body.recurrence, dueAt);
+  if (recurrence.error) return fail(recurrence.error);
+
+  const task = await Task.create({
+    number: await nextNumber("task"),
+    kind,
+    title: String(body.title || "").trim().slice(0, 200),
+    project: project?._id || null,
+    item: item?._id || null,
+    stage: stage?.key || "",
+    department,
+    type,
+    assignee: assigneeId,
+    createdBy: user.id,
+    priority: ["normal", "important", "urgent"].includes(body.priority) ? body.priority : "normal",
+    revision: item ? await nextRevisionFor(project._id, item._id, stage.key) : 0,
+    plannedStart,
+    dueAt,
+    estimatedHours: Math.max(0, Math.min(1000, Number(body.estimatedHours) || 0)),
+    description: String(body.description || "").slice(0, 4000),
+    deliveryLink: String(body.deliveryLink || "").trim().slice(0, 1000),
+    parentTask: parent?._id || null,
+    dependsOn: deps.ids,
+    recurrence: recurrence.value,
+  });
+
+  await logActivity(task._id, user, "created");
+  if (parent) await logActivity(parent._id, user, "subtask_added", "", { number: task.number });
+  const enriched = await enrichTask(task);
+
+  if (assigneeId !== user.id) {
+    await notify({
+      type: "task.assigned",
+      recipients: [assigneeId],
+      actor: user,
+      params: { actor: user.name || user.email, number: task.number, title: taskTitle(enriched) },
+      link: `/dashboard/tasks?task=${task._id}`,
+      entityType: "task",
+      entityId: task._id,
+    });
+  }
+  await publishTaskChange(task);
+  if (parent) await publishTaskChange(parent);
+
+  return NextResponse.json({ task: enriched, canManage: canManageTask(user, task) }, { status: 201 });
+}

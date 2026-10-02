@@ -1,7 +1,7 @@
-import { getSession } from "@/lib/auth";
+import { getCurrentUser, publicUser } from "@/lib/currentUser";
 import DashboardOverview from "@/components/dashboard/DashboardOverview";
 
 export default async function DashboardPage() {
-  const session = await getSession();
-  return <DashboardOverview role={session?.role} />;
+  const user = await getCurrentUser();
+  return <DashboardOverview user={publicUser(user)} />;
 }

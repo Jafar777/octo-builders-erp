@@ -38,10 +38,13 @@ export function LanguageProvider({ children }) {
     setLangState((prev) => (prev === "ar" ? "en" : "ar"));
   }, []);
 
+  // t("a.b", { name: "x" }) replaces {name} in the translation.
   const t = useCallback(
-    (key) => {
+    (key, vars) => {
       const value = getFromPath(translations[lang], key);
-      return value !== undefined ? value : key;
+      if (value === undefined) return key;
+      if (!vars || typeof value !== "string") return value;
+      return value.replace(/\{(\w+)\}/g, (match, name) => (name in vars ? String(vars[name]) : match));
     },
     [lang]
   );

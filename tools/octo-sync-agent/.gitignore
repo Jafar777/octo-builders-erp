@@ -1,0 +1,4 @@
+config.json
+queue.sqlite3
+octo_sync_log.txt
+__pycache__/

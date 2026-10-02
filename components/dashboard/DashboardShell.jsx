@@ -1,29 +1,125 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutGrid, Globe2, LogOut, ArrowLeft, Menu, X } from "lucide-react";
+import {
+  LayoutGrid,
+  Globe2,
+  LogOut,
+  ArrowLeft,
+  Menu,
+  X,
+  MessagesSquare,
+  Bell,
+  Users,
+  ShieldCheck,
+  Building2,
+  Settings,
+  History,
+  Eye,
+  ListChecks,
+  ClipboardCheck,
+  FolderKanban,
+  CalendarClock,
+  Gauge,
+  BriefcaseBusiness,
+  BarChart3,
+  Wallet,
+  Calculator,
+} from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
+import { usePollingFallback, useRealtime, useRealtimeEvent, userChannelName } from "@/context/RealtimeContext";
 import LanguageSwitch from "@/components/LanguageSwitch";
 import NotificationBell from "@/components/NotificationBell";
+import Avatar from "@/components/erp/ui/Avatar";
+import TopProgress from "@/components/erp/ui/TopProgress";
+import MiniChat from "@/components/erp/messages/MiniChat";
+
+// Sidebar entries; `perm` hides an entry from roles without that permission and
+// `staff` hides it from accounts that have no role yet.
+const NAV = [
+  {
+    group: "main",
+    items: [
+      { href: "/dashboard", key: "overview", icon: LayoutGrid, exact: true },
+      { href: "/dashboard/tasks", key: "tasks", icon: ListChecks, staff: true },
+      { href: "/dashboard/projects", key: "projects", icon: FolderKanban, staff: true },
+      { href: "/dashboard/reviews", key: "reviews", icon: ClipboardCheck, perm: "tasks.review", badge: "reviews" },
+      { href: "/dashboard/attendance", key: "attendance", icon: CalendarClock, staff: true },
+      { href: "/dashboard/kpi", key: "kpi", icon: Gauge, staff: true },
+      { href: "/dashboard/messages", key: "messages", icon: MessagesSquare, staff: true, badge: "messages", exact: true },
+      { href: "/dashboard/notifications", key: "notifications", icon: Bell, staff: true },
+    ],
+  },
+  {
+    group: "management",
+    items: [
+      { href: "/dashboard/analytics", key: "analytics", icon: BarChart3, perm: "analytics.view" },
+      { href: "/dashboard/hr", key: "hr", icon: BriefcaseBusiness, perm: "attendance.view" },
+      { href: "/dashboard/finance", key: "finance", icon: Wallet, perm: "finance.view" },
+      { href: "/dashboard/pricing", key: "pricing", icon: Calculator, perm: "pricing.use" },
+      { href: "/dashboard/staff", key: "staff", icon: Users, perm: "users.view" },
+      { href: "/dashboard/roles", key: "roles", icon: ShieldCheck, perm: "roles.manage" },
+      { href: "/dashboard/organization", key: "organization", icon: Building2, perm: "org.manage" },
+      { href: "/dashboard/messages/review", key: "messageReview", icon: Eye, perm: "messages.review" },
+      { href: "/dashboard/audit", key: "audit", icon: History, perm: "audit.view" },
+      { href: "/dashboard/settings", key: "settings", icon: Settings, perm: "settings.manage" },
+      { href: "/dashboard/website", key: "website", icon: Globe2, perm: "website.manage" },
+    ],
+  },
+];
 
 export default function DashboardShell({ user, children }) {
-  const { t } = useLanguage();
-  const { logout } = useAuth();
+  const { t, lang } = useLanguage();
+  const { logout, refresh } = useAuth();
+  const { connected } = useRealtime();
   const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [pendingReviews, setPendingReviews] = useState(0);
+  const canReview = user.permissions.includes("tasks.review");
 
-  const links = [
-    { href: "/dashboard", label: t("dashboard.overview"), icon: LayoutGrid, exact: true },
-    ...(user.role === "admin"
-      ? [{ href: "/dashboard/website", label: t("dashboard.website"), icon: Globe2, exact: false }]
-      : []),
-  ];
+  const loadUnread = useCallback(() => {
+    if (!user.isStaff) return;
+    fetch("/api/messages/unread", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setUnreadMessages(data.unread || 0))
+      .catch(() => {});
+  }, [user.isStaff]);
+
+  const loadReviews = useCallback(() => {
+    if (!canReview) return;
+    fetch("/api/tasks?view=review", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setPendingReviews(data.tasks?.length || 0))
+      .catch(() => {});
+  }, [canReview]);
+
+  useEffect(() => {
+    loadUnread();
+    loadReviews();
+  }, [loadUnread, loadReviews]);
+  usePollingFallback(loadUnread, 20000);
+  usePollingFallback(loadReviews, 30000);
+
+  const channel = userChannelName(user.id);
+  useRealtimeEvent(channel, "conversation:updated", loadUnread);
+  useRealtimeEvent(channel, "task:updated", loadReviews);
+  // Role or permissions changed by the GM: reload server data and navigation.
+  useRealtimeEvent(channel, "user:updated", () => {
+    refresh();
+    router.refresh();
+  });
+
+  const groups = NAV.map((g) => ({
+    ...g,
+    items: g.items.filter((item) => (!item.staff || user.isStaff) && (!item.perm || user.permissions.includes(item.perm))),
+  })).filter((g) => g.items.length > 0);
 
   async function handleLogout() {
     await logout();
@@ -32,46 +128,57 @@ export default function DashboardShell({ user, children }) {
 
   const Sidebar = (
     <div className="flex h-full flex-col justify-between p-5">
-      <div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
         <Image src="/brand/00-Icon.png" alt="Octo Builders" width={36} height={36} className="mb-6 h-9 w-9" />
-        <Link href="/" className="mb-8 flex items-center gap-2 text-sm text-white/60 hover:text-white">
-          <ArrowLeft size={16} />
+        <Link href="/" className="mb-6 flex items-center gap-2 text-sm text-white/60 hover:text-white">
+          <ArrowLeft size={16} className="rtl:rotate-180" />
           {t("dashboard.backToSite")}
         </Link>
 
-        <nav className="space-y-1">
-          {links.map((link) => {
-            const active = link.exact ? pathname === link.href : pathname.startsWith(link.href);
-            const Icon = link.icon;
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
-                  active ? "bg-brand-orange text-white" : "text-white/70 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                <Icon size={18} />
-                {link.label}
-              </Link>
-            );
-          })}
-        </nav>
+        {groups.map((g) => (
+          <nav key={g.group} className="mb-6 space-y-1">
+            {g.group !== "main" && (
+              <p className="px-4 pb-2 text-[11px] font-semibold uppercase tracking-wider text-white/35">
+                {t(`erp.nav.group_${g.group}`)}
+              </p>
+            )}
+            {g.items.map((link) => {
+              const active = link.exact ? pathname === link.href : pathname.startsWith(link.href);
+              const Icon = link.icon;
+              const badge = link.badge === "messages" ? unreadMessages : link.badge === "reviews" ? pendingReviews : 0;
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${
+                    active ? "bg-brand-orange text-white" : "text-white/70 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  <Icon size={18} />
+                  <span className="flex-1">{t(`erp.nav.${link.key}`)}</span>
+                  {badge > 0 && (
+                    <span
+                      className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${
+                        active ? "bg-white text-brand-orange" : "bg-brand-orange text-white"
+                      }`}
+                    >
+                      {badge > 99 ? "99+" : badge}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+        ))}
       </div>
 
       <div className="space-y-4 border-t border-white/10 pt-4">
         <div className="flex items-center gap-3 px-2">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/10 text-sm font-semibold text-white">
-            {user.avatarUrl ? (
-              <Image src={user.avatarUrl} alt={user.name || user.email} width={40} height={40} className="h-full w-full object-cover" />
-            ) : (
-              (user.name || user.email || "?").charAt(0).toUpperCase()
-            )}
-          </div>
+          <Avatar name={user.name || user.email} src={user.avatarUrl} />
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-white">{user.name || user.email}</p>
-            <p className="truncate text-xs text-white/40">{t(`dashboard.role_${user.role}`)}</p>
+            <p className="truncate text-xs text-white/40">{user.roleName?.[lang] || user.role}</p>
           </div>
         </div>
         <button
@@ -88,10 +195,11 @@ export default function DashboardShell({ user, children }) {
 
   return (
     <div className="flex min-h-screen bg-brand-navy text-white">
-      <aside className="hidden w-72 shrink-0 border-e border-white/10 lg:block">{Sidebar}</aside>
+      <TopProgress />
+      <aside className="sticky top-0 hidden h-screen w-72 shrink-0 border-e border-white/10 lg:block">{Sidebar}</aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 items-center justify-between border-b border-white/10 px-4 sm:px-6">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-white/10 bg-brand-navy/90 px-4 backdrop-blur sm:px-6">
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
@@ -103,6 +211,10 @@ export default function DashboardShell({ user, children }) {
             {t("dashboard.welcome")}, {user.name || user.email}
           </p>
           <div className="flex items-center gap-3">
+            <span
+              title={connected ? t("erp.realtimeOn") : t("erp.realtimeOff")}
+              className={`h-2.5 w-2.5 rounded-full ${connected ? "bg-emerald-400" : "bg-white/25"}`}
+            />
             <LanguageSwitch compact />
             <NotificationBell />
           </div>
@@ -110,6 +222,10 @@ export default function DashboardShell({ user, children }) {
 
         <main className="flex-1 p-4 sm:p-6 lg:p-10">{children}</main>
       </div>
+
+      {user.isStaff && !pathname.startsWith("/dashboard/messages") && (
+        <MiniChat meId={user.id} canAnnounce={user.permissions.includes("messages.announce")} unread={unreadMessages} />
+      )}
 
       <AnimatePresence>
         {mobileOpen && (
@@ -122,9 +238,9 @@ export default function DashboardShell({ user, children }) {
               className="fixed inset-0 z-40 bg-black/60 lg:hidden"
             />
             <motion.div
-              initial={{ x: "-100%" }}
+              initial={{ x: lang === "ar" ? "100%" : "-100%" }}
               animate={{ x: 0 }}
-              exit={{ x: "-100%" }}
+              exit={{ x: lang === "ar" ? "100%" : "-100%" }}
               transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
               className="fixed inset-y-0 start-0 z-50 w-72 bg-brand-navy lg:hidden"
             >

@@ -77,10 +77,104 @@ html {
   animation: marquee 40s linear infinite;
 }
 
+/* ---- Dashboard loading effects ---- */
+
+/* Skeleton placeholder: a soft light sweeping across (direction-aware). */
+@keyframes shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+.skeleton {
+  background-color: rgb(255 255 255 / 0.05);
+  background-image: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.09) 50%, transparent 80%);
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+[dir="rtl"] .skeleton {
+  animation-direction: reverse;
+}
+
+/* Top progress bar: a glowing segment sliding across while requests run. */
+@keyframes progress-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+.progress-runner {
+  animation: progress-slide 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+[dir="rtl"] .progress-runner {
+  animation-direction: reverse;
+}
+
+/* Brand loader: a rotating orange arc around the logo + a breathing glow. */
+@keyframes spin-arc {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(0.94);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+}
+
+.loader-arc {
+  animation: spin-arc 1.1s linear infinite;
+}
+
+.loader-breathe {
+  animation: breathe 1.8s ease-in-out infinite;
+}
+
+/* Content arriving after loading fades up gently. */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.35s ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-marquee,
   .animate-kenburns {
     animation: none;
+  }
+  .skeleton,
+  .loader-arc,
+  .loader-breathe,
+  .animate-fade-up {
+    animation-duration: 3s;
+  }
+  .progress-runner {
+    animation-duration: 2.5s;
   }
 }
 
