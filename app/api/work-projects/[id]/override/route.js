@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
-import { projectAccess } from "@/lib/projects";
+import { canManageStage, checkStageHandoffs, projectChannel } from "@/lib/projects";
 import { publish } from "@/lib/realtime/server";
 import { departmentChannel } from "@/lib/tasks";
 import WorkProject from "@/models/WorkProject";
@@ -16,12 +16,13 @@ export async function POST(request, { params }) {
   if (!isObjectId(id)) return notFound();
   const project = await WorkProject.findById(id);
   if (!project) return notFound();
-  if (projectAccess(user, project) !== "manage") return forbidden();
 
   const body = await readJson(request);
   const item = project.items.id(body.itemId);
   const stage = project.stages.find((s) => s.key === body.stage);
   if (!item || !stage || !["skip", "done", "clear"].includes(body.status)) return fail("invalid_cell");
+  // The project's managers, or the managers of the department doing this stage.
+  if (!canManageStage(user, project, stage)) return forbidden();
   const reason = String(body.reason || "").trim().slice(0, 500);
   if (body.status !== "clear" && !reason) return fail("reason_required");
 
@@ -39,7 +40,10 @@ export async function POST(request, { params }) {
     summary: `${item.name} · ${stage.name.en} → ${body.status}`,
     details: { reason },
   });
-  await publish(departmentChannel(project.department.toString()), "project:updated", { id: project._id.toString() });
+  await publish([departmentChannel(project.department.toString()), projectChannel(project._id.toString())], "project:updated", {
+    id: project._id.toString(),
+  });
+  await checkStageHandoffs(project._id, user);
 
   return NextResponse.json({ ok: true });
 }

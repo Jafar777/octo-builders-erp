@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
-import { cleanItems, cleanProjectFields, cleanStages } from "@/lib/projectPayload";
+import { applyStageRouting, cleanItems, cleanProjectFields, cleanStages } from "@/lib/projectPayload";
 import { listProjectsWithProgress, projectQueryFor, serializeProject } from "@/lib/projects";
 import { getTaskSettings } from "@/lib/settings";
 import { inScope } from "@/lib/scope";
@@ -35,19 +35,23 @@ export async function POST(request) {
   const settings = await getTaskSettings();
   let stages = body.stages;
   let items = body.items;
+  let template = null;
   if (isObjectId(body.templateId)) {
-    const template = await ProjectTemplate.findById(body.templateId).lean();
+    template = await ProjectTemplate.findById(body.templateId).lean();
     if (!template) return fail("invalid_template");
     stages = template.stages;
     items = template.items.map((name) => ({ name }));
   }
   const cleanedStages = cleanStages(stages, settings.taskTypes.map((t) => t.key));
   if (cleanedStages.error) return fail(cleanedStages.error);
+  // A template's hand-overs were set by the GM, so they carry over to the project.
+  const routed = await applyStageRouting(user, cleanedStages.stages, template?.stages);
+  if (routed.error) return fail(routed.error);
 
   const project = await WorkProject.create({
     ...fields,
     department: body.department,
-    stages: cleanedStages.stages,
+    stages: routed.stages,
     items: cleanItems(items),
     baselineDueDate: fields.dueDate,
     participants: [...new Set([...(fields.participants || []), user.id])],

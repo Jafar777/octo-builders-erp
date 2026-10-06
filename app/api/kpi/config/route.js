@@ -3,7 +3,7 @@ import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
 import { hrMonthState, todayIn } from "@/lib/hr";
-import { cleanKpiConfig, DEFAULT_KPI, kpiConfigFor, METRICS } from "@/lib/kpi/config";
+import { cleanKpiConfig, kpiConfigFor, METRICS } from "@/lib/kpi/config";
 import { getSettings } from "@/lib/settings";
 import Setting from "@/models/Setting";
 
@@ -16,7 +16,6 @@ export async function GET() {
     current: kpiConfigFor(settings.kpi, month),
     versions: (settings.kpi.versions || []).map((v) => v.from),
     metrics: METRICS,
-    defaults: DEFAULT_KPI,
     month,
   });
 }

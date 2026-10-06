@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Copy, Lock, LockOpen, Plus, Trash2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
@@ -13,7 +13,6 @@ import Modal from "@/components/erp/ui/Modal";
 import { Button, Card, ErrorText, Input, PageHeader, Select, Toggle } from "@/components/erp/ui/fields";
 import { hm, money, MonthPicker } from "@/components/erp/hr/hrUi";
 import PersonMonth from "@/components/erp/hr/PersonMonth";
-import HrProfile from "@/components/erp/hr/HrProfile";
 import LeaveList from "@/components/erp/hr/LeaveList";
 import SalaryUnlock from "@/components/erp/hr/SalaryUnlock";
 import { SkeletonList, SkeletonTable } from "@/components/erp/ui/Loading";
@@ -333,18 +332,17 @@ export default function HrCenter({ initialMonth }) {
   const [settings, setSettings] = useState(null);
   const [departments, setDepartments] = useState([]);
   const [leaves, setLeaves] = useState(null);
-  const [person, setPerson] = useState(null);
-  // ?person=<id> opens that employee (links from notifications and the home page).
-  const personParam = searchParams.get("person");
-  const [personOpened, setPersonOpened] = useState(false);
-  useEffect(() => {
-    if (personOpened || !personParam || !data) return;
-    const row = data.rows?.find((r) => r.staff.id === personParam);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (row) setPerson(row.staff);
-    setPersonOpened(true);
-  }, [personParam, data, personOpened]);
+  const router = useRouter();
+  const [viewing, setViewing] = useState(null);
   const perms = useMemo(() => user?.permissions || [], [user]);
+  // HR manages each employee (attendance, profile, salary, documents) from their file on
+  // the staff page; department heads only get a read-only look at the month.
+  const openPerson = (staff) => (perms.includes("attendance.manage") ? router.push(`/dashboard/staff?person=${staff.id}`) : setViewing(staff));
+  // Older notifications link to /dashboard/hr?person=<id>.
+  const personParam = searchParams.get("person");
+  useEffect(() => {
+    if (personParam && perms.includes("attendance.manage")) router.replace(`/dashboard/staff?person=${personParam}`);
+  }, [personParam, perms, router]);
 
   const load = useCallback(() => {
     api(`/api/hr/overview?month=${month}`).then(setData).catch(() => {});
@@ -393,7 +391,7 @@ export default function HrCenter({ initialMonth }) {
         (data ? (
           <div className="animate-fade-up space-y-4">
             {data.permissions.salaryLocked && <SalaryUnlock compact onUnlocked={load} />}
-            <Overview data={data} lookups={lookups} onOpen={setPerson} payroll={data.permissions.payroll} />
+            <Overview data={data} lookups={lookups} onOpen={openPerson} payroll={data.permissions.payroll} />
           </div>
         ) : (
           <SkeletonTable rows={8} cols={7} />
@@ -419,13 +417,8 @@ export default function HrCenter({ initialMonth }) {
       {tab === "devices" && <Devices />}
       {tab === "rules" && settings && <Rules settings={settings} onSaved={() => { loadSettings(); load(); }} />}
 
-      <Modal open={Boolean(person)} onClose={() => setPerson(null)} title={person?.name || ""} wide>
-        {person && (
-          <div className="space-y-6">
-            <PersonMonth userId={person.id} month={month} />
-            <HrProfile userId={person.id} currencies={settings?.currencies} onChanged={load} />
-          </div>
-        )}
+      <Modal open={Boolean(viewing)} onClose={() => setViewing(null)} title={viewing?.name || ""} wide>
+        {viewing && <PersonMonth userId={viewing.id} month={month} />}
       </Modal>
     </div>
   );

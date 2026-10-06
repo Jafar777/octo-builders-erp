@@ -5,6 +5,7 @@ import { conversationAccess } from "@/lib/messaging";
 import Conversation from "@/models/Conversation";
 import Message from "@/models/Message";
 import User from "@/models/User";
+import { NAME_FIELDS, pickName, viewerLang } from "@/lib/personName";
 
 const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 
@@ -21,8 +22,9 @@ export async function GET(request, { params }) {
 
   const messages = await Message.find({ conversation: id }).sort({ createdAt: 1 }).lean();
   const senderIds = [...new Set(messages.map((m) => m.sender?.toString()).filter(Boolean))];
-  const people = await User.find({ _id: { $in: senderIds } }, { name: 1, email: 1 }).lean();
-  const names = Object.fromEntries(people.map((p) => [p._id.toString(), p.name || p.email]));
+  const people = await User.find({ _id: { $in: senderIds } }, NAME_FIELDS).lean();
+  const lang = await viewerLang();
+  const names = Object.fromEntries(people.map((p) => [p._id.toString(), pickName(p, lang)]));
   // Members don't see deleted text; management review does (marked as deleted).
   const showDeleted = access === "review";
 

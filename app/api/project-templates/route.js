@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { bilingual, fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
-import { cleanStages } from "@/lib/projectPayload";
+import { applyStageRouting, cleanStages } from "@/lib/projectPayload";
 import { projectAccess, serializeTemplate } from "@/lib/projects";
 import { getTaskSettings } from "@/lib/settings";
 import { isBilingualComplete } from "@/lib/validateBilingual";
@@ -33,9 +33,11 @@ export async function POST(request) {
     const settings = await getTaskSettings();
     const cleaned = cleanStages(body.stages, settings.taskTypes.map((t) => t.key));
     if (cleaned.error) return fail(cleaned.error);
+    const routed = await applyStageRouting(user, cleaned.stages);
+    if (routed.error) return fail(routed.error);
     data = {
       department: isObjectId(body.department) ? body.department : null,
-      stages: cleaned.stages,
+      stages: routed.stages,
       items: (Array.isArray(body.items) ? body.items : []).map((i) => String(i).trim().slice(0, 120)).filter(Boolean),
     };
   }

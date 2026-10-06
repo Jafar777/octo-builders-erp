@@ -16,6 +16,7 @@ import RawPunch from "@/models/RawPunch";
 import Task from "@/models/Task";
 import User from "@/models/User";
 import WorkProject from "@/models/WorkProject";
+import { NAME_FIELDS, pickName, viewerLang } from "@/lib/personName";
 
 const idStr = (v) => (v ? v.toString() : null);
 
@@ -33,6 +34,7 @@ export async function GET() {
   const now = Date.now();
   const can = (p) => hasPermission(user, p);
   const deptFilter = user.scope === "all" ? {} : { department: user.department };
+  const lang = await viewerLang();
   const out = {};
 
   const jobs = [];
@@ -122,12 +124,12 @@ export async function GET() {
         const in30 = new Date(new Date(`${today}T00:00:00Z`).getTime() + 30 * 86400000).toISOString().slice(0, 10);
         const [pendingLeave, ending, devices] = await Promise.all([
           can("leave.approve") ? LeaveRequest.countDocuments({ status: "pending" }) : 0,
-          User.find({ status: "active", contractEnd: { $gte: today, $lte: in30 } }, { name: 1, email: 1, contractEnd: 1 }).sort({ contractEnd: 1 }).lean(),
+          User.find({ status: "active", contractEnd: { $gte: today, $lte: in30 } }, { ...NAME_FIELDS, contractEnd: 1 }).sort({ contractEnd: 1 }).lean(),
           AttendanceDevice.find({ active: true }, { name: 1, lastSeenAt: 1 }).lean(),
         ]);
         out.hr = {
           pendingLeave,
-          contractsEnding: ending.map((u) => ({ id: u._id.toString(), name: u.name || u.email, date: u.contractEnd })),
+          contractsEnding: ending.map((u) => ({ id: u._id.toString(), name: pickName(u, lang), date: u.contractEnd })),
           devicesOffline: devices.filter((d) => !d.lastSeenAt || now - new Date(d.lastSeenAt).getTime() > 6 * 3600000).map((d) => d.name),
         };
       })()

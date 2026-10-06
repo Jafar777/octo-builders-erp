@@ -2,17 +2,21 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Lock, Pencil, Plus, Trash2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAuth } from "@/context/AuthContext";
 import { api, errorText } from "@/lib/clientApi";
 import BilingualField from "@/components/dashboard/BilingualField";
 import Modal from "@/components/erp/ui/Modal";
 import { Button, Card, ErrorText, Label, PageHeader, Select, Toggle } from "@/components/erp/ui/fields";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { SkeletonCards } from "@/components/erp/ui/Loading";
+import StageRouting, { canRouteStages } from "@/components/erp/projects/StageRouting";
 
 function TemplateEditor({ template, lookups, onSaved, onClose }) {
   const { t, lang } = useLanguage();
+  const { user } = useAuth();
+  const canRoute = canRouteStages(user);
   const [form, setForm] = useState({
     name: template?.name || { ar: "", en: "" },
     department: template?.department || "",
@@ -48,6 +52,7 @@ function TemplateEditor({ template, lookups, onSaved, onClose }) {
       />
       <div className="space-y-2">
         <Label>{t("erp.projects.stages")}</Label>
+        {canRoute && <p className="text-xs text-white/40">{t("erp.projects.routingHint")}</p>}
         {form.stages.map((stage, i) => (
           <div key={i} className="grid items-end gap-2 rounded-xl border border-white/10 p-3 sm:grid-cols-[1fr_170px_auto]">
             <BilingualField label={`${t("erp.projects.stage")} ${i + 1}`} value={stage.name} onChange={(name) => setStage(i, { name })} />
@@ -65,6 +70,11 @@ function TemplateEditor({ template, lookups, onSaved, onClose }) {
             >
               <Trash2 size={15} />
             </button>
+            {canRoute && (
+              <div className="sm:col-span-3">
+                <StageRouting stage={stage} index={i} departments={lookups.departments} onChange={(patch) => setStage(i, patch)} />
+              </div>
+            )}
           </div>
         ))}
         <Button variant="ghost" onClick={() => setForm((f) => ({ ...f, stages: [...f.stages, { key: "", name: { ar: "", en: "" }, taskType: "other" }] }))}>
@@ -153,7 +163,11 @@ export default function TemplatesManager() {
               {tpl.stages.map((s, i) => (
                 <span key={s.key} className="flex items-center gap-1.5">
                   {i > 0 && <span className="text-white/25">←</span>}
-                  <span className="rounded-full bg-white/10 px-2.5 py-1 text-white/75">{s.name?.[lang]}</span>
+                  <span className="rounded-full bg-white/10 px-2.5 py-1 text-white/75">
+                    {s.name?.[lang]}
+                    {s.department && s.department !== tpl.department && <span className="text-brand-orange"> · {lookups.departmentName(s.department)}</span>}
+                    {s.waitForPrevious && <Lock size={11} className="ms-1 inline text-white/45" />}
+                  </span>
                 </span>
               ))}
             </div>

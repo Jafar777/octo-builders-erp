@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowDown, ArrowUp, CalendarDays, ExternalLink, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowDown, ArrowUp, CalendarDays, ExternalLink, Lock, Plus, Trash2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAuth } from "@/context/AuthContext";
 import ProjectScore from "@/components/erp/projects/ProjectScore";
 import { usePollingFallback, useRealtimeEvent } from "@/context/RealtimeContext";
 import { api, errorText } from "@/lib/clientApi";
@@ -18,6 +19,7 @@ import TaskDrawer from "@/components/erp/tasks/TaskDrawer";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { revisionLabel, STATUS_STYLE, toDateInput, useNow } from "@/components/erp/tasks/taskUi";
 import { PageSkeleton } from "@/components/erp/ui/Loading";
+import StageRouting, { canRouteStages } from "@/components/erp/projects/StageRouting";
 
 const TABS = ["board", "tasks", "settings"];
 
@@ -28,6 +30,7 @@ function CellModal({ project, cell, canManage, lookups, onOpenTask, onNewTask, o
   const item = project.items.find((i) => i.id === cell.itemId);
   const stage = project.stages.find((s) => s.key === cell.stage);
   const state = project.cells[cell.itemId]?.[cell.stage];
+  const locked = project.locked?.includes(cell.stage);
   const assignee = lookups.people.find((p) => p.id === state?.assignee);
 
   async function override(status) {
@@ -64,13 +67,19 @@ function CellModal({ project, cell, canManage, lookups, onOpenTask, onNewTask, o
         </p>
       )}
 
+      {locked && (
+        <p className="flex items-center gap-2 rounded-xl bg-white/5 px-3 py-2 text-sm text-white/60">
+          <Lock size={14} /> {t("erp.projects.waitingNote")}
+        </p>
+      )}
+
       <div className="flex flex-wrap gap-2">
         {state?.taskId && (
           <Button variant="ghost" onClick={() => onOpenTask(state.taskId)}>
             {t("erp.projects.openTask")}
           </Button>
         )}
-        {project.status === "active" && (
+        {project.status === "active" && !locked && (
           <Button onClick={onNewTask}>
             <Plus size={16} /> {state?.taskId ? t("erp.projects.newRevision") : t("erp.tasks.new")}
           </Button>
@@ -103,6 +112,8 @@ function CellModal({ project, cell, canManage, lookups, onOpenTask, onNewTask, o
 
 function ProjectSettings({ project, lookups, onSaved }) {
   const { t, lang } = useLanguage();
+  const { user } = useAuth();
+  const canRoute = canRouteStages(user);
   const [form, setForm] = useState({
     name: project.name,
     code: project.code,
@@ -250,6 +261,7 @@ function ProjectSettings({ project, lookups, onSaved }) {
 
       <Card className="space-y-3">
         <p className="font-semibold">{t("erp.projects.stages")}</p>
+        {canRoute && <p className="text-xs text-white/45">{t("erp.projects.routingHint")}</p>}
         {stages.map((stage, i) => (
           <div key={i} className="grid items-end gap-2 rounded-xl border border-white/10 p-3 sm:grid-cols-[1fr_180px_auto]">
             <BilingualField
@@ -274,6 +286,16 @@ function ProjectSettings({ project, lookups, onSaved }) {
                 <Trash2 size={14} />
               </button>
             </div>
+            {canRoute && (
+              <div className="sm:col-span-3">
+                <StageRouting
+                  stage={stage}
+                  index={i}
+                  departments={lookups.departments}
+                  onChange={(patch) => setStages((l) => l.map((x, j) => (j === i ? { ...x, ...patch } : x)))}
+                />
+              </div>
+            )}
           </div>
         ))}
         <Button variant="ghost" onClick={() => setStages((l) => [...l, { key: "", name: { ar: "", en: "" }, taskType: "other" }])}>
@@ -326,14 +348,19 @@ export default function ProjectBoard({ projectId }) {
   }, [load]);
   usePollingFallback(load, 20000);
 
-  const departmentChannel = data ? `private-department-${data.project.department}` : null;
-  const onTaskEvent = (e) => e.projectId === projectId && load();
-  useRealtimeEvent(departmentChannel, "task:updated", onTaskEvent);
-  useRealtimeEvent(departmentChannel, "project:updated", (e) => e.id === projectId && load());
+  // Every department working on the project hears its updates here.
+  const projectChannel = data ? `private-project-${projectId}` : null;
+  useRealtimeEvent(projectChannel, "task:updated", (e) => e.projectId === projectId && load());
+  useRealtimeEvent(projectChannel, "project:updated", (e) => e.id === projectId && load());
 
   const now = useNow(tasks.some((x) => x.status === "in_progress"));
   const project = data?.project;
   const canManage = data?.access === "manage";
+  const { user } = useAuth();
+  // Managers of the department doing a stage handle its cells too.
+  const canManageStage = (stage) =>
+    canManage ||
+    Boolean(user?.permissions?.includes("projects.manage") && user?.department && (stage?.department || project?.department) === user.department);
   const sortedTasks = useMemo(() => [...tasks].sort((a, b) => b.number - a.number), [tasks]);
 
   if (!project) {
@@ -408,7 +435,13 @@ export default function ProjectBoard({ projectId }) {
                 <th className="px-2 py-3 text-center font-medium">%</th>
                 {project.stages.map((s) => (
                   <th key={s.key} className="px-2 py-3 text-center font-medium">
-                    {s.name?.[lang]}
+                    <span className="inline-flex items-center gap-1">
+                      {project.locked?.includes(s.key) && <Lock size={11} className="text-white/40" />}
+                      {s.name?.[lang]}
+                    </span>
+                    {s.department && s.department !== project.department && (
+                      <span className="block text-[10px] font-normal text-brand-orange">{lookups.departmentName(s.department)}</span>
+                    )}
                   </th>
                 ))}
               </tr>
@@ -425,6 +458,7 @@ export default function ProjectBoard({ projectId }) {
                   {project.stages.map((s) => {
                     const c = project.cells[item.id]?.[s.key] || { status: "not_started" };
                     const person = lookups.people.find((p) => p.id === c.assignee);
+                    const waiting = c.status === "not_started" && project.locked?.includes(s.key);
                     return (
                       <td key={s.key} className="px-1.5 py-1.5">
                         <button
@@ -432,7 +466,7 @@ export default function ProjectBoard({ projectId }) {
                           onClick={() => setCell({ itemId: item.id, stage: s.key })}
                           className={`flex h-12 w-full min-w-24 flex-col items-center justify-center rounded-lg border px-1 text-[11px] leading-tight transition hover:brightness-125 ${STATUS_STYLE[c.status] || STATUS_STYLE.not_started}`}
                         >
-                          <span className="font-medium">{t(`erp.tasks.status.${c.status}`)}</span>
+                          <span className="font-medium">{waiting ? t("erp.projects.waiting") : t(`erp.tasks.status.${c.status}`)}</span>
                           {c.number && (
                             <span className="opacity-70" dir="ltr">
                               #{c.number} · {revisionLabel(c.revision)}
@@ -478,7 +512,7 @@ export default function ProjectBoard({ projectId }) {
           <CellModal
             project={project}
             cell={cell}
-            canManage={canManage}
+            canManage={canManageStage(project.stages.find((s) => s.key === cell.stage))}
             lookups={lookups}
             onClose={() => setCell(null)}
             onChanged={load}

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { notify } from "@/lib/notify";
-import { projectAccess } from "@/lib/projects";
+import { isStageLocked, projectAccess, stageDepartment } from "@/lib/projects";
 import { getTaskSettings } from "@/lib/settings";
 import { inScope } from "@/lib/scope";
 import {
@@ -116,12 +116,16 @@ export async function POST(request) {
       item = project.items.find((i) => i._id.toString() === body.itemId);
       stage = project.stages.find((s) => s.key === body.stage);
       if (!item || !stage) return fail("invalid_cell");
+      // A stage waiting for the earlier stages can't get work yet.
+      if (await isStageLocked(project, stage.key)) return fail("stage_waiting", 409);
     }
   } else if (kind === "task" && !parent) {
     return fail("project_required");
   }
 
-  const department = parent?.department || project?.department || assignee.department || user.department || null;
+  // Board work belongs to the department doing the stage (it reviews it and it counts in its KPI).
+  const department =
+    parent?.department || (project && stage ? stageDepartment(project, stage) : project?.department) || assignee.department || user.department || null;
   if (assigneeId !== user.id && !(hasPermission(user, "tasks.assign") && inScope(user, department))) {
     return forbidden();
   }

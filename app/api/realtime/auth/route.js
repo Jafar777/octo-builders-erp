@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/currentUser";
 import { authorizeChannel, PRESENCE_CHANNEL } from "@/lib/realtime/server";
 import { conversationAccess } from "@/lib/messaging";
+import { projectAccess } from "@/lib/projects";
 import { fail, forbidden, isObjectId } from "@/lib/apiUtils";
 import Conversation from "@/models/Conversation";
+import WorkProject from "@/models/WorkProject";
 
 // Pusher calls this (form-encoded) before joining a private or presence channel.
 export async function POST(request) {
@@ -22,11 +24,18 @@ export async function POST(request) {
     allowed = true;
   } else if (channel === PRESENCE_CHANNEL) {
     allowed = user.isStaff;
-    presence = { user_id: user.id, user_info: { name: user.name || user.email, avatarUrl: user.avatarUrl } };
+    presence = { user_id: user.id, user_info: { name: user.displayName || user.email, avatarUrl: user.avatarUrl } };
   } else if (channel.startsWith("private-department-")) {
     // Task and board updates of a department.
     const id = channel.slice("private-department-".length);
     allowed = user.isStaff && (user.scope === "all" || user.department === id);
+  } else if (channel.startsWith("private-project-")) {
+    // Board updates of one project, for everyone who can open it.
+    const id = channel.slice("private-project-".length);
+    if (isObjectId(id)) {
+      const project = await WorkProject.findById(id, { department: 1, participants: 1, stages: 1 }).lean();
+      allowed = Boolean(projectAccess(user, project));
+    }
   } else if (channel.startsWith("private-conversation-")) {
     const id = channel.slice("private-conversation-".length);
     if (isObjectId(id)) {

@@ -44,6 +44,8 @@ const WorkProjectSchema = new mongoose.Schema(
         { _id: false }
       ),
     ],
+    // Waiting stages whose department was already told "ready for you".
+    handedOff: [{ type: String }],
     finishedAt: { type: Date, default: null },
     // Planned cost in the base currency (0 = no budget) — finance compares it with
     // direct expenses + the allocated salary / overhead share.

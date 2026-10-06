@@ -5,6 +5,18 @@ import translations from "@/lib/i18n/translations";
 
 const LanguageContext = createContext(null);
 
+// The server reads the language from this cookie to send people's names in it.
+function persistLang(lang) {
+  try {
+    window.localStorage.setItem("octa_lang", lang);
+  } catch {}
+  document.cookie = `octa_lang=${lang}; path=/; max-age=31536000; samesite=lax`;
+}
+
+const cookieLang = () => document.cookie.match(/(?:^|; )octa_lang=(ar|en)/)?.[1];
+// Dashboard data (names) was loaded in the old language, so it is reloaded.
+const inDashboard = () => window.location.pathname.startsWith("/dashboard");
+
 function getFromPath(obj, path) {
   return path.split(".").reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : undefined), obj);
 }
@@ -20,23 +32,27 @@ export function LanguageProvider({ children }) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setLangState(stored);
     }
+    const lang = stored === "en" ? "en" : "ar";
+    if (cookieLang() !== lang) {
+      persistLang(lang);
+      // First visit since names follow the language: reload once with the cookie set.
+      if (stored === "en" && inDashboard()) window.location.reload();
+    }
   }, []);
 
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
-    try {
-      window.localStorage.setItem("octa_lang", lang);
-    } catch {}
   }, [lang]);
 
   const setLang = useCallback((next) => {
-    setLangState(next === "ar" ? "ar" : "en");
-  }, []);
+    const value = next === "ar" ? "ar" : "en";
+    persistLang(value);
+    if (inDashboard() && value !== lang) return window.location.reload();
+    setLangState(value);
+  }, [lang]);
 
-  const toggleLang = useCallback(() => {
-    setLangState((prev) => (prev === "ar" ? "en" : "ar"));
-  }, []);
+  const toggleLang = useCallback(() => setLang(lang === "ar" ? "en" : "ar"), [lang, setLang]);
 
   // t("a.b", { name: "x" }) replaces {name} in the translation.
   const t = useCallback(

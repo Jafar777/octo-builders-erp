@@ -5,6 +5,7 @@ import { audit } from "@/lib/audit";
 import { notify } from "@/lib/notify";
 import { syncStaffChannels } from "@/lib/messaging";
 import { publish, userChannel } from "@/lib/realtime/server";
+import { cleanNameParts, viewerLang } from "@/lib/personName";
 import { serializeStaff } from "@/lib/staff";
 import User from "@/models/User";
 import Role from "@/models/Role";
@@ -54,11 +55,15 @@ export async function PATCH(request, { params }) {
   }
   if (typeof body.phone === "string") changes.phone = body.phone.trim().slice(0, 30);
   if (typeof body.badgeId === "string") changes.badgeId = body.badgeId.trim().slice(0, 20);
-  if (typeof body.name === "string" && body.name.trim()) changes.name = body.name.trim().slice(0, 80);
+  if (body.firstName !== undefined || body.lastName !== undefined) {
+    const names = cleanNameParts(body.firstName, body.lastName);
+    if (names.error) return fail(names.error);
+    Object.assign(changes, names);
+  }
 
   target.set(changes);
   await target.save();
-  const after = serializeStaff(target.toObject());
+  const after = serializeStaff(target.toObject(), await viewerLang());
 
   await audit(actor, "user.updated", {
     entityType: "user",

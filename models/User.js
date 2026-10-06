@@ -5,7 +5,11 @@ const { ObjectId } = mongoose.Schema.Types;
 const UserSchema = new mongoose.Schema(
   {
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    // Full names (English / Arabic), built from the four name parts below.
     name: { type: String, default: "" },
+    nameAr: { type: String, default: "" },
+    firstName: { ar: { type: String, default: "" }, en: { type: String, default: "" } },
+    lastName: { ar: { type: String, default: "" }, en: { type: String, default: "" } },
     avatarUrl: { type: String, default: "" },
     // Key of a Role document. New signups are "user" until the GM assigns a role.
     role: { type: String, default: "user" },
@@ -41,6 +45,17 @@ const UserSchema = new mongoose.Schema(
         uploadedAt: { type: Date, default: Date.now },
       }),
     ],
+    skills: [{ type: String }],
+    // Personal working hours; when `custom` is off the company hours (Settings) apply.
+    workSchedule: {
+      custom: { type: Boolean, default: false },
+      workStart: { type: String, default: "" },
+      workEnd: { type: String, default: "" },
+      dailyHours: { type: Number, default: null },
+      ramadanHours: { type: Number, default: null },
+      minHours: { type: Number, default: null },
+      graceMinutes: { type: Number, default: null },
+    },
     annualLeaveDays: { type: Number, default: 21 },
     kpiExcluded: { type: Boolean, default: false },
     lastLoginAt: { type: Date },

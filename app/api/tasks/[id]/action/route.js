@@ -3,6 +3,7 @@ import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
 import { notify } from "@/lib/notify";
+import { checkStageHandoffs } from "@/lib/projects";
 import { getTaskSettings } from "@/lib/settings";
 import {
   applyTransition,
@@ -197,5 +198,6 @@ async function review(user, task, body, now) {
 
   await publishTaskChange(task, [user.id]);
   if (approve) await notifyUnblocked(task, notify);
+  if (approve && task.project && task.item) await checkStageHandoffs(task.project, user);
   return NextResponse.json({ task: enriched, revisionTaskId: revisionTask?._id?.toString() || null });
 }

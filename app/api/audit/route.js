@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/currentUser";
 import { forbidden, isObjectId } from "@/lib/apiUtils";
 import AuditLog from "@/models/AuditLog";
 import User from "@/models/User";
+import { NAME_FIELDS, pickName, viewerLang } from "@/lib/personName";
 
 const PAGE_SIZE = 50;
 
@@ -22,8 +23,9 @@ export async function GET(request) {
 
   const logs = await AuditLog.find(query).sort({ createdAt: -1 }).limit(PAGE_SIZE).lean();
   const actorIds = [...new Set(logs.map((l) => l.actor?.toString()).filter(Boolean))];
-  const actors = await User.find({ _id: { $in: actorIds } }, { name: 1, email: 1 }).lean();
-  const names = Object.fromEntries(actors.map((a) => [a._id.toString(), a.name || a.email]));
+  const actors = await User.find({ _id: { $in: actorIds } }, NAME_FIELDS).lean();
+  const lang = await viewerLang();
+  const names = Object.fromEntries(actors.map((a) => [a._id.toString(), pickName(a, lang)]));
 
   return NextResponse.json({
     logs: logs.map((l) => ({

@@ -11,11 +11,16 @@ export function Label({ children }) {
   return <label className="mb-2 block text-sm font-medium text-white/70">{children}</label>;
 }
 
-export function Select({ label, value, onChange, options, placeholder }) {
+export function Select({ label, value, onChange, options, placeholder, disabled }) {
   return (
     <div>
       {label && <Label>{label}</Label>}
-      <select value={value ?? ""} onChange={(e) => onChange(e.target.value)} className={`${inputClass} [&>option]:bg-brand-navy`}>
+      <select
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className={`${inputClass} [&>option]:bg-brand-navy disabled:cursor-not-allowed disabled:opacity-50`}
+      >
         {placeholder !== undefined && <option value="">{placeholder}</option>}
         {options.map((o) => (
           <option key={o.value} value={o.value}>

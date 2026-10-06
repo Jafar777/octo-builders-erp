@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
 import BilingualField from "@/components/dashboard/BilingualField";
@@ -52,15 +52,7 @@ export default function KpiConfig() {
       <Link href="/dashboard/kpi" className="mb-4 inline-flex items-center gap-2 text-sm text-white/55 hover:text-white">
         <ArrowLeft size={15} className="rtl:rotate-180" /> {t("erp.nav.kpi")}
       </Link>
-      <PageHeader
-        title={t("erp.kpi.configure")}
-        subtitle={t("erp.kpi.configSubtitle")}
-        actions={
-          <Button variant="ghost" onClick={() => setConfig({ ...meta.defaults, from: config.from })}>
-            <RotateCcw size={16} /> {t("erp.kpi.resetExcel")}
-          </Button>
-        }
-      />
+      <PageHeader title={t("erp.kpi.configure")} subtitle={t("erp.kpi.configSubtitle")} />
 
       <Card className="mb-6 flex flex-wrap items-end gap-4">
         <div className="w-44">

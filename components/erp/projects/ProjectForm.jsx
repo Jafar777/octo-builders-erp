@@ -58,7 +58,7 @@ export default function ProjectForm({ lookups, onCreated, onCancel }) {
         <Input label={t("erp.projects.code")} value={form.code} onChange={set("code")} dir="ltr" placeholder="M9, E19..." />
         <Input label={t("erp.projects.client")} value={form.client} onChange={set("client")} />
         <Select
-          label={t("erp.org.department")}
+          label={t("erp.projects.mainDepartment")}
           value={form.department}
           onChange={pickDepartment}
           placeholder="—"
@@ -81,6 +81,7 @@ export default function ProjectForm({ lookups, onCreated, onCancel }) {
         />
         <Input label={t("erp.projects.folderLink")} value={form.folderLink} onChange={set("folderLink")} dir="ltr" />
       </div>
+      <p className="text-xs text-white/40">{t("erp.projects.mainDepartmentHint")}</p>
       <p className="text-xs text-white/40">{t("erp.projects.dueRequiredNote")}</p>
       <ErrorText>{error}</ErrorText>
       <div className="flex justify-end gap-2">

@@ -17,6 +17,7 @@ import {
 import Task from "@/models/Task";
 import TaskActivity from "@/models/TaskActivity";
 import User from "@/models/User";
+import { NAME_FIELDS, pickName, viewerLang } from "@/lib/personName";
 
 async function load(params) {
   const { id } = await params;
@@ -43,8 +44,9 @@ export async function GET(request, { params }) {
       : [],
   ]);
   const actorIds = [...new Set(activity.map((a) => a.actor?.toString()).filter(Boolean))];
-  const actors = await User.find({ _id: { $in: actorIds } }, { name: 1, email: 1 }).lean();
-  const names = Object.fromEntries(actors.map((a) => [a._id.toString(), a.name || a.email]));
+  const actors = await User.find({ _id: { $in: actorIds } }, NAME_FIELDS).lean();
+  const lang = await viewerLang();
+  const names = Object.fromEntries(actors.map((a) => [a._id.toString(), pickName(a, lang)]));
 
   return NextResponse.json({
     task: await enrichTask(task),

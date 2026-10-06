@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
-import { cleanItems, cleanProjectFields, cleanStages } from "@/lib/projectPayload";
-import { buildCells, projectAccess, serializeProject } from "@/lib/projects";
+import { applyStageRouting, cleanItems, cleanProjectFields, cleanStages } from "@/lib/projectPayload";
+import { buildCells, checkStageHandoffs, projectAccess, projectChannel, serializeProject } from "@/lib/projects";
 import { projectScore } from "@/lib/projectHealth";
 import { publish } from "@/lib/realtime/server";
 import { getTaskSettings } from "@/lib/settings";
@@ -61,7 +61,9 @@ export async function PATCH(request, { params }) {
     if (cleaned.error) return fail(cleaned.error);
     const kept = new Set(cleaned.stages.map((s) => s.key));
     if (used.some((t) => t.stage && !kept.has(t.stage))) return fail("stage_has_tasks", 409);
-    fields.stages = cleaned.stages;
+    const routed = await applyStageRouting(user, cleaned.stages, project.stages);
+    if (routed.error) return fail(routed.error);
+    fields.stages = routed.stages;
   }
   if (fields.status === "finished" && project.status !== "finished") fields.finishedAt = new Date();
   if (fields.status && fields.status !== "finished") fields.finishedAt = null;
@@ -76,7 +78,10 @@ export async function PATCH(request, { params }) {
     summary: project.name.en,
     details: { fields: Object.keys(fields) },
   });
-  await publish(departmentChannel(project.department.toString()), "project:updated", { id: project._id.toString() });
+  await publish([departmentChannel(project.department.toString()), projectChannel(project._id.toString())], "project:updated", {
+    id: project._id.toString(),
+  });
+  if (fields.stages) await checkStageHandoffs(project._id, user);
 
   return NextResponse.json({ project: serializeProject(project.toObject()) });
 }
