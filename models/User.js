@@ -45,7 +45,20 @@ const UserSchema = new mongoose.Schema(
         uploadedAt: { type: Date, default: Date.now },
       }),
     ],
-    skills: [{ type: String }],
+    skills: [{ type: String }], // approved skills
+    // Skills the employee added themselves, waiting for (or refused by) the general manager.
+    skillRequests: [
+      new mongoose.Schema(
+        {
+          name: { type: String, required: true },
+          status: { type: String, enum: ["pending", "rejected"], default: "pending" },
+          requestedAt: { type: Date, default: Date.now },
+          reviewedBy: { type: ObjectId, ref: "User", default: null },
+          reviewedAt: { type: Date, default: null },
+        },
+        { _id: false }
+      ),
+    ],
     // Personal working hours; when `custom` is off the company hours (Settings) apply.
     workSchedule: {
       custom: { type: Boolean, default: false },

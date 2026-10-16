@@ -16,6 +16,7 @@ import SalaryUnlock from "@/components/erp/hr/SalaryUnlock";
 import { DocumentsCard, EmergencyContactCard } from "@/components/erp/hr/HrFile";
 import StaffEditor from "@/components/erp/staff/StaffEditor";
 import KpiRing from "@/components/erp/staff/KpiRing";
+import { PendingSkills } from "@/components/erp/hr/SkillRequests";
 
 const TABS = ["overview", "attendance", "contract", "salary", "documents"];
 
@@ -140,7 +141,7 @@ function ContactCard({ person, profile, userId, onChanged, onPhone }) {
   );
 }
 
-function SkillsCard({ userId, skills: initial, onChanged }) {
+function SkillsCard({ userId, skills: initial, requests, canApprove, onChanged }) {
   const { t } = useLanguage();
   const [skills, setSkills] = useState(initial);
   const [draft, setDraft] = useState("");
@@ -172,6 +173,7 @@ function SkillsCard({ userId, skills: initial, onChanged }) {
         ))}
         {skills.length === 0 && <p className="text-sm text-white/40">{t("erp.staffFile.noSkills")}</p>}
       </div>
+      <PendingSkills userId={userId} requests={requests} canApprove={canApprove} onDone={onChanged} />
       <div className="flex items-end gap-2">
         <div className="flex-1">
           <Input
@@ -198,7 +200,8 @@ function KpiCard({ hrRow }) {
   const stats = s
     ? [
         [t("erp.hr.worked"), `${hm(s.workedHours)} / ${hm(s.requiredToDate)}`],
-        [t("erp.hr.efficiency"), s.efficiency === null ? "—" : `${Math.round(s.efficiency * 100)}%`],
+        [t("erp.hr.actualHours"), hm(s.actualHours || 0)],
+        [t("erp.hr.efficiency"), s.efficiency === null || s.efficiency === undefined ? "—" : `${Math.round(s.efficiency * 100)}%`],
         [t("erp.hr.warnings"), s.warnings],
         [t("erp.hr.absent"), s.absentDays],
         [t("erp.hr.lateCount"), s.lateCount],
@@ -478,7 +481,14 @@ export default function EmployeeFile({ person, hrRow, roles, org, canManage, meI
           <EmploymentCard person={person} profile={data.profile} roles={roles} org={org} canManage={canManage} meId={meId} onStaffSaved={onStaffSaved} />
           <KpiCard hrRow={hrRow} />
           <ContactCard key={`c${data.profile.phone}`} person={person} profile={data.profile} userId={person.id} onChanged={changed} onPhone={(phone) => onStaffSaved({ ...person, phone })} />
-          <SkillsCard userId={person.id} skills={data.profile.skills} onChanged={load} />
+          <SkillsCard
+            key={`s${data.profile.skills.join("|")}`}
+            userId={person.id}
+            skills={data.profile.skills}
+            requests={data.profile.skillRequests}
+            canApprove={data.canApproveSkills}
+            onChanged={load}
+          />
           {data.canEditFile && (
             <div className="lg:col-span-2">
               <EmergencyContactCard userId={person.id} data={data} />

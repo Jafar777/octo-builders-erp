@@ -6,6 +6,9 @@ const KpiResultSchema = new mongoose.Schema(
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     month: { type: String, required: true },
     total: { type: Number, default: 0 },
+    // Department managers: the system part and the GM / CEO rating (0–100) behind `total`.
+    systemScore: { type: Number, default: null },
+    manualScore: { type: Number, default: null },
     grade: { type: mongoose.Schema.Types.Mixed, default: {} },
     rank: { type: Number, default: 0 },
     of: { type: Number, default: 0 },

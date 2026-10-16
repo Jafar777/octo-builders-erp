@@ -17,12 +17,17 @@ const WorkProjectSchema = new mongoose.Schema(
     participants: [{ type: ObjectId, ref: "User" }],
     status: { type: String, enum: ["active", "on_hold", "finished", "archived"], default: "active" },
     priority: { type: String, enum: ["normal", "important", "urgent"], default: "normal" },
+    // settings.tasks.projectScales key: the maximum hours each task of the project may take.
+    scale: { type: String, default: "" },
+    // How tasks may start: "ordered" (each stage waits for the earlier ones), "random"
+    // (any stage, any time) or "mixed" (each stage's waitForPrevious decides).
+    flow: { type: String, enum: ["ordered", "random", "mixed"], default: "mixed" },
     startDate: { type: Date, default: null },
     dueDate: { type: Date, required: true }, // mandatory — most Excel projects had none
     baselineDueDate: { type: Date, default: null },
     folderLink: { type: String, default: "" },
     notes: { type: String, default: "" },
-    // Board: rows = items (spaces / drawings / the building), columns = stages.
+    // Board: one row of stages. (`items` = former board rows, no longer used; kept so old data survives.)
     stages: [StageSchema],
     items: [
       new mongoose.Schema({
@@ -34,7 +39,7 @@ const WorkProjectSchema = new mongoose.Schema(
     overrides: [
       new mongoose.Schema(
         {
-          item: { type: ObjectId, required: true },
+          item: { type: ObjectId, default: null }, // former board row (old data only)
           stage: { type: String, required: true },
           status: { type: String, enum: ["skip", "done"], required: true },
           reason: { type: String, default: "" },
@@ -44,6 +49,17 @@ const WorkProjectSchema = new mongoose.Schema(
         { _id: false }
       ),
     ],
+    // Key dates (client delivery, permit…) on the Gantt; reached when `doneAt` is set.
+    milestones: [
+      new mongoose.Schema({
+        name: { type: String, required: true },
+        date: { type: Date, required: true },
+        dependsOn: [{ type: ObjectId, ref: "Task" }],
+        doneAt: { type: Date, default: null },
+        baselineDate: { type: Date, default: null },
+      }),
+    ],
+    taskBaselineAt: { type: Date, default: null }, // last "Save baseline" on the Gantt
     // Waiting stages whose department was already told "ready for you".
     handedOff: [{ type: String }],
     finishedAt: { type: Date, default: null },

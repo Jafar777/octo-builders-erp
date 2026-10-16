@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Copy, Lock, LockOpen, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Copy, Gift, Lock, LockOpen, Plus, Trash2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { api, errorText } from "@/lib/clientApi";
@@ -17,51 +18,97 @@ import LeaveList from "@/components/erp/hr/LeaveList";
 import SalaryUnlock from "@/components/erp/hr/SalaryUnlock";
 import { SkeletonList, SkeletonTable } from "@/components/erp/ui/Loading";
 
+// Efficiency colour: actual (task) hours against fingerprint hours.
+const effTone = (e) => (e === null || e === undefined ? "text-white/35" : e >= 0.8 ? "text-emerald-300" : e >= 0.6 ? "text-amber-200" : "text-red-300");
+
 function Overview({ data, lookups, onOpen, payroll }) {
   const { t, lang } = useLanguage();
+  const th = "px-3 py-3 font-medium whitespace-nowrap";
+  const td = "px-3 py-3 tabular-nums whitespace-nowrap";
+  // Numbers are written left-to-right inside, but cells keep the page direction so
+  // they line up under their headers.
+  const ltr = (v) => <span dir="ltr">{v}</span>;
   return (
     <div className="overflow-x-auto rounded-2xl border border-white/10">
-      <table className="w-full min-w-[900px] text-sm">
+      <table className="w-full min-w-[1000px] text-sm">
         <thead className="bg-white/[0.04] text-xs text-white/50">
           <tr>
-            <th className="px-3 py-2.5 text-start font-medium">{t("auth.name")}</th>
-            <th className="px-3 py-2.5 text-start font-medium">{t("erp.hr.worked")}</th>
-            <th className="px-3 py-2.5 text-start font-medium">{t("erp.hr.efficiency")}</th>
-            <th className="px-3 py-2.5 text-start font-medium">{t("erp.hr.absent")}</th>
-            <th className="px-3 py-2.5 text-start font-medium">{t("erp.hr.lateCount")}</th>
-            <th className="px-3 py-2.5 text-start font-medium">{t("erp.hr.warnings")}</th>
-            <th className="px-3 py-2.5 text-start font-medium">{t("erp.hr.overtime")}</th>
-            <th className="px-3 py-2.5 text-start font-medium">KPI</th>
-            {payroll && <th className="px-3 py-2.5 text-end font-medium">{t("erp.hr.pay.net")}</th>}
+            <th className={`${th} text-start`}>{t("auth.name")}</th>
+            <th className={`${th} text-center`} title={t("erp.hr.workedHint")}>{t("erp.hr.worked")}</th>
+            <th className={`${th} text-center`} title={t("erp.hr.actualHint")}>{t("erp.hr.actualHours")}</th>
+            <th className={`${th} text-center`} title={t("erp.hr.efficiencyHint")}>{t("erp.hr.efficiency")}</th>
+            <th className={`${th} text-center`}>{t("erp.hr.absent")}</th>
+            <th className={`${th} text-center`}>{t("erp.hr.lateCount")}</th>
+            <th className={`${th} text-center`}>{t("erp.hr.warnings")}</th>
+            <th className={`${th} text-center`}>{t("erp.hr.overtime")}</th>
+            <th className={`${th} text-center`}>KPI</th>
+            {payroll && <th className={`${th} text-end`}>{t("erp.hr.pay.net")}</th>}
           </tr>
         </thead>
         <tbody>
           {data.rows.map((r) => {
             const s = r.summary;
+            const exempt = r.staff.attendanceExempt;
+            const dash = <span className="text-white/30">—</span>;
             return (
               <tr key={r.staff.id} onClick={() => onOpen(r.staff)} className="cursor-pointer border-t border-white/5 hover:bg-white/[0.04]">
-                <td className="px-3 py-2.5">
-                  <span className="flex items-center gap-2">
-                    <Avatar name={r.staff.name} src={r.staff.avatarUrl} size={30} />
-                    <span>
-                      <span className="block font-medium">{r.staff.name}</span>
-                      <span className="block text-xs text-white/40">
+                <td className="px-3 py-3">
+                  <span className="flex items-center gap-2.5">
+                    <Avatar name={r.staff.name} src={r.staff.avatarUrl} size={32} />
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{r.staff.name}</span>
+                      <span className="block truncate text-xs text-white/40">
                         {lookups.dep(r.staff.department)}
-                        {!r.staff.badgeId && <span className="ms-1 text-amber-300">· {t("erp.hr.noBadge")}</span>}
+                        {!r.staff.badgeId && !exempt && <span className="ms-1 text-amber-300">· {t("erp.hr.noBadge")}</span>}
                       </span>
                     </span>
                   </span>
                 </td>
-                <td className="px-3 py-2.5 tabular-nums" dir="ltr">{s ? `${hm(s.workedHours)} / ${hm(s.requiredToDate)}` : "—"}</td>
-                <td className="px-3 py-2.5 tabular-nums">{s?.efficiency === null || !s ? "—" : `${Math.round(s.efficiency * 100)}%`}</td>
-                <td className="px-3 py-2.5 tabular-nums">{s?.absentDays ?? "—"}</td>
-                <td className="px-3 py-2.5 tabular-nums">{s?.lateCount ?? "—"}</td>
-                <td className={`px-3 py-2.5 tabular-nums ${s?.warnings >= 4 ? "text-red-300" : ""}`}>{s?.warnings ?? "—"}</td>
-                <td className="px-3 py-2.5 tabular-nums" dir="ltr">{s ? hm(s.overtimeHours) : "—"}</td>
-                <td className="px-3 py-2.5 tabular-nums">{r.kpi ? `${r.kpi.score} · ${r.kpi.grade?.[lang] || ""}` : "—"}</td>
+                {exempt ? (
+                  <>
+                    <td colSpan={2} className={`${td} text-center`}>
+                      <span className="rounded-full bg-white/5 px-2.5 py-1 text-xs text-white/50">{t("erp.hr.day.exempt")}</span>
+                    </td>
+                    <td className={`${td} text-center`}>{dash}</td>
+                    <td className={`${td} text-center`}>{dash}</td>
+                    <td className={`${td} text-center`}>{dash}</td>
+                    <td className={`${td} text-center`}>{dash}</td>
+                    <td className={`${td} text-center`}>{dash}</td>
+                  </>
+                ) : (
+                  <>
+                    <td className={`${td} text-center`}>
+                      {s ? (
+                        <>
+                          {ltr(hm(s.workedHours))} <span className="text-white/35">/ {ltr(hm(s.requiredToDate))}</span>
+                        </>
+                      ) : (
+                        dash
+                      )}
+                    </td>
+                    <td className={`${td} text-center font-medium text-sky-200`}>{s ? ltr(hm(s.actualHours || 0)) : dash}</td>
+                    <td className={`${td} text-center font-medium ${effTone(s?.efficiency)}`}>
+                      {s?.efficiency === null || s?.efficiency === undefined ? dash : ltr(`${Math.round(s.efficiency * 100)}%`)}
+                    </td>
+                    <td className={`${td} text-center ${s?.absentDays ? "text-red-300" : ""}`}>{s?.absentDays ?? "—"}</td>
+                    <td className={`${td} text-center ${s?.lateCount ? "text-amber-200" : ""}`}>{s?.lateCount ?? "—"}</td>
+                    <td className={`${td} text-center ${s?.warnings >= 4 ? "text-red-300" : ""}`}>{s?.warnings ?? "—"}</td>
+                    <td className={`${td} text-center`}>{s ? ltr(hm(s.overtimeHours)) : dash}</td>
+                  </>
+                )}
+                <td className={`${td} text-center`}>
+                  {r.kpi ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="font-semibold">{r.kpi.score}</span>
+                      <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-white/60">{r.kpi.grade?.[lang] || ""}</span>
+                    </span>
+                  ) : (
+                    dash
+                  )}
+                </td>
                 {payroll && (
-                  <td className="px-3 py-2.5 text-end tabular-nums">
-                    {r.payroll?.hasSalary ? money(r.payroll.net, r.payroll.currency, lang) : <span className="text-white/35">{t("erp.hr.noSalary")}</span>}
+                  <td className={`${td} text-end`}>
+                    {r.payroll?.hasSalary ? money(r.payroll.net, r.payroll.currency, lang) : <span className="text-xs text-white/35">{t("erp.hr.noSalary")}</span>}
                   </td>
                 )}
               </tr>
@@ -75,19 +122,9 @@ function Overview({ data, lookups, onOpen, payroll }) {
 
 function PayrollPanel({ data, month, onChanged, settings }) {
   const { t, lang } = useLanguage();
-  const [pool, setPool] = useState(String(data.state.bonusPool || ""));
   const [error, setError] = useState("");
   const closed = data.state.closed;
 
-  async function savePool() {
-    setError("");
-    try {
-      await api(`/api/hr/months/${month}`, { method: "PATCH", body: { bonusPool: Number(pool) || 0, bonusCurrency: settings.currencies.base } });
-      onChanged();
-    } catch (err) {
-      setError(errorText(t, err));
-    }
-  }
   async function act(action) {
     if (!window.confirm(t(action === "close" ? "erp.hr.confirmClose" : "erp.hr.confirmReopen"))) return;
     setError("");
@@ -104,12 +141,11 @@ function PayrollPanel({ data, month, onChanged, settings }) {
 
   return (
     <div className="space-y-5">
-      <Card className="flex flex-wrap items-end gap-4">
-        <div className="w-48">
-          <Input type="number" label={`${t("erp.hr.bonusPool")} (${settings.currencies.base})`} value={pool} onChange={setPool} dir="ltr" disabled={closed} />
-        </div>
-        {!closed && <Button variant="ghost" onClick={savePool}>{t("common.save")}</Button>}
-        <p className="text-xs text-white/45">{t("erp.hr.bonusHint", { split: settings.hr.bonusSplit.join(" / ") })}</p>
+      <Card className="flex flex-wrap items-center gap-4">
+        {/* The KPI bonus is managed on the Bonus page only. */}
+        <Link href="/dashboard/bonus" className="inline-flex items-center gap-1.5 text-sm text-amber-200 hover:underline">
+          <Gift size={15} /> {t("erp.hr.bonusOnBonusPage")}
+        </Link>
         <div className="ms-auto flex items-center gap-3">
           {Object.entries(totals).map(([c, v]) => (
             <span key={c} className="text-sm text-white/70">
@@ -307,12 +343,6 @@ function Rules({ settings, onSaved }) {
           <Plus size={16} /> {t("common.add")}
         </Button>
       </div>
-      <Input
-        label={t("erp.hr.bonusSplit")}
-        value={value.bonusSplit.join(", ")}
-        dir="ltr"
-        onChange={(v) => set("bonusSplit")(v.split(",").map((x) => Number(x.trim())).filter((x) => !Number.isNaN(x)))}
-      />
       <ErrorText>{error}</ErrorText>
       {status && <p className="text-sm text-emerald-300">{status}</p>}
       <Button onClick={save}>{t("common.save")}</Button>

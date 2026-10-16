@@ -3,13 +3,16 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CalendarDays, LayoutTemplate, ListChecks, Plus } from "lucide-react";
+import { AlertTriangle, CalendarDays, ChartNoAxesGantt, LayoutGrid, LayoutTemplate, ListChecks, Plus } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { formatDate } from "@/lib/formatTime";
 import Modal from "@/components/erp/ui/Modal";
 import { Button, PageHeader, Select } from "@/components/erp/ui/fields";
 import ProjectForm from "@/components/erp/projects/ProjectForm";
+import ProjectsTimeline from "@/components/erp/projects/ProjectsTimeline";
+import ProjectsSummary from "@/components/erp/projects/ProjectsSummary";
+import { ScaleBadge } from "@/components/erp/projects/ScaleSelect";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { SkeletonList } from "@/components/erp/ui/Loading";
 
@@ -23,6 +26,7 @@ export default function ProjectsList() {
   const [status, setStatus] = useState("active");
   const [department, setDepartment] = useState("");
   const [creating, setCreating] = useState(false);
+  const [view, setView] = useState("timeline");
   const canManage = user?.permissions?.includes("projects.manage");
 
   const visible = useMemo(
@@ -52,6 +56,21 @@ export default function ProjectsList() {
       />
 
       <div className="mb-6 flex flex-wrap gap-3">
+        <div className="flex gap-1 rounded-xl border border-white/10 p-1">
+          {[
+            ["timeline", ChartNoAxesGantt],
+            ["cards", LayoutGrid],
+          ].map(([v, Icon]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm ${view === v ? "bg-white/15 text-white" : "text-white/60 hover:text-white"}`}
+            >
+              <Icon size={15} /> {t(`erp.gantt.${v}`)}
+            </button>
+          ))}
+        </div>
         <div className="flex flex-wrap gap-1 rounded-xl border border-white/10 p-1">
           {STATUSES.map((s) => (
             <button
@@ -76,7 +95,9 @@ export default function ProjectsList() {
         )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {view === "timeline" && lookups.projectsLoaded && <ProjectsTimeline projects={visible} status={status} />}
+
+      <div className={`grid gap-4 md:grid-cols-2 xl:grid-cols-3 ${view === "cards" ? "" : "hidden"}`}>
         {visible.map((p) => {
           const dep = lookups.departments.find((d) => d.id === p.department);
           const pct = Math.round((p.progress || 0) * 100);
@@ -118,6 +139,7 @@ export default function ProjectsList() {
                 <span className="flex items-center gap-1">
                   <ListChecks size={13} /> {t("erp.projects.openTasks", { count: p.openTasks })}
                 </span>
+                <ScaleBadge scales={lookups.settings.projectScales} value={p.scale} />
                 {p.overdueTasks > 0 && (
                   <span className="text-red-300">{t("erp.projects.overdueTasks", { count: p.overdueTasks })}</span>
                 )}
@@ -128,6 +150,8 @@ export default function ProjectsList() {
       </div>
       {!lookups.projectsLoaded && <SkeletonList rows={5} />}
       {lookups.projectsLoaded && visible.length === 0 && <p className="py-12 text-center text-white/40">{t("erp.projects.none")}</p>}
+
+      <ProjectsSummary />
 
       <Modal open={creating} onClose={() => setCreating(false)} title={t("erp.projects.new")} wide>
         {creating && (

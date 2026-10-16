@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
-import { applyStageRouting, cleanItems, cleanProjectFields, cleanStages } from "@/lib/projectPayload";
+import { applyFlow, applyStageRouting, cleanProjectFields, cleanStages } from "@/lib/projectPayload";
 import { buildCells, checkStageHandoffs, projectAccess, projectChannel, serializeProject } from "@/lib/projects";
 import { projectScore } from "@/lib/projectHealth";
 import { publish } from "@/lib/realtime/server";
@@ -27,7 +27,7 @@ export async function GET(request, { params }) {
 
   const tasks = await Task.find(
     { project: project._id },
-    { item: 1, stage: 1, revision: 1, status: 1, kind: 1, createdAt: 1, assignee: 1, number: 1, dueAt: 1, submittedAt: 1 }
+    { stage: 1, revision: 1, status: 1, kind: 1, createdAt: 1, assignee: 1, number: 1, dueAt: 1, submittedAt: 1 }
   ).lean();
   const board = buildCells(project.toObject(), tasks);
   // Project KPI: delivery + quality here; the cost part is added on the finance-aware analytics page.
@@ -47,14 +47,13 @@ export async function PATCH(request, { params }) {
   const { fields, error } = cleanProjectFields(body);
   if (error) return fail(error);
 
-  // Board structure: rows and columns that already have tasks can't be removed.
-  const used = await Task.find({ project: project._id }, { item: 1, stage: 1 }).lean();
-  if (Array.isArray(body.items)) {
-    const items = cleanItems(body.items);
-    const kept = new Set(items.map((i) => i._id.toString()));
-    if (used.some((t) => t.item && !kept.has(t.item.toString()))) return fail("item_has_tasks", 409);
-    fields.items = items;
+  if ("scale" in fields) {
+    const { projectScales = [] } = await getTaskSettings();
+    if (!projectScales.some((s) => s.key === fields.scale)) return fail("scale_required");
   }
+
+  // Stages that already have tasks can't be removed.
+  const used = await Task.find({ project: project._id }, { stage: 1 }).lean();
   if (Array.isArray(body.stages)) {
     const settings = await getTaskSettings();
     const cleaned = cleanStages(body.stages, settings.taskTypes.map((t) => t.key));
@@ -64,6 +63,10 @@ export async function PATCH(request, { params }) {
     const routed = await applyStageRouting(user, cleaned.stages, project.stages);
     if (routed.error) return fail(routed.error);
     fields.stages = routed.stages;
+  }
+  // The project type decides which stages wait (also when only the type changed).
+  if (fields.stages || fields.flow) {
+    fields.stages = applyFlow(fields.stages || project.toObject().stages, fields.flow || project.flow || "mixed");
   }
   if (fields.status === "finished" && project.status !== "finished") fields.finishedAt = new Date();
   if (fields.status && fields.status !== "finished") fields.finishedAt = null;

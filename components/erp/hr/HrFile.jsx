@@ -124,13 +124,3 @@ export function DocumentsCard({ userId, data, onChanged }) {
     </Card>
   );
 }
-
-// Emergency contact + documents of one employee (their own "My file").
-export default function HrFile({ userId, data, onChanged }) {
-  return (
-    <>
-      <EmergencyContactCard userId={userId} data={data} />
-      <DocumentsCard userId={userId} data={data} onChanged={onChanged} />
-    </>
-  );
-}

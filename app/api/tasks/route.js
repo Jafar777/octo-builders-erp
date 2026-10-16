@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { notify } from "@/lib/notify";
-import { isStageLocked, projectAccess, stageDepartment } from "@/lib/projects";
+import { getWorkCalendar } from "@/lib/ganttServer";
+import { canRouteStages, isStageLocked, projectAccess, stageDepartment } from "@/lib/projects";
+import { projectScale, scaledDue } from "@/lib/projectScale";
 import { getTaskSettings } from "@/lib/settings";
 import { inScope } from "@/lib/scope";
 import {
@@ -13,7 +15,6 @@ import {
   enrichTask,
   enrichTasks,
   logActivity,
-  nextRevisionFor,
   publishTaskChange,
   starSummary,
   taskTitle,
@@ -101,21 +102,18 @@ export async function POST(request) {
     if (!parent || !canViewTask(user, parent)) return fail("invalid_parent");
     if (parent.parentTask) return fail("nested_subtask");
     body.projectId = parent.project ? parent.project.toString() : "";
-    body.itemId = "";
     body.stage = "";
   }
 
   let project = null;
-  let item = null;
   let stage = null;
   if (isObjectId(body.projectId)) {
     project = await WorkProject.findById(body.projectId).lean();
     if (!project || !projectAccess(user, project)) return fail("invalid_project");
     if (["finished", "archived"].includes(project.status)) return fail("project_closed");
-    if (body.itemId || body.stage) {
-      item = project.items.find((i) => i._id.toString() === body.itemId);
+    if (body.stage) {
       stage = project.stages.find((s) => s.key === body.stage);
-      if (!item || !stage) return fail("invalid_cell");
+      if (!stage) return fail("invalid_cell");
       // A stage waiting for the earlier stages can't get work yet.
       if (await isStageLocked(project, stage.key)) return fail("stage_waiting", 409);
     }
@@ -131,15 +129,37 @@ export async function POST(request) {
   }
 
   const type = settings.taskTypes.some((t) => t.key === body.type) ? body.type : stage?.taskType || "other";
-  const dueAt = parseDate(body.dueAt);
-  const plannedStart = parseDate(body.plannedStart);
+  // Time is set by the system: only the GM / CEO may give dates, hours, predecessors
+  // or a repeat rule. Everyone else's work starts counting when they press Start.
+  const isScheduler = canRouteStages(user);
+  let dueAt = isScheduler ? parseDate(body.dueAt) : null;
+  const plannedStart = isScheduler ? parseDate(body.plannedStart) : null;
   if (dueAt === undefined || plannedStart === undefined) return fail("invalid_date");
+  let estimatedHours = isScheduler ? Math.max(0, Math.min(1000, Number(body.estimatedHours) || 0)) : 0;
+  if (!isScheduler) {
+    body.dependsOn = [];
+    body.recurrence = null;
+  }
+
+  // Project scale: the task gets the scale's hours and a due date that many working
+  // hours after it starts (recalculated at Start).
+  const scale = kind === "task" ? projectScale(project, settings) : null;
+  const maxHours = scale?.hours || 0;
+  if (kind === "task" && project && !maxHours && !isScheduler) return fail("project_scale_missing");
+  let dueManual = false;
+  if (maxHours) {
+    if (dueAt) dueManual = true;
+    else {
+      dueAt = scaledDue(plannedStart || new Date(), maxHours, await getWorkCalendar());
+      estimatedHours = maxHours;
+    }
+  }
   if (kind === "task" && !dueAt) return fail("due_required");
 
   const deps = await cleanDependsOn(body.dependsOn);
   if (deps.error) return fail(deps.error);
-  // Board-cell tasks follow the revision chain, so they can't repeat.
-  const recurrence = item ? cleanRecurrence(null) : cleanRecurrence(body.recurrence, dueAt);
+  // Stage tasks follow the revision chain, so they can't repeat.
+  const recurrence = stage ? cleanRecurrence(null) : cleanRecurrence(body.recurrence, dueAt);
   if (recurrence.error) return fail(recurrence.error);
 
   const task = await Task.create({
@@ -147,17 +167,18 @@ export async function POST(request) {
     kind,
     title: String(body.title || "").trim().slice(0, 200),
     project: project?._id || null,
-    item: item?._id || null,
     stage: stage?.key || "",
     department,
     type,
     assignee: assigneeId,
     createdBy: user.id,
     priority: ["normal", "important", "urgent"].includes(body.priority) ? body.priority : "normal",
-    revision: item ? await nextRevisionFor(project._id, item._id, stage.key) : 0,
+    revision: 0,
     plannedStart,
     dueAt,
-    estimatedHours: Math.max(0, Math.min(1000, Number(body.estimatedHours) || 0)),
+    estimatedHours,
+    maxHours,
+    dueManual,
     description: String(body.description || "").slice(0, 4000),
     deliveryLink: String(body.deliveryLink || "").trim().slice(0, 1000),
     parentTask: parent?._id || null,

@@ -3,7 +3,7 @@ import { getCurrentUser, hasPermission } from "@/lib/currentUser";
 import { forbidden } from "@/lib/apiUtils";
 import { localParts } from "@/lib/attendance";
 import { loadFinance } from "@/lib/finance";
-import { attendanceForMonth, hrStaff, todayIn } from "@/lib/hr";
+import { attendanceForMonth, hrStaff, tasksForMonth, todayIn, withActualHours } from "@/lib/hr";
 import { serializeNotification } from "@/lib/notify";
 import { lateTaskCount, projectRisk } from "@/lib/projectHealth";
 import { buildCells } from "@/lib/projects";
@@ -55,9 +55,9 @@ export async function GET() {
     (async () => {
       const [me] = await hrStaff({ _id: user.id });
       if (!me) return;
-      const att = (await attendanceForMonth([me], month, settings))[me.id];
+      const att = withActualHours(await attendanceForMonth([me], month, settings), await tasksForMonth(month, [me.id], settings.hr.timezone))[me.id];
       const s = att?.summary;
-      if (s) out.myMonth = { worked: s.workedHours, required: s.requiredToDate, efficiency: s.efficiency, warnings: s.warnings, late: s.lateCount, overtime: s.overtimeHours };
+      if (s) out.myMonth = { worked: s.workedHours, actual: s.actualHours, required: s.requiredToDate, efficiency: s.efficiency, warnings: s.warnings, late: s.lateCount, overtime: s.overtimeHours };
     })()
   );
   jobs.push(

@@ -15,6 +15,7 @@ export const DAY_STYLE = {
   justified_absence: "bg-amber-500/10 text-amber-300",
   upcoming: "text-white/30",
   not_employed: "text-white/25",
+  exempt: "text-white/35",
 };
 
 // 7.5 → "7:30"

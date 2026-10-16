@@ -78,14 +78,20 @@ export function Payslip({ payroll, closed }) {
   const { t, lang } = useLanguage();
   if (!payroll) return null;
   const c = payroll.currency;
-  const rows = [
-    ["base", payroll.base],
-    ["hoursDeduction", -payroll.hoursDeduction, `${hm(payroll.missingHours)} h`],
-    ["warningDeduction", -payroll.warningDeduction, `${payroll.warnings} · ${payroll.warningPercent}%`],
-    ["overtimePay", payroll.overtimePay, `${hm(payroll.overtimeHours)} h`],
-    ["manualBonus", payroll.manualBonus],
-    ["kpiBonus", payroll.kpiBonus],
-  ];
+  // Fixed salaries (GM / CEO) have no attendance lines.
+  const rows = payroll.fixed
+    ? [
+        ["base", payroll.base],
+        ["manualBonus", payroll.manualBonus],
+      ]
+    : [
+        ["base", payroll.base],
+        ["hoursDeduction", -payroll.hoursDeduction, `${hm(payroll.missingHours)} h`],
+        ["warningDeduction", -payroll.warningDeduction, `${payroll.warnings} · ${payroll.warningPercent}%`],
+        ["overtimePay", payroll.overtimePay, `${hm(payroll.overtimeHours)} h`],
+        ["manualBonus", payroll.manualBonus],
+        ["kpiBonus", payroll.kpiBonus],
+      ];
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
       <div className="mb-4 flex items-center justify-between">
@@ -102,6 +108,7 @@ export function Payslip({ payroll, closed }) {
         <p className="text-sm text-white/50">{t("erp.hr.noSalary")}</p>
       ) : (
         <>
+          {payroll.fixed && <p className="mb-3 rounded-xl bg-white/5 px-3 py-2 text-xs text-white/60">{t("erp.hr.fixedSalary")}</p>}
           <div className="space-y-2 text-sm">
             {rows.map(([key, value, hint]) => (
               <div key={key} className="flex items-center justify-between gap-3">
@@ -165,9 +172,24 @@ export default function PersonMonth({ userId, month, onData }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
-        <StatTile label={t("erp.hr.worked")} value={hm(s.workedHours)} hint={`${t("erp.hr.of")} ${hm(s.requiredToDate)}`} />
-        <StatTile label={t("erp.hr.efficiency")} value={s.efficiency === null ? "—" : `${Math.round(s.efficiency * 100)}%`} />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+        <StatTile
+          label={t("erp.hr.worked")}
+          value={hm(s.workedHours)}
+          hint={`${t("erp.hr.of")} ${hm(s.requiredToDate)}${s.sickHours ? ` · ${t("erp.hr.includesSick", { h: hm(s.sickHours) })}` : ""}`}
+        />
+        <StatTile
+          label={t("erp.hr.actualHours")}
+          value={hm(s.actualHours || 0)}
+          tone="text-sky-200"
+          hint={s.sickHours ? t("erp.hr.includesSick", { h: hm(s.sickHours) }) : t("erp.hr.actualHint")}
+        />
+        <StatTile
+          label={t("erp.hr.efficiency")}
+          value={s.efficiency === null || s.efficiency === undefined ? "—" : `${Math.round(s.efficiency * 100)}%`}
+          tone={s.efficiency === null || s.efficiency === undefined ? "" : s.efficiency >= 0.8 ? "text-emerald-300" : s.efficiency >= 0.6 ? "text-amber-200" : "text-red-300"}
+          hint={t("erp.hr.efficiencyHint")}
+        />
         <StatTile label={t("erp.hr.overtime")} value={hm(s.overtimeHours)} />
         <StatTile label={t("erp.hr.lateCount")} value={s.lateCount} />
         <StatTile label={t("erp.hr.warnings")} value={s.warnings} tone={s.warnings >= 4 ? "text-red-300" : ""} hint={t("erp.hr.warningsHint")} />

@@ -29,6 +29,9 @@ import {
   BarChart3,
   Wallet,
   Calculator,
+  UserRound,
+  Gift,
+  UserCheck,
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
@@ -40,18 +43,20 @@ import Avatar from "@/components/erp/ui/Avatar";
 import TopProgress from "@/components/erp/ui/TopProgress";
 import MiniChat from "@/components/erp/messages/MiniChat";
 
-// Sidebar entries; `perm` hides an entry from roles without that permission and
-// `staff` hides it from accounts that have no role yet.
+// Sidebar entries; `perm` hides an entry from roles without that permission,
+// `staff` hides it from accounts that have no role yet, and `when(user)` is a custom rule.
 const NAV = [
   {
     group: "main",
     items: [
       { href: "/dashboard", key: "overview", icon: LayoutGrid, exact: true },
+      { href: "/dashboard/profile", key: "profile", icon: UserRound },
       { href: "/dashboard/tasks", key: "tasks", icon: ListChecks, staff: true },
       { href: "/dashboard/projects", key: "projects", icon: FolderKanban, staff: true },
       { href: "/dashboard/reviews", key: "reviews", icon: ClipboardCheck, perm: "tasks.review", badge: "reviews" },
       { href: "/dashboard/attendance", key: "attendance", icon: CalendarClock, staff: true },
       { href: "/dashboard/kpi", key: "kpi", icon: Gauge, staff: true },
+      { href: "/dashboard/bonus", key: "bonus", icon: Gift, staff: true },
       { href: "/dashboard/messages", key: "messages", icon: MessagesSquare, staff: true, badge: "messages", exact: true },
       { href: "/dashboard/notifications", key: "notifications", icon: Bell, staff: true },
     ],
@@ -60,6 +65,14 @@ const NAV = [
     group: "management",
     items: [
       { href: "/dashboard/analytics", key: "analytics", icon: BarChart3, perm: "analytics.view" },
+      // GM / CEO (rate) and department managers (see their own).
+      {
+        href: "/dashboard/manager-kpi",
+        key: "managerKpi",
+        icon: UserCheck,
+        when: (u) =>
+          (u.scope === "all" && u.permissions.includes("kpi.manage")) || (u.scope === "department" && u.permissions.includes("tasks.review")),
+      },
       { href: "/dashboard/hr", key: "hr", icon: BriefcaseBusiness, perm: "attendance.view" },
       { href: "/dashboard/finance", key: "finance", icon: Wallet, perm: "finance.view" },
       { href: "/dashboard/pricing", key: "pricing", icon: Calculator, perm: "pricing.use" },
@@ -119,7 +132,9 @@ export default function DashboardShell({ user, children }) {
 
   const groups = NAV.map((g) => ({
     ...g,
-    items: g.items.filter((item) => (!item.staff || user.isStaff) && (!item.perm || user.permissions.includes(item.perm))),
+    items: g.items.filter(
+      (item) => (!item.staff || user.isStaff) && (!item.perm || user.permissions.includes(item.perm)) && (!item.when || (user.isStaff && item.when(user)))
+    ),
   })).filter((g) => g.items.length > 0);
 
   async function handleLogout() {

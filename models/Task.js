@@ -21,7 +21,7 @@ const TaskSchema = new mongoose.Schema(
     kind: { type: String, enum: TASK_KINDS, default: "task" },
     title: { type: String, default: "" }, // free text for meetings / personal tasks
     project: { type: ObjectId, ref: "WorkProject", default: null },
-    item: { type: ObjectId, default: null }, // WorkProject.items._id
+    item: { type: ObjectId, default: null }, // former board row (old data only; not used)
     stage: { type: String, default: "" }, // WorkProject.stages.key
     department: { type: ObjectId, ref: "Department", default: null },
     type: { type: String, default: "" }, // settings.tasks.taskTypes key
@@ -46,6 +46,13 @@ const TaskSchema = new mongoose.Schema(
     plannedStart: { type: Date, default: null },
     dueAt: { type: Date, default: null },
     estimatedHours: { type: Number, default: 0 },
+    // From the project's scale: the working hours the employee has for this task (0 = no limit).
+    // The due date follows it (set again when work starts) unless the GM set it by hand.
+    maxHours: { type: Number, default: 0 },
+    dueManual: { type: Boolean, default: false },
+    // Saved plan (Gantt "Save baseline") to compare the current dates with.
+    baselineStart: { type: Date, default: null },
+    baselineEnd: { type: Date, default: null },
     deliveryLink: { type: String, default: "" },
     attachments: [
       new mongoose.Schema({ url: String, name: String, mime: String, size: Number }, { _id: false }),

@@ -28,7 +28,7 @@ export async function POST(request) {
   if (isObjectId(body.fromProjectId)) {
     const project = await WorkProject.findById(body.fromProjectId).lean();
     if (!project || !projectAccess(user, project)) return fail("invalid_project");
-    data = { department: project.department, stages: project.stages, items: project.items.map((i) => i.name) };
+    data = { department: project.department, stages: project.stages };
   } else {
     const settings = await getTaskSettings();
     const cleaned = cleanStages(body.stages, settings.taskTypes.map((t) => t.key));
@@ -38,7 +38,6 @@ export async function POST(request) {
     data = {
       department: isObjectId(body.department) ? body.department : null,
       stages: routed.stages,
-      items: (Array.isArray(body.items) ? body.items : []).map((i) => String(i).trim().slice(0, 120)).filter(Boolean),
     };
   }
 

@@ -22,8 +22,7 @@ import { useAuth } from "@/context/AuthContext";
 import { usePollingFallback, useRealtimeEvent, userChannelName } from "@/context/RealtimeContext";
 import { api, errorText } from "@/lib/clientApi";
 import { formatDate, formatDateTime, formatRelative, locale } from "@/lib/formatTime";
-import MediaUploader from "@/components/dashboard/MediaUploader";
-import NameFields, { initialNames, namesComplete } from "@/components/erp/staff/NameFields";
+import { namesComplete } from "@/components/erp/staff/NameFields";
 import { ErrorText, Input } from "@/components/erp/ui/fields";
 import CheckInCard from "@/components/erp/hr/CheckInCard";
 import { hm, money, StatTile } from "@/components/erp/hr/hrUi";
@@ -75,68 +74,18 @@ function HomeSkeleton() {
   );
 }
 
-function ProfileCard({ user }) {
+// New accounts are sent to their profile until the name is filled in both languages.
+function CompleteProfileNote({ user }) {
   const { t } = useLanguage();
-  const { refresh } = useAuth();
-  const [names, setNames] = useState(() => initialNames(user));
-  // Opens by itself until the employee has filled in their name in both languages.
-  const incomplete = !namesComplete(user || {});
-  const [open, setOpen] = useState(incomplete);
-  const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || "");
-  const [phone, setPhone] = useState(user?.phone || "");
-  const [contact, setContact] = useState(user?.emergencyContact || { name: "", phone: "", relation: "" });
-  const setContactField = (field) => (value) => setContact((c) => ({ ...c, [field]: value }));
-  const [status, setStatus] = useState("idle");
-  const [error, setError] = useState("");
-
-  async function handleSave() {
-    setStatus("saving");
-    setError("");
-    try {
-      await api("/api/auth/me", { method: "PATCH", body: { ...names, avatarUrl, phone, emergencyContact: contact } });
-      await refresh();
-      setStatus("saved");
-      setTimeout(() => setStatus("idle"), 2000);
-    } catch (err) {
-      setError(errorText(t, err));
-      setStatus("idle");
-    }
-  }
-
+  if (!user || namesComplete(user)) return null;
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/[0.03]">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between gap-3 p-5 text-start">
-        <span className="text-sm font-semibold uppercase tracking-wider text-white/50">{t("dashboard.profile")}</span>
-        <ChevronDown size={18} className={`text-white/40 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <div className="max-w-lg space-y-5 px-5 pb-5">
-          {incomplete && <p className="rounded-xl bg-brand-orange/10 px-4 py-2.5 text-sm text-brand-orange">{t("erp.names.completeProfile")}</p>}
-          <MediaUploader previewUrl={avatarUrl} onUploaded={setAvatarUrl} />
-          <NameFields value={names} onChange={setNames} />
-          <Input label={t("erp.staff.phone")} value={phone} onChange={setPhone} dir="ltr" type="tel" />
-          <div className="space-y-3 border-t border-white/10 pt-4">
-            <p className="text-sm font-medium text-white/70">{t("erp.hrFile.emergency")}</p>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Input label={t("erp.hrFile.contactName")} value={contact.name} onChange={setContactField("name")} />
-              <Input label={t("erp.staff.phone")} value={contact.phone} onChange={setContactField("phone")} dir="ltr" type="tel" />
-              <Input label={t("erp.hrFile.relation")} value={contact.relation} onChange={setContactField("relation")} />
-            </div>
-          </div>
-          <ErrorText>{error}</ErrorText>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={status === "saving" || !namesComplete(names)}
-            className="flex items-center gap-2 rounded-xl bg-brand-orange px-6 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.01] disabled:opacity-60"
-          >
-            {status === "saving" && <Loader2 size={16} className="animate-spin" />}
-            {status === "saved" && <Check size={16} />}
-            {status === "saved" ? t("common.saved") : t("common.save")}
-          </button>
-        </div>
-      )}
-    </section>
+    <Link
+      href="/dashboard/profile"
+      className="flex items-center justify-between gap-3 rounded-2xl bg-brand-orange/10 px-5 py-4 text-sm text-brand-orange hover:bg-brand-orange/15"
+    >
+      {t("erp.names.completeProfile")}
+      <ArrowUpRight size={16} className="shrink-0 rtl:-scale-x-100" />
+    </Link>
   );
 }
 
@@ -377,7 +326,7 @@ export default function DashboardOverview({ user }) {
         </>
       )}
 
-      <ProfileCard user={user} />
+      <CompleteProfileNote user={user} />
     </div>
   );
 }

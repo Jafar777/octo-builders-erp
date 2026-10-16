@@ -8,6 +8,7 @@ import { getSettings } from "@/lib/settings";
 import SalaryHistory from "@/models/SalaryHistory";
 import User from "@/models/User";
 import { pickName, viewerLang } from "@/lib/personName";
+import { canApproveSkills, serializeSkillRequests } from "@/lib/skills";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -71,6 +72,7 @@ export async function GET(request, { params }) {
       kpiExcluded: Boolean(u.kpiExcluded),
       phone: u.phone || "",
       skills: u.skills || [],
+      skillRequests: serializeSkillRequests(u.skillRequests),
       workSchedule: scheduleOut(u.workSchedule),
       emergencyContact: canEditFile
         ? { name: u.emergencyContact?.name || "", phone: u.emergencyContact?.phone || "", relation: u.emergencyContact?.relation || "" }
@@ -78,6 +80,7 @@ export async function GET(request, { params }) {
     },
     documents: canEditFile ? (u.documents || []).map(serializeDocument) : [],
     canEditFile,
+    canApproveSkills: canApproveSkills(user),
     salaries: salaries.map((s) => ({ id: s._id.toString(), amount: s.amount, currency: s.currency, from: s.from, note: s.note })),
     canPay,
     salaryLocked: mayPay && !canPay,

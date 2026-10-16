@@ -5,12 +5,15 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { api, errorText } from "@/lib/clientApi";
 import { Button, ErrorText, Input, Label, Select } from "@/components/erp/ui/fields";
-import { DependencyPicker, RecurrenceFields } from "@/components/erp/tasks/TaskPlanning";
+import { canRouteStages } from "@/components/erp/projects/StageRouting";
+import { AlertTriangle, Timer } from "lucide-react";
 
 const KINDS = ["task", "meeting", "personal"];
 
-// Create a task. `preset` fixes the project / item / stage when opened from a board
-// cell, or `preset.parent` (a task) for a sub-task.
+// Create a task. `preset` fixes the project / stage when opened from a board
+// cell, or `preset.parent` (a task) for a sub-task. Time is not entered here: a
+// project task gets its hours from the project scale and its clock starts when the
+// employee presses Start. Only the GM / CEO may set a due date by hand.
 export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
@@ -18,18 +21,13 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
   const [form, setForm] = useState({
     kind: "task",
     projectId: preset.projectId || "",
-    itemId: preset.itemId || "",
     stage: preset.stage || "",
     type: "",
     title: "",
     assigneeId: user?.id || "",
     dueAt: "",
-    plannedStart: "",
-    estimatedHours: "",
     priority: "normal",
     description: "",
-    dependsOn: [],
-    recurrence: { freq: "", interval: 1, until: "" },
   });
   const parent = preset.parent || null;
   const [saving, setSaving] = useState(false);
@@ -39,7 +37,12 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
   const openProjects = lookups.projects.filter((p) => ["active", "on_hold"].includes(p.status));
   const project = lookups.projects.find((p) => p.id === form.projectId);
   const stage = project?.stages.find((s) => s.key === form.stage);
-  const fixedCell = Boolean(preset.itemId);
+  const fixedCell = Boolean(preset.stage);
+  const isScheduler = canRouteStages(user);
+  // Project scale: tasks get its hours; only the GM / CEO set their own due date.
+  const scaleProject = project || lookups.projects.find((p) => p.id === parent?.project?.id);
+  const scale = form.kind === "task" ? (lookups.settings.projectScales || []).find((s) => s.key === scaleProject?.scale) : null;
+  const missingScale = form.kind === "task" && Boolean(scaleProject) && !scale && !isScheduler;
 
   async function save() {
     setSaving(true);
@@ -48,17 +51,12 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
       const body = {
         ...form,
         type: form.type || stage?.taskType || "",
-        dueAt: form.dueAt ? new Date(form.dueAt).toISOString() : null,
-        plannedStart: form.plannedStart ? new Date(form.plannedStart).toISOString() : null,
+        dueAt: isScheduler && form.dueAt ? new Date(form.dueAt).toISOString() : null,
       };
       if (body.kind !== "task" && !body.projectId) {
-        body.itemId = "";
         body.stage = "";
       }
       if (parent) body.parentTaskId = parent.id;
-      body.recurrence = form.recurrence.freq
-        ? { ...form.recurrence, interval: Number(form.recurrence.interval) || 1, until: form.recurrence.until || null }
-        : null;
       const { task } = await api("/api/tasks", { method: "POST", body });
       onCreated(task);
     } catch (err) {
@@ -95,34 +93,25 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
         <Select
           label={`${t("erp.tasks.project")}${form.kind === "task" ? "" : ` ${t("dashboard.optional")}`}`}
           value={form.projectId}
-          onChange={(projectId) => setForm((f) => ({ ...f, projectId, itemId: "", stage: "" }))}
+          onChange={(projectId) => setForm((f) => ({ ...f, projectId, stage: "" }))}
           placeholder="—"
           options={openProjects.map((p) => ({ value: p.id, label: `${p.code ? `${p.code} · ` : ""}${p.name?.[lang]}` }))}
         />
       )}
 
       {project && !fixedCell && !parent && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Select
-            label={t("erp.tasks.item")}
-            value={form.itemId}
-            onChange={set("itemId")}
-            placeholder="—"
-            options={project.items.map((i) => ({ value: i.id, label: i.name }))}
-          />
-          <Select
-            label={t("erp.tasks.stage")}
-            value={form.stage}
-            onChange={set("stage")}
-            placeholder="—"
-            options={project.stages.map((s) => ({ value: s.key, label: s.name?.[lang] }))}
-          />
-        </div>
+        <Select
+          label={t("erp.tasks.stage")}
+          value={form.stage}
+          onChange={set("stage")}
+          placeholder="—"
+          options={project.stages.map((s) => ({ value: s.key, label: s.name?.[lang] }))}
+        />
       )}
 
       {fixedCell && project && (
         <p className="rounded-xl bg-white/5 px-3 py-2 text-sm text-white/70">
-          {project.name?.[lang]} · {project.items.find((i) => i.id === form.itemId)?.name} · {stage?.name?.[lang]}
+          {project.name?.[lang]} · {stage?.name?.[lang]}
         </p>
       )}
 
@@ -155,9 +144,14 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
             options={["normal", "important", "urgent"].map((p) => ({ value: p, label: t(`erp.tasks.priority.${p}`) }))}
           />
         )}
-        <Input type="datetime-local" label={t("erp.tasks.dueAt")} value={form.dueAt} onChange={set("dueAt")} />
-        <Input type="datetime-local" label={`${t("erp.tasks.plannedStart")} ${t("dashboard.optional")}`} value={form.plannedStart} onChange={set("plannedStart")} />
-        <Input type="number" min="0" step="0.5" label={t("erp.tasks.estimatedHours")} value={form.estimatedHours} onChange={set("estimatedHours")} dir="ltr" />
+        {isScheduler && (
+          <Input
+            type="datetime-local"
+            label={`${t("erp.tasks.dueAt")}${scale || form.kind !== "task" ? ` ${t("dashboard.optional")}` : ""}`}
+            value={form.dueAt}
+            onChange={set("dueAt")}
+          />
+        )}
         {canAssign && (
           <Select
             label={t("erp.tasks.priorityLabel")}
@@ -167,6 +161,21 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
           />
         )}
       </div>
+
+      {scale && (
+        <p className="flex items-start gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2.5 text-sm text-sky-100">
+          <Timer size={16} className="mt-0.5 shrink-0" />
+          <span>
+            {t("erp.scale.formInfo", { scale: scale.name?.[lang], h: scale.hours })}
+            {isScheduler && <span className="block text-xs text-sky-200/70">{t("erp.scale.formOverride")}</span>}
+          </span>
+        </p>
+      )}
+      {missingScale && (
+        <p className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-100">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" /> {t("erp.scale.missing")}
+        </p>
+      )}
 
       <div>
         <Label>{`${t("erp.tasks.description")} ${t("dashboard.optional")}`}</Label>
@@ -178,24 +187,12 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
         />
       </div>
 
-      <details className="rounded-xl border border-white/10 px-3 py-2" open={false}>
-        <summary className="cursor-pointer text-sm text-white/70">{t("erp.tasks.planning")}</summary>
-        <div className="mt-3 space-y-4">
-          <DependencyPicker
-            value={form.dependsOn}
-            onChange={set("dependsOn")}
-            projectId={parent?.project?.id || form.projectId || ""}
-          />
-          {!form.itemId && <RecurrenceFields value={form.recurrence} onChange={set("recurrence")} />}
-        </div>
-      </details>
-
       <ErrorText>{error}</ErrorText>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onCancel}>
           {t("common.cancel")}
         </Button>
-        <Button onClick={save} disabled={saving}>
+        <Button onClick={save} disabled={saving || missingScale}>
           {t("erp.tasks.create")}
         </Button>
       </div>

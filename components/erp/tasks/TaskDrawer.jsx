@@ -25,6 +25,7 @@ import Avatar from "@/components/erp/ui/Avatar";
 import { Button, ErrorText, Input, Label, Select } from "@/components/erp/ui/fields";
 import { StatusBadge, taskHeading } from "@/components/erp/tasks/TaskRow";
 import TaskForm from "@/components/erp/tasks/TaskForm";
+import { canRouteStages } from "@/components/erp/projects/StageRouting";
 import Stars from "@/components/erp/tasks/Stars";
 import { DependencyPicker, recurrenceText } from "@/components/erp/tasks/TaskPlanning";
 import { Skeleton, SkeletonText } from "@/components/erp/ui/Loading";
@@ -49,6 +50,9 @@ function Detail({ label, children }) {
 }
 
 function ReviewForm({ task, lookups, onDone }) {
+  const { user } = useAuth();
+  // Scaled tasks: the revision gets the same allowed hours; only the GM / CEO pick a date.
+  const pickDue = !task.maxHours || canRouteStages(user);
   const { t, lang } = useLanguage();
   const [decision, setDecision] = useState("approve");
   const [ratings, setRatings] = useState([]);
@@ -161,7 +165,11 @@ function ReviewForm({ task, lookups, onDone }) {
             onChange={setCause}
             options={["employee", "management", "project"].map((c) => ({ value: c, label: t(`erp.tasks.cause.${c}`) }))}
           />
-          <Input type="datetime-local" label={t("erp.tasks.revisionDue")} value={newDueAt} onChange={setNewDueAt} />
+          {pickDue ? (
+            <Input type="datetime-local" label={t("erp.tasks.revisionDue")} value={newDueAt} onChange={setNewDueAt} />
+          ) : (
+            <p className="self-end text-xs text-sky-200">{t("erp.scale.revisionInfo", { h: task.maxHours })}</p>
+          )}
           <p className="text-xs text-white/50 sm:col-span-2">{t("erp.tasks.rejectHint", { rev: revisionLabel(task.revision + 1) })}</p>
         </div>
       )}
@@ -285,7 +293,7 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
             {task.kind !== "task" && (
               <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs">{t(`erp.tasks.kind.${task.kind}`)}</span>
             )}
-            {task.item && (
+            {task.stage && task.project && (
               <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs" dir="ltr">
                 {revisionLabel(task.revision)}
               </span>
@@ -310,10 +318,20 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
               )}
             </Detail>
             <Detail label={t("erp.tasks.dueAt")}>{formatDateTime(task.dueAt, lang)}</Detail>
-            <Detail label={t("erp.tasks.estimatedHours")}>{task.estimatedHours || "—"}</Detail>
+            {task.maxHours > 0 && (
+              <Detail label={t("erp.scale.maxAllowed")}>
+                <span className="inline-flex items-center gap-1 text-sky-200" title={t("erp.scale.lockedHint")}>
+                  <Lock size={12} /> {t("erp.scale.hours", { h: task.maxHours })}
+                </span>
+              </Detail>
+            )}
             <Detail label={t("erp.tasks.timeSpent")}>
-              <span dir="ltr" className={s === "in_progress" ? "text-sky-300" : ""}>
+              <span
+                dir="ltr"
+                className={task.maxHours > 0 && liveActiveMs(task, now) > task.maxHours * 3600000 ? "text-red-300" : s === "in_progress" ? "text-sky-300" : ""}
+              >
                 {formatDuration(liveActiveMs(task, now))}
+                {task.maxHours > 0 && <span className="text-white/40"> / {formatDuration(task.maxHours * 3600000)}</span>}
               </span>
               {task.holdMs > 0 && (
                 <span className="ms-2 text-xs text-white/40" dir="ltr">
@@ -576,10 +594,20 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
                 onChange={(v) => setManage((m) => ({ ...m, assigneeId: v }))}
                 options={lookups.people.map((x) => ({ value: x.id, label: x.name }))}
               />
-              <Input type="datetime-local" label={t("erp.tasks.dueAt")} value={manage.dueAt} onChange={(v) => setManage((m) => ({ ...m, dueAt: v }))} />
+              {task.maxHours > 0 && !canRouteStages(user) ? (
+                <p className="text-xs text-sky-200">{t("erp.scale.lockedHint")}</p>
+              ) : (
+                <Input type="datetime-local" label={t("erp.tasks.dueAt")} value={manage.dueAt} onChange={(v) => setManage((m) => ({ ...m, dueAt: v }))} />
+              )}
               <Button
                 variant="ghost"
-                onClick={() => patch({ assigneeId: manage.assigneeId, dueAt: manage.dueAt ? new Date(manage.dueAt).toISOString() : null })}
+                onClick={() =>
+                  patch(
+                    task.maxHours > 0 && !canRouteStages(user)
+                      ? { assigneeId: manage.assigneeId }
+                      : { assigneeId: manage.assigneeId, dueAt: manage.dueAt ? new Date(manage.dueAt).toISOString() : null }
+                  )
+                }
               >
                 {t("common.save")}
               </Button>
@@ -588,7 +616,7 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
 
           <ErrorText>{error}</ErrorText>
 
-          {/* Revisions of this board cell */}
+          {/* Revisions of this task (rejected → R-01 → R-02…) */}
           {data.history.length > 1 && (
             <div>
               <p className="mb-2 text-sm font-medium text-white/70">{t("erp.tasks.revisions")}</p>

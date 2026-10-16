@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
-import { applyStageRouting, cleanItems, cleanProjectFields, cleanStages } from "@/lib/projectPayload";
+import { applyFlow, applyStageRouting, cleanProjectFields, cleanStages } from "@/lib/projectPayload";
 import { listProjectsWithProgress, projectQueryFor, serializeProject } from "@/lib/projects";
 import { getTaskSettings } from "@/lib/settings";
 import { inScope } from "@/lib/scope";
@@ -33,14 +33,17 @@ export async function POST(request) {
   if (!fields.dueDate) return fail("due_required");
 
   const settings = await getTaskSettings();
+  // Every project gets a scale: it sets how many hours each of its tasks may take.
+  if (!fields.scale || !(settings.projectScales || []).some((s) => s.key === fields.scale)) return fail("scale_required");
+  if (!fields.flow) return fail("flow_required");
   let stages = body.stages;
-  let items = body.items;
   let template = null;
   if (isObjectId(body.templateId)) {
     template = await ProjectTemplate.findById(body.templateId).lean();
     if (!template) return fail("invalid_template");
-    stages = template.stages;
-    items = template.items.map((name) => ({ name }));
+    // Mixed projects: the creator's choice per stage ({ stageKey: true = waits }).
+    const waits = body.stageWaits && typeof body.stageWaits === "object" ? body.stageWaits : null;
+    stages = template.stages.map((s) => ({ ...s, waitForPrevious: waits && s.key in waits ? Boolean(waits[s.key]) : s.waitForPrevious }));
   }
   const cleanedStages = cleanStages(stages, settings.taskTypes.map((t) => t.key));
   if (cleanedStages.error) return fail(cleanedStages.error);
@@ -51,8 +54,7 @@ export async function POST(request) {
   const project = await WorkProject.create({
     ...fields,
     department: body.department,
-    stages: routed.stages,
-    items: cleanItems(items),
+    stages: applyFlow(routed.stages, fields.flow),
     baselineDueDate: fields.dueDate,
     participants: [...new Set([...(fields.participants || []), user.id])],
     createdBy: user.id,

@@ -33,7 +33,6 @@ export async function PATCH(request, { params }) {
     name,
     department: isObjectId(body.department) ? body.department : null,
     stages: routed.stages,
-    items: (Array.isArray(body.items) ? body.items : []).map((i) => String(i).trim().slice(0, 120)).filter(Boolean),
     active: body.active !== false,
   });
   await template.save();

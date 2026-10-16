@@ -13,12 +13,13 @@ import { PageHeader } from "@/components/erp/ui/fields";
 import StaffEditor from "@/components/erp/staff/StaffEditor";
 import EmployeeFile from "@/components/erp/staff/EmployeeFile";
 import KpiRing from "@/components/erp/staff/KpiRing";
+import { SkillRequestsPanel } from "@/components/erp/hr/SkillRequests";
 
 const FILTERS = ["all", "pending", "active", "inactive"];
 
 // `canFile` (HR and the general manager): each row opens the employee's full HR file
 // and shows their KPI ring for the current month.
-export default function StaffManager({ initialStaff, roles, org, canManage, canFile, meId, month, currencies }) {
+export default function StaffManager({ initialStaff, roles, org, canManage, canFile, meId, month, currencies, canApproveSkills }) {
   const { t, lang } = useLanguage();
   const searchParams = useSearchParams();
   const online = useOnlineUsers();
@@ -73,6 +74,7 @@ export default function StaffManager({ initialStaff, roles, org, canManage, canF
   return (
     <div>
       <PageHeader title={t("erp.nav.staff")} subtitle={t("erp.staff.subtitle")} />
+      {canApproveSkills && <SkillRequestsPanel />}
 
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <div className="relative min-w-60 flex-1">

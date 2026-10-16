@@ -10,6 +10,7 @@
     "test": "node --experimental-detect-module tests/hr-engine.test.mjs && node --experimental-detect-module tests/finance-engine.test.mjs"
   },
   "dependencies": {
+    "exceljs": "^4.4.0",
     "framer-motion": "^13.4.4",
     "imagekit": "^6.0.0",
     "jose": "^6.2.12",

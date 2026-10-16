@@ -3,7 +3,10 @@ import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
 import { notify } from "@/lib/notify";
-import { checkStageHandoffs } from "@/lib/projects";
+import { getWorkCalendar } from "@/lib/ganttServer";
+import { canRouteStages, checkStageHandoffs, isStageLocked } from "@/lib/projects";
+import WorkProject from "@/models/WorkProject";
+import { scaledDue } from "@/lib/projectScale";
 import { getTaskSettings } from "@/lib/settings";
 import {
   applyTransition,
@@ -64,10 +67,21 @@ export async function POST(request, { params }) {
   if (action === "start") {
     const blockers = await openBlockers(task);
     if (blockers.length) return fail("blocked_by_dependency", 409, { numbers: blockers.map((b) => b.number) });
+    // Ordered / mixed projects: a waiting stage can't start before the earlier stages finish.
+    if (task.project && task.stage) {
+      const project = await WorkProject.findById(task.project).lean();
+      if (project && (await isStageLocked(project, task.stage))) return fail("stage_waiting", 409);
+    }
   }
 
   const error = applyTransition(task, action, now);
   if (error) return fail(error, 409);
+  // Scaled project: the allowed hours count from the moment work starts.
+  if (action === "start" && task.maxHours > 0 && !task.dueManual) {
+    task.dueAt = scaledDue(now, task.maxHours, await getWorkCalendar());
+    task.dueReminderSent = false;
+    task.overdueNotified = false;
+  }
   await task.save();
   await logActivity(task._id, user, action, action === "help" ? String(body.note || "").slice(0, 1000) : "", {
     helperId: helper?._id?.toString(),
@@ -83,7 +97,6 @@ export async function POST(request, { params }) {
       kind: "help",
       title: String(body.note || "").trim().slice(0, 200) || `#${task.number}`,
       project: task.project,
-      item: task.item,
       stage: task.stage,
       department: task.department,
       type: task.type,
@@ -165,13 +178,15 @@ async function review(user, task, body, now) {
     });
   } else {
     // Rejection opens the next revision for the same person — the Excel "طلبات التعديلات".
-    const due = body.newDueAt ? new Date(body.newDueAt) : null;
+    // Scaled tasks: the revision gets the same allowed hours (a custom date only from the GM / CEO).
+    const scaled = task.maxHours > 0;
+    let due = body.newDueAt && (!scaled || canRouteStages(user)) ? new Date(body.newDueAt) : null;
+    if (scaled && !due) due = scaledDue(new Date(), task.maxHours, await getWorkCalendar());
     revisionTask = await Task.create({
       number: await nextNumber("task"),
-      kind: task.project && task.item ? "revision" : task.kind,
+      kind: task.project && task.stage ? "revision" : task.kind,
       title: task.title,
       project: task.project,
-      item: task.item,
       stage: task.stage,
       department: task.department,
       type: task.type,
@@ -180,6 +195,9 @@ async function review(user, task, body, now) {
       priority: task.priority,
       revision: task.revision + 1,
       previousTask: task._id,
+      maxHours: task.maxHours || 0,
+      estimatedHours: task.maxHours || task.estimatedHours || 0,
+      dueManual: scaled && Boolean(body.newDueAt) && canRouteStages(user),
       dueAt: due && !Number.isNaN(due.getTime()) ? due : null,
       description: task.headNotes,
     });
@@ -198,6 +216,6 @@ async function review(user, task, body, now) {
 
   await publishTaskChange(task, [user.id]);
   if (approve) await notifyUnblocked(task, notify);
-  if (approve && task.project && task.item) await checkStageHandoffs(task.project, user);
+  if (approve && task.project && task.stage) await checkStageHandoffs(task.project, user);
   return NextResponse.json({ task: enriched, revisionTaskId: revisionTask?._id?.toString() || null });
 }

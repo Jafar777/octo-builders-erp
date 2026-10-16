@@ -19,7 +19,8 @@ import TaskDrawer from "@/components/erp/tasks/TaskDrawer";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { revisionLabel, STATUS_STYLE, toDateInput, useNow } from "@/components/erp/tasks/taskUi";
 import { PageSkeleton } from "@/components/erp/ui/Loading";
-import StageRouting, { canRouteStages } from "@/components/erp/projects/StageRouting";
+import StageRouting, { canRouteStages, FlowBadge, FlowSelect } from "@/components/erp/projects/StageRouting";
+import ScaleSelect, { ScaleBadge } from "@/components/erp/projects/ScaleSelect";
 
 const TABS = ["board", "tasks", "settings"];
 
@@ -27,9 +28,8 @@ function CellModal({ project, cell, canManage, lookups, onOpenTask, onNewTask, o
   const { t, lang } = useLanguage();
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
-  const item = project.items.find((i) => i.id === cell.itemId);
   const stage = project.stages.find((s) => s.key === cell.stage);
-  const state = project.cells[cell.itemId]?.[cell.stage];
+  const state = project.cells[cell.stage];
   const locked = project.locked?.includes(cell.stage);
   const assignee = lookups.people.find((p) => p.id === state?.assignee);
 
@@ -38,7 +38,7 @@ function CellModal({ project, cell, canManage, lookups, onOpenTask, onNewTask, o
     try {
       await api(`/api/work-projects/${project.id}/override`, {
         method: "POST",
-        body: { itemId: cell.itemId, stage: cell.stage, status, reason },
+        body: { stage: cell.stage, status, reason },
       });
       onChanged();
       onClose();
@@ -50,7 +50,8 @@ function CellModal({ project, cell, canManage, lookups, onOpenTask, onNewTask, o
   return (
     <div className="space-y-5">
       <p className="text-sm text-white/60">
-        {item?.name} · {stage?.name?.[lang]}
+        {project.name?.[lang]} · {stage?.name?.[lang]}
+        {state?.count > 1 && <span className="ms-2 text-white/40">({t("erp.projects.stageTasks", { count: state.count })})</span>}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge status={state?.status === "pending" ? "submitted" : state?.status || "not_started"} />
@@ -120,13 +121,13 @@ function ProjectSettings({ project, lookups, onSaved }) {
     client: project.client,
     status: project.status,
     priority: project.priority,
+    scale: project.scale || "",
+    flow: project.flow || "mixed",
     startDate: toDateInput(project.startDate),
     dueDate: toDateInput(project.dueDate),
     folderLink: project.folderLink,
     participants: project.participants,
   });
-  const [items, setItems] = useState(project.items);
-  const [bulk, setBulk] = useState("");
   const [stages, setStages] = useState(project.stages);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -138,7 +139,7 @@ function ProjectSettings({ project, lookups, onSaved }) {
     try {
       await api(`/api/work-projects/${project.id}`, {
         method: "PATCH",
-        body: { ...form, items, stages, ...extra },
+        body: { ...form, stages, ...extra },
       });
       setStatus(t("common.saved"));
       onSaved();
@@ -192,6 +193,8 @@ function ProjectSettings({ project, lookups, onSaved }) {
           />
         </div>
         <Input label={t("erp.projects.folderLink")} value={form.folderLink} onChange={set("folderLink")} dir="ltr" />
+        <ScaleSelect scales={lookups.settings.projectScales} value={form.scale} onChange={set("scale")} />
+        <FlowSelect value={form.flow} onChange={set("flow")} />
         <div>
           <Label>{t("erp.projects.participants")}</Label>
           <div className="flex flex-wrap gap-1.5">
@@ -212,51 +215,6 @@ function ProjectSettings({ project, lookups, onSaved }) {
             })}
           </div>
         </div>
-      </Card>
-
-      <Card className="space-y-3">
-        <p className="font-semibold">{t("erp.projects.items")}</p>
-        <p className="text-xs text-white/45">{t("erp.projects.itemsHint")}</p>
-        <div className="space-y-1.5">
-          {items.map((item, i) => (
-            <div key={item.id || i} className="flex items-center gap-2">
-              <input
-                value={item.name}
-                onChange={(e) => setItems((list) => list.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
-                dir="ltr"
-                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none focus:border-white/30"
-              />
-              <button type="button" onClick={() => setItems((l) => move(l, i, i - 1))} className="p-1.5 text-white/50 hover:text-white" aria-label={t("dashboard.moveUp")}>
-                <ArrowUp size={14} />
-              </button>
-              <button type="button" onClick={() => setItems((l) => move(l, i, i + 1))} className="p-1.5 text-white/50 hover:text-white" aria-label={t("dashboard.moveDown")}>
-                <ArrowDown size={14} />
-              </button>
-              <button type="button" onClick={() => setItems((l) => l.filter((_, j) => j !== i))} className="p-1.5 text-red-400 hover:text-red-300" aria-label={t("common.delete")}>
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-        <textarea
-          rows={3}
-          value={bulk}
-          onChange={(e) => setBulk(e.target.value)}
-          placeholder={t("erp.projects.bulkPlaceholder")}
-          dir="ltr"
-          className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm outline-none focus:border-white/30"
-        />
-        <Button
-          variant="ghost"
-          onClick={() => {
-            const names = bulk.split("\n").map((x) => x.trim()).filter(Boolean);
-            setItems((l) => [...l, ...names.map((name) => ({ name }))]);
-            setBulk("");
-          }}
-          disabled={!bulk.trim()}
-        >
-          <Plus size={16} /> {t("erp.projects.addItems")}
-        </Button>
       </Card>
 
       <Card className="space-y-3">
@@ -286,12 +244,14 @@ function ProjectSettings({ project, lookups, onSaved }) {
                 <Trash2 size={14} />
               </button>
             </div>
-            {canRoute && (
+            {(canRoute || form.flow === "mixed") && (
               <div className="sm:col-span-3">
                 <StageRouting
                   stage={stage}
                   index={i}
                   departments={lookups.departments}
+                  canRoute={canRoute}
+                  flow={form.flow}
                   onChange={(patch) => setStages((l) => l.map((x, j) => (j === i ? { ...x, ...patch } : x)))}
                 />
               </div>
@@ -385,6 +345,8 @@ export default function ProjectBoard({ projectId }) {
               <CalendarDays size={14} /> {formatDate(project.dueDate, lang)}
             </span>
             <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs">{t(`erp.projects.status.${project.status}`)}</span>
+            <ScaleBadge scales={lookups.settings.projectScales} value={project.scale} />
+            <FlowBadge flow={project.flow} />
             {project.folderLink && (
               <a href={project.folderLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-brand-orange hover:underline">
                 {t("erp.projects.folder")} <ExternalLink size={13} />
@@ -427,14 +389,15 @@ export default function ProjectBoard({ projectId }) {
       </div>
 
       {tab === "board" && (
-        <div className="overflow-x-auto rounded-2xl border border-white/10">
-          <table className="w-full min-w-[640px] border-collapse text-sm">
-            <thead className="bg-white/[0.04] text-xs text-white/55">
-              <tr>
-                <th className="sticky start-0 z-10 bg-brand-navy px-3 py-3 text-start font-medium">{t("erp.tasks.item")}</th>
-                <th className="px-2 py-3 text-center font-medium">%</th>
-                {project.stages.map((s) => (
-                  <th key={s.key} className="px-2 py-3 text-center font-medium">
+        <div className="overflow-x-auto rounded-2xl border border-white/10 p-3">
+          <div className="grid min-w-[640px] gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(project.stages.length, 1)}, minmax(110px, 1fr))` }}>
+            {project.stages.map((s) => {
+              const c = project.cells[s.key] || { status: "not_started" };
+              const person = lookups.people.find((p) => p.id === c.assignee);
+              const waiting = c.status === "not_started" && project.locked?.includes(s.key);
+              return (
+                <div key={s.key} className="flex flex-col gap-1.5">
+                  <p className="flex min-h-9 flex-col items-center justify-end text-center text-xs font-medium text-white/60">
                     <span className="inline-flex items-center gap-1">
                       {project.locked?.includes(s.key) && <Lock size={11} className="text-white/40" />}
                       {s.name?.[lang]}
@@ -442,52 +405,29 @@ export default function ProjectBoard({ projectId }) {
                     {s.department && s.department !== project.department && (
                       <span className="block text-[10px] font-normal text-brand-orange">{lookups.departmentName(s.department)}</span>
                     )}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {project.items.map((item) => (
-                <tr key={item.id} className="border-t border-white/5">
-                  <td className="sticky start-0 z-10 max-w-60 truncate bg-brand-navy px-3 py-2 font-medium" dir="ltr" title={item.name}>
-                    {item.name}
-                  </td>
-                  <td className="px-2 py-2 text-center text-xs text-white/50" dir="ltr">
-                    {Math.round((project.cells[item.id]?._progress || 0) * 100)}%
-                  </td>
-                  {project.stages.map((s) => {
-                    const c = project.cells[item.id]?.[s.key] || { status: "not_started" };
-                    const person = lookups.people.find((p) => p.id === c.assignee);
-                    const waiting = c.status === "not_started" && project.locked?.includes(s.key);
-                    return (
-                      <td key={s.key} className="px-1.5 py-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setCell({ itemId: item.id, stage: s.key })}
-                          className={`flex h-12 w-full min-w-24 flex-col items-center justify-center rounded-lg border px-1 text-[11px] leading-tight transition hover:brightness-125 ${STATUS_STYLE[c.status] || STATUS_STYLE.not_started}`}
-                        >
-                          <span className="font-medium">{waiting ? t("erp.projects.waiting") : t(`erp.tasks.status.${c.status}`)}</span>
-                          {c.number && (
-                            <span className="opacity-70" dir="ltr">
-                              #{c.number} · {revisionLabel(c.revision)}
-                              {person ? ` · ${person.name.split(" ")[0]}` : ""}
-                            </span>
-                          )}
-                        </button>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-              {project.items.length === 0 && (
-                <tr>
-                  <td colSpan={project.stages.length + 2} className="px-4 py-10 text-center text-white/40">
-                    {canManage ? t("erp.projects.noItemsManage") : t("erp.projects.noItems")}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setCell({ stage: s.key })}
+                    className={`flex h-16 w-full flex-col items-center justify-center rounded-xl border px-1 text-[11px] leading-tight transition hover:brightness-125 ${STATUS_STYLE[c.status] || STATUS_STYLE.not_started}`}
+                  >
+                    <span className="text-xs font-medium">{waiting ? t("erp.projects.waiting") : t(`erp.tasks.status.${c.status}`)}</span>
+                    {c.number && (
+                      <span className="opacity-70" dir="ltr">
+                        #{c.number}
+                        {c.revision > 0 ? ` · ${revisionLabel(c.revision)}` : ""}
+                        {person ? ` · ${person.name.split(" ")[0]}` : ""}
+                      </span>
+                    )}
+                    {c.count > 1 && <span className="opacity-60">{t("erp.projects.stageTasks", { count: c.count })}</span>}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          {project.stages.length === 0 && (
+            <p className="px-4 py-10 text-center text-white/40">{canManage ? t("erp.projects.noStagesManage") : t("erp.projects.noStages")}</p>
+          )}
         </div>
       )}
 
@@ -505,7 +445,7 @@ export default function ProjectBoard({ projectId }) {
         </div>
       )}
 
-      {tab === "settings" && canManage && <ProjectSettings key={project.id + project.items.length} project={project} lookups={lookups} onSaved={load} />}
+      {tab === "settings" && canManage && <ProjectSettings key={project.id} project={project} lookups={lookups} onSaved={load} />}
 
       <Modal open={Boolean(cell)} onClose={() => setCell(null)} title={t("erp.projects.cell")}>
         {cell && (
@@ -521,7 +461,7 @@ export default function ProjectBoard({ projectId }) {
               setOpenTaskId(id);
             }}
             onNewTask={() => {
-              setNewTaskFor({ projectId, itemId: cell.itemId, stage: cell.stage });
+              setNewTaskFor({ projectId, stage: cell.stage });
               setCell(null);
             }}
           />

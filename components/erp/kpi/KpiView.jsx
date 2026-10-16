@@ -11,6 +11,7 @@ import { Button, Card, ErrorText, PageHeader, Select } from "@/components/erp/ui
 import { MonthPicker, monthLabel, money } from "@/components/erp/hr/hrUi";
 import { GroupedBarChart, ScoreRing } from "@/components/erp/charts/BarChart";
 import { Skeleton, SkeletonTable } from "@/components/erp/ui/Loading";
+import BonusAlert from "@/components/erp/kpi/BonusAlert";
 
 const UNIT = { "%": "%", h: " h", "×": "" };
 
@@ -73,6 +74,11 @@ export default function KpiView({ initialMonth, meId }) {
         }
       />
       <ErrorText>{error}</ErrorText>
+      {data?.bonus && (
+        <div className="mb-6">
+          <BonusAlert bonus={data.bonus} isMe={userId === meId} showLink />
+        </div>
+      )}
 
       {!data && !error && (
         <div className="grid gap-4 lg:grid-cols-[320px_1fr]">

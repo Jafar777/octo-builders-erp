@@ -243,6 +243,38 @@ function TasksSettings({ initial }) {
       </div>
 
       <div>
+        <p className="mb-1 text-sm font-medium text-white/70">{t("erp.scale.settingsTitle")}</p>
+        <p className="mb-3 text-xs text-white/40">{t("erp.scale.settingsHint")}</p>
+        <div className="space-y-2">
+          {(value.projectScales || []).map((sc, i) => (
+            <div key={i} className="grid items-end gap-2 rounded-xl border border-white/10 p-3 sm:grid-cols-[140px_1fr_130px_auto]">
+              <Input label={t("erp.settings.code")} value={sc.key} dir="ltr" onChange={(key) => setList("projectScales", i, { key })} />
+              <BilingualField label={t("erp.org.name")} value={sc.name} onChange={(name) => setList("projectScales", i, { name })} />
+              <Input
+                type="number"
+                min="0.5"
+                max="200"
+                step="0.5"
+                label={t("erp.scale.hoursPerTask")}
+                value={sc.hours}
+                dir="ltr"
+                onChange={(hours) => setList("projectScales", i, { hours })}
+              />
+              <button type="button" onClick={() => removeFrom("projectScales", i)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-red-500/30 text-red-400" aria-label={t("common.delete")}>
+                <Trash2 size={15} />
+              </button>
+            </div>
+          ))}
+          <Button
+            variant="ghost"
+            onClick={() => setValue((v) => ({ ...v, projectScales: [...(v.projectScales || []), { key: "", name: { ar: "", en: "" }, hours: 4 }] }))}
+          >
+            <Plus size={16} /> {t("erp.scale.add")}
+          </Button>
+        </div>
+      </div>
+
+      <div>
         <p className="mb-1 text-sm font-medium text-white/70">{t("erp.settings.ratingTags")}</p>
         <p className="mb-3 text-xs text-white/40">{t("erp.settings.ratingHint")}</p>
         <div className="space-y-2">

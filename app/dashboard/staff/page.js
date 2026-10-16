@@ -9,6 +9,7 @@ import Role from "@/models/Role";
 import User from "@/models/User";
 import StaffManager from "@/components/erp/staff/StaffManager";
 import NoAccess from "@/components/erp/NoAccess";
+import { canApproveSkills } from "@/lib/skills";
 
 export default async function StaffPage() {
   const user = await requirePermission("users.view");
@@ -35,6 +36,7 @@ export default async function StaffPage() {
       month={todayIn(settings.hr.timezone).slice(0, 7)}
       currencies={settings.currencies}
       meId={user.id}
+      canApproveSkills={canApproveSkills(user)}
     />
   );
 }

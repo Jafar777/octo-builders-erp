@@ -18,8 +18,8 @@ export function StatusBadge({ status }) {
 }
 
 export function taskHeading(task, lang) {
-  if (task.title && !task.item) return task.title;
-  return [task.item?.name, task.stage?.name?.[lang]].filter(Boolean).join(" · ") || task.title || "—";
+  if (task.title && !task.stage) return task.title;
+  return [task.title, task.stage?.name?.[lang]].filter(Boolean).join(" · ") || "—";
 }
 
 export default function TaskRow({ task, lookups, now, onOpen, showAssignee = false }) {
@@ -41,9 +41,14 @@ export default function TaskRow({ task, lookups, now, onOpen, showAssignee = fal
           {task.kind !== "task" && (
             <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-white/70">{t(`erp.tasks.kind.${task.kind}`)}</span>
           )}
-          {(task.kind === "task" || task.kind === "revision") && task.item && (
+          {(task.kind === "task" || task.kind === "revision") && task.stage && task.revision > 0 && (
             <span className="text-[11px] text-white/45" dir="ltr">
               {revisionLabel(task.revision)}
+            </span>
+          )}
+          {task.maxHours > 0 && (
+            <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] text-sky-200" title={t("erp.scale.maxAllowed")}>
+              {t("erp.scale.hours", { h: task.maxHours })}
             </span>
           )}
           {task.priority !== "normal" && (

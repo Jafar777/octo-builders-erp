@@ -5,6 +5,7 @@ import { computeMonth, hrStaff, todayIn } from "@/lib/hr";
 import { canSeePerson, MONTH_OK, staffInScope } from "@/lib/hrAccess";
 import { kpiConfigFor } from "@/lib/kpi/config";
 import { getSettings } from "@/lib/settings";
+import { bonusStanding } from "@/lib/bonus";
 
 function previousMonths(month, count) {
   const [y, m] = month.split("-").map(Number);
@@ -42,6 +43,8 @@ export async function GET(request) {
     config: kpiConfigFor(settings.kpi, month),
     person: row?.staff || null,
     kpi: row?.kpi || null,
+    // What this person needs for each bonus place this month.
+    bonus: bonusStanding(current.rows, userId, { ...current.state, month }, settings),
     trend: months.map((m) => {
       const r = computed[m].rows.find((x) => x.staff.id === userId);
       return {

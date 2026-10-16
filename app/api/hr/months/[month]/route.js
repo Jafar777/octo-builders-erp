@@ -17,20 +17,7 @@ async function guard(params) {
   return { user, month };
 }
 
-// Bonus pool for the KPI top 3. Body: { bonusPool, bonusCurrency }
-export async function PATCH(request, { params }) {
-  const { user, month, error } = await guard(params);
-  if (error) return error;
-  if ((await hrMonthState(month)).closed) return fail("month_closed", 409);
-
-  const body = await readJson(request);
-  const settings = await getSettings();
-  const currency = String(body.bonusCurrency || settings.currencies.base).toUpperCase();
-  const bonusPool = Math.max(0, Number(body.bonusPool) || 0);
-  await HrMonth.findOneAndUpdate({ month }, { month, bonusPool, bonusCurrency: currency }, { upsert: true });
-  await audit(user, "payroll.bonus_pool", { entityType: "month", entityId: month, summary: `${bonusPool} ${currency}` });
-  return NextResponse.json({ ok: true });
-}
+// The KPI bonus (pool, split, note) is set on the Bonus page: PATCH /api/bonus.
 
 // Body: { action: "close" | "reopen" }
 export async function POST(request, { params }) {

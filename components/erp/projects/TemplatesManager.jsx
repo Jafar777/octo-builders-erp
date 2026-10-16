@@ -21,7 +21,6 @@ function TemplateEditor({ template, lookups, onSaved, onClose }) {
     name: template?.name || { ar: "", en: "" },
     department: template?.department || "",
     stages: template?.stages || [{ key: "", name: { ar: "", en: "" }, taskType: "other" }],
-    items: (template?.items || []).join("\n"),
     active: template?.active !== false,
   });
   const [error, setError] = useState("");
@@ -30,7 +29,7 @@ function TemplateEditor({ template, lookups, onSaved, onClose }) {
   async function save() {
     setError("");
     try {
-      const body = { ...form, items: form.items.split("\n").map((x) => x.trim()).filter(Boolean) };
+      const body = form;
       const { template: saved } = template
         ? await api(`/api/project-templates/${template.id}`, { method: "PATCH", body })
         : await api("/api/project-templates", { method: "POST", body });
@@ -72,7 +71,7 @@ function TemplateEditor({ template, lookups, onSaved, onClose }) {
             </button>
             {canRoute && (
               <div className="sm:col-span-3">
-                <StageRouting stage={stage} index={i} departments={lookups.departments} onChange={(patch) => setStage(i, patch)} />
+                <StageRouting stage={stage} index={i} departments={lookups.departments} canRoute onChange={(patch) => setStage(i, patch)} />
               </div>
             )}
           </div>
@@ -80,17 +79,6 @@ function TemplateEditor({ template, lookups, onSaved, onClose }) {
         <Button variant="ghost" onClick={() => setForm((f) => ({ ...f, stages: [...f.stages, { key: "", name: { ar: "", en: "" }, taskType: "other" }] }))}>
           <Plus size={16} /> {t("erp.projects.addStage")}
         </Button>
-      </div>
-      <div>
-        <Label>{t("erp.projects.defaultItems")}</Label>
-        <textarea
-          rows={4}
-          dir="ltr"
-          value={form.items}
-          onChange={(e) => setForm((f) => ({ ...f, items: e.target.value }))}
-          placeholder={t("erp.projects.bulkPlaceholder")}
-          className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm outline-none focus:border-white/30"
-        />
       </div>
       <Toggle checked={form.active} onChange={(active) => setForm((f) => ({ ...f, active }))} label={t("erp.org.active")} />
       <ErrorText>{error}</ErrorText>
@@ -146,7 +134,7 @@ export default function TemplatesManager() {
               <div>
                 <p className="font-semibold">{tpl.name?.[lang]}</p>
                 <p className="text-xs text-white/45">
-                  {lookups.departmentName(tpl.department)} · {tpl.items.length} {t("erp.projects.itemsCount")}
+                  {lookups.departmentName(tpl.department)} · {tpl.stages.length} {t("erp.projects.stagesCount")}
                   {!tpl.active && ` · ${t("erp.org.inactive")}`}
                 </p>
               </div>
