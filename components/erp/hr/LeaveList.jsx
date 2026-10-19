@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Check, Clock, Minus, X } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
+import { formatDate } from "@/lib/formatTime";
 import { api, errorText } from "@/lib/clientApi";
 import { Button, ErrorText, Input, Label, Select } from "@/components/erp/ui/fields";
 
@@ -49,8 +51,65 @@ export function LeaveForm({ onCreated, onCancel }) {
   );
 }
 
-// List of leave requests; `approver` shows approve / reject, otherwise own cancel.
-export default function LeaveList({ leaves, approver = false, onChanged }) {
+// Where a request is: department manager → HR / GM. Each step shows who decided.
+function LeaveSteps({ leave }) {
+  const { t, lang } = useLanguage();
+  const steps = [];
+  // A request still on (or stopped at) the manager step keeps stage "manager".
+  const atManager = leave.stage === "manager";
+  if (atManager || leave.manager) {
+    steps.push(
+      !atManager
+        ? { key: "manager", state: "done", who: leave.manager.name, at: leave.manager.at }
+        : leave.status === "rejected"
+          ? { key: "manager", state: "rejected", who: leave.manager?.name, at: leave.manager?.at }
+          : { key: "manager", state: "current" }
+    );
+  }
+  if (atManager) {
+    // Not with HR / GM yet — or never sent, when the manager rejected it.
+    steps.push({ key: "final", state: leave.status === "pending" ? "waiting" : "skipped" });
+  } else if (leave.status === "pending") {
+    steps.push({ key: "final", state: "current" });
+  } else {
+    steps.push({ key: "final", state: leave.status === "approved" ? "done" : "rejected", who: leave.decidedBy, at: leave.decidedAt });
+  }
+
+  const STYLE = {
+    done: { dot: "bg-emerald-400 text-brand-navy", Icon: Check, text: "text-emerald-300" },
+    rejected: { dot: "bg-red-400 text-brand-navy", Icon: X, text: "text-red-300" },
+    current: { dot: "bg-brand-orange text-brand-navy", Icon: Clock, text: "text-brand-orange" },
+    waiting: { dot: "bg-white/10 text-white/40", Icon: Clock, text: "text-white/40" },
+    skipped: { dot: "bg-white/5 text-white/25", Icon: Minus, text: "text-white/30" },
+  };
+
+  return (
+    <div className="flex basis-full flex-wrap items-center gap-2 text-xs">
+      {steps.map((s, i) => {
+        const st = STYLE[s.state];
+        return (
+          <span key={s.key} className="flex items-center gap-2">
+            {i > 0 && <span className="h-px w-6 bg-white/15" />}
+            <span className={`flex h-5 w-5 items-center justify-center rounded-full ${st.dot}`}>
+              <st.Icon size={12} strokeWidth={3} />
+            </span>
+            <span className={st.text}>
+              {t(`erp.leaveFlow.step.${s.key}`)}
+              <span className="text-white/45">
+                {" · "}
+                {s.who ? `${s.who}${s.at ? ` (${formatDate(s.at, lang)})` : ""}` : t(`erp.leaveFlow.state.${s.state}`)}
+              </span>
+            </span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// List of leave requests. Approve / reject show on requests the viewer decides now;
+// otherwise (own requests) cancel while pending.
+export default function LeaveList({ leaves, approver = false, onChanged, empty }) {
   const { t } = useLanguage();
   const [error, setError] = useState("");
 
@@ -80,18 +139,24 @@ export default function LeaveList({ leaves, approver = false, onChanged }) {
           </span>
           {l.reason && <span className="min-w-0 flex-1 truncate text-white/50">{l.reason}</span>}
           <span className={`ms-auto rounded-full px-2.5 py-0.5 text-xs ${STATUS[l.status]}`}>{t(`erp.hr.leaveStatus.${l.status}`)}</span>
-          {l.status === "pending" && approver && (
+          {l.canDecide && (
             <>
-              <Button onClick={() => decide(l.id, "approve")}>{t("erp.tasks.approve")}</Button>
+              <Button onClick={() => decide(l.id, "approve")}>
+                {t(l.stage === "manager" ? "erp.leaveFlow.approveForward" : "erp.tasks.approve")}
+              </Button>
               <Button variant="danger" onClick={() => decide(l.id, "reject")}>{t("erp.tasks.reject")}</Button>
             </>
           )}
           {l.status === "pending" && !approver && (
             <Button variant="ghost" onClick={() => decide(l.id, "cancel")}>{t("common.cancel")}</Button>
           )}
+          {l.status !== "cancelled" && <LeaveSteps leave={l} />}
+          {(l.manager?.note || l.decisionNote) && (
+            <p className="basis-full text-xs text-white/45">{[l.manager?.note, l.decisionNote !== l.manager?.note ? l.decisionNote : ""].filter(Boolean).join(" · ")}</p>
+          )}
         </div>
       ))}
-      {leaves.length === 0 && <p className="py-6 text-center text-sm text-white/40">{t("erp.hr.noLeave")}</p>}
+      {leaves.length === 0 && <p className="py-6 text-center text-sm text-white/40">{empty || t("erp.hr.noLeave")}</p>}
     </div>
   );
 }

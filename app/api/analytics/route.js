@@ -4,7 +4,7 @@ import { forbidden } from "@/lib/apiUtils";
 import { localParts, monthDays } from "@/lib/attendance";
 import { hrStaff, todayIn } from "@/lib/hr";
 import { buildCells } from "@/lib/projects";
-import { lateTaskCount, projectRisk, projectScore } from "@/lib/projectHealth";
+import { lateTaskCount, projectRisk, projectScore, rejectionCount } from "@/lib/projectHealth";
 import { getSettings } from "@/lib/settings";
 import { loadFinance } from "@/lib/finance";
 import LeaveRequest from "@/models/LeaveRequest";
@@ -41,14 +41,19 @@ export async function GET() {
   const now = Date.now();
   const deptFilter = user.scope === "all" ? {} : { department: user.department };
 
+  // A department head also follows the projects where their department does a stage.
+  const projectFilter = user.scope === "all" ? {} : { $or: [{ department: user.department }, { "stages.department": user.department }] };
+  const TASK_FIELDS = {
+    status: 1, kind: 1, type: 1, dueAt: 1, submittedAt: 1, reviewedAt: 1, assignee: 1, project: 1, item: 1,
+    stage: 1, revision: 1, createdAt: 1, estimatedHours: 1, title: 1, department: 1, number: 1, activeMs: 1,
+  };
   const [tasks, projects, staff] = await Promise.all([
-    Task.find(deptFilter, {
-      status: 1, kind: 1, type: 1, dueAt: 1, submittedAt: 1, reviewedAt: 1, assignee: 1, project: 1, item: 1,
-      stage: 1, revision: 1, createdAt: 1, estimatedHours: 1, title: 1, department: 1, number: 1,
-    }).lean(),
-    WorkProject.find({ ...deptFilter, status: { $in: ["active", "on_hold"] } }).lean(),
+    Task.find(deptFilter, TASK_FIELDS).lean(),
+    WorkProject.find({ ...projectFilter, status: { $in: ["active", "on_hold", "finished"] } }).lean(),
     hrStaff({ status: "active", ...(user.scope === "all" ? {} : { department: user.department }) }),
   ]);
+  // Project KPIs need every task of the project, whichever department did it.
+  const projectTasks = await Task.find({ project: { $in: projects.map((p) => p._id) } }, TASK_FIELDS).lean();
 
   // Counters
   const open = tasks.filter((t) => OPEN.includes(t.status));
@@ -83,28 +88,38 @@ export async function GET() {
     for (const fp of finance.projects) costs[fp.id] = fp.cost;
   }
   const byProject = {};
-  for (const t of tasks) if (t.project) (byProject[idStr(t.project)] ||= []).push(t);
+  for (const t of projectTasks) (byProject[idStr(t.project)] ||= []).push(t);
   const health = projects
     .map((p) => {
       const list = byProject[p._id.toString()] || [];
-      const { progress } = buildCells(p, list);
+      const { progress, complete, total } = buildCells(p, list);
       const lateTasks = lateTaskCount(list, now);
-      const rejections = list.filter((t) => t.status === "rejected").length;
-      const risk = projectRisk(p, progress, lateTasks, rejections, now);
+      const rejections = rejectionCount(list);
+      const finished = p.status === "finished";
+      // A finished project is judged at the day it finished, not today.
+      const at = finished ? new Date(p.finishedAt || p.updatedAt).getTime() : now;
+      const risk = projectRisk(p, finished ? 1 : progress, lateTasks, rejections, at);
       return {
         id: p._id.toString(),
         name: p.name,
         code: p.code,
+        status: p.status,
         department: idStr(p.department),
+        startDate: p.startDate || p.createdAt,
         dueDate: p.dueDate,
-        daysLeft: Math.ceil((new Date(p.dueDate).getTime() - now) / 86400000),
+        finishedAt: finished ? p.finishedAt || p.updatedAt : null,
+        daysLeft: Math.ceil((new Date(p.dueDate).getTime() - at) / 86400000),
         progress: Math.round(progress * 100),
+        stagesDone: complete,
+        stagesTotal: total,
         openTasks: list.filter((t) => OPEN.includes(t.status)).length,
+        totalTasks: list.filter((t) => ["task", "revision"].includes(t.kind) && t.status !== "cancelled").length,
         lateTasks,
         rejections,
-        participants: [...new Set(list.map((t) => idStr(t.assignee)))].length,
+        hoursWorked: Math.round(list.reduce((h, t) => h + (t.activeMs || 0), 0) / 360000) / 10,
+        participants: new Set(list.map((t) => idStr(t.assignee))).size,
         ...risk,
-        kpi: projectScore(list, { budget: p.budget || 0, cost: costs[p._id.toString()] ?? null }),
+        kpi: projectScore(list, { budget: p.budget || 0, cost: costs[p._id.toString()] ?? null, now: at }),
       };
     })
     .sort((a, b) => b.score - a.score);

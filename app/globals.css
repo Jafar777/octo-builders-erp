@@ -215,3 +215,68 @@ html {
 .animate-bounce-y {
   animation: bounce-y 1.8s ease-in-out infinite;
 }
+
+/* Org chart connectors (components/erp/org/OrgChart). Logical sides, so RTL works. */
+.org-tree ul {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding-top: 24px;
+}
+.org-tree li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 8px 0;
+  list-style: none;
+}
+.org-tree li::before,
+.org-tree li::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  inset-inline-end: 50%;
+  width: 50%;
+  height: 24px;
+  border-top: 1px solid rgb(255 255 255 / 0.18);
+}
+.org-tree li::after {
+  inset-inline-end: auto;
+  inset-inline-start: 50%;
+  border-inline-start: 1px solid rgb(255 255 255 / 0.18);
+}
+.org-tree li:only-child {
+  padding-top: 0;
+}
+.org-tree li:only-child::before,
+.org-tree li:only-child::after,
+.org-tree > ul > li::before,
+.org-tree > ul > li::after {
+  display: none;
+}
+.org-tree li:first-child::before,
+.org-tree li:last-child::after {
+  border: 0 none;
+}
+.org-tree li:last-child::before {
+  border-inline-end: 1px solid rgb(255 255 255 / 0.18);
+  border-start-end-radius: 8px;
+}
+.org-tree li:first-child::after {
+  border-start-start-radius: 8px;
+}
+.org-tree ul ul::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  inset-inline-start: 50%;
+  height: 24px;
+  border-inline-start: 1px solid rgb(255 255 255 / 0.18);
+}
+.org-tree > ul {
+  padding-top: 0;
+}
+.org-tree > ul > li {
+  padding-top: 0;
+}

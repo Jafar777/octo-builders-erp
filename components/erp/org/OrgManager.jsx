@@ -8,6 +8,7 @@ import { api, errorText } from "@/lib/clientApi";
 import BilingualField from "@/components/dashboard/BilingualField";
 import Modal from "@/components/erp/ui/Modal";
 import { Button, ErrorText, Input, PageHeader, Toggle } from "@/components/erp/ui/fields";
+import OrgChart from "@/components/erp/org/OrgChart";
 
 const TYPES = ["departments", "branches", "jobTitles"];
 
@@ -79,10 +80,12 @@ function ItemEditor({ type, item, onSaved, onClose }) {
   );
 }
 
-export default function OrgManager({ initialOrg }) {
+export default function OrgManager({ initialOrg, canManage }) {
   const { t, lang } = useLanguage();
   const [org, setOrg] = useState(initialOrg);
-  const [tab, setTab] = useState("departments");
+  // Employees without org.manage only get the hierarchy.
+  const [tab, setTab] = useState(canManage ? "departments" : "hierarchy");
+  const tabs = canManage ? [...TYPES, "hierarchy"] : ["hierarchy"];
   const [editing, setEditing] = useState(null); // item, or "new"
   const [error, setError] = useState("");
 
@@ -109,17 +112,19 @@ export default function OrgManager({ initialOrg }) {
     <div>
       <PageHeader
         title={t("erp.nav.organization")}
-        subtitle={t("erp.org.subtitle")}
+        subtitle={t(canManage ? "erp.org.subtitle" : "erp.org.hierarchySubtitle")}
         actions={
-          <Button onClick={() => setEditing("new")}>
-            <Plus size={16} />
-            {t("common.add")}
-          </Button>
+          tab !== "hierarchy" && (
+            <Button onClick={() => setEditing("new")}>
+              <Plus size={16} />
+              {t("common.add")}
+            </Button>
+          )
         }
       />
 
       <div className="relative mb-6 flex gap-1 border-b border-white/10">
-        {TYPES.map((key) => (
+        {tabs.map((key) => (
           <button
             key={key}
             type="button"
@@ -138,6 +143,10 @@ export default function OrgManager({ initialOrg }) {
         ))}
       </div>
 
+      {tab === "hierarchy" ? (
+        <OrgChart />
+      ) : (
+      <>
       <ErrorText>{error}</ErrorText>
 
       <div className="mt-4 space-y-2">
@@ -177,8 +186,10 @@ export default function OrgManager({ initialOrg }) {
         ))}
         {org[tab].length === 0 && <p className="py-8 text-center text-white/40">{t("dashboard.noItems")}</p>}
       </div>
+      </>
+      )}
 
-      <Modal open={Boolean(editing)} onClose={() => setEditing(null)} title={t(`erp.org.${tab}`)}>
+      <Modal open={Boolean(editing) && tab !== "hierarchy"} onClose={() => setEditing(null)} title={t(`erp.org.${tab}`)}>
         {editing && (
           <ItemEditor type={tab} item={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={saved} />
         )}

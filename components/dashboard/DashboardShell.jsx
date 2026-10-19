@@ -32,6 +32,8 @@ import {
   UserRound,
   Gift,
   UserCheck,
+  UsersRound,
+  ScrollText,
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
@@ -52,6 +54,9 @@ const NAV = [
       { href: "/dashboard", key: "overview", icon: LayoutGrid, exact: true },
       { href: "/dashboard/profile", key: "profile", icon: UserRound },
       { href: "/dashboard/tasks", key: "tasks", icon: ListChecks, staff: true },
+      // GM / CEO: every task of a month.
+      { href: "/dashboard/task-log", key: "taskLog", icon: ScrollText, when: (u) => u.permissions.includes("projects.manage") && u.scope === "all" },
+      { href: "/dashboard/team-tasks", key: "teamTasks", icon: UsersRound, staff: true },
       { href: "/dashboard/projects", key: "projects", icon: FolderKanban, staff: true },
       { href: "/dashboard/reviews", key: "reviews", icon: ClipboardCheck, perm: "tasks.review", badge: "reviews" },
       { href: "/dashboard/attendance", key: "attendance", icon: CalendarClock, staff: true },
@@ -78,7 +83,8 @@ const NAV = [
       { href: "/dashboard/pricing", key: "pricing", icon: Calculator, perm: "pricing.use" },
       { href: "/dashboard/staff", key: "staff", icon: Users, perm: "users.view" },
       { href: "/dashboard/roles", key: "roles", icon: ShieldCheck, perm: "roles.manage" },
-      { href: "/dashboard/organization", key: "organization", icon: Building2, perm: "org.manage" },
+      // Everyone sees the hierarchy tab; the rest of the page stays with org.manage.
+      { href: "/dashboard/organization", key: "organization", icon: Building2, staff: true },
       { href: "/dashboard/messages/review", key: "messageReview", icon: Eye, perm: "messages.review" },
       { href: "/dashboard/audit", key: "audit", icon: History, perm: "audit.view" },
       { href: "/dashboard/settings", key: "settings", icon: Settings, perm: "settings.manage" },
@@ -252,7 +258,8 @@ export default function DashboardShell({ user, children }) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setMobileOpen(false)}
-              className="fixed inset-0 z-40 bg-black/60 lg:hidden"
+              // Starts under the header, so the bell and messages stay usable with the menu open.
+              className="fixed inset-x-0 bottom-0 top-16 z-40 bg-black/60 lg:hidden"
             />
             <motion.div
               initial={{ x: lang === "ar" ? "100%" : "-100%" }}

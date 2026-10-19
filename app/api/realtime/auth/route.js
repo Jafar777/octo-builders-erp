@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/currentUser";
 import { authorizeChannel, PRESENCE_CHANNEL } from "@/lib/realtime/server";
 import { conversationAccess } from "@/lib/messaging";
 import { projectAccess } from "@/lib/projects";
+import { COMPANY_TASKS_CHANNEL } from "@/lib/tasks";
 import { fail, forbidden, isObjectId } from "@/lib/apiUtils";
 import Conversation from "@/models/Conversation";
 import WorkProject from "@/models/WorkProject";
@@ -25,6 +26,8 @@ export async function POST(request) {
   } else if (channel === PRESENCE_CHANNEL) {
     allowed = user.isStaff;
     presence = { user_id: user.id, user_info: { name: user.displayName || user.email, avatarUrl: user.avatarUrl } };
+  } else if (channel === COMPANY_TASKS_CHANNEL) {
+    allowed = user.isStaff;
   } else if (channel.startsWith("private-department-")) {
     // Task and board updates of a department.
     const id = channel.slice("private-department-".length);

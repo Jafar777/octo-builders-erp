@@ -5,7 +5,7 @@ import { localParts } from "@/lib/attendance";
 import { loadFinance } from "@/lib/finance";
 import { attendanceForMonth, hrStaff, tasksForMonth, todayIn, withActualHours } from "@/lib/hr";
 import { serializeNotification } from "@/lib/notify";
-import { lateTaskCount, projectRisk } from "@/lib/projectHealth";
+import { lateTaskCount, projectRisk, rejectionCount } from "@/lib/projectHealth";
 import { buildCells } from "@/lib/projects";
 import { getSettings } from "@/lib/settings";
 import { ACTIVE_STATUSES, enrichTasks } from "@/lib/tasks";
@@ -90,7 +90,7 @@ export async function GET() {
         const rows = projects.map((p) => {
           const list = tasks.filter((t) => idStr(t.project) === p._id.toString());
           const { progress } = buildCells(p, list);
-          const risk = projectRisk(p, progress, lateTaskCount(list, now), list.filter((t) => t.status === "rejected").length, now);
+          const risk = projectRisk(p, progress, lateTaskCount(list, now), rejectionCount(list), now);
           return { id: p._id.toString(), name: p.name, code: p.code, progress: Math.round(progress * 100), dueDate: p.dueDate, ...risk };
         });
         out.projects = {
@@ -123,7 +123,8 @@ export async function GET() {
       (async () => {
         const in30 = new Date(new Date(`${today}T00:00:00Z`).getTime() + 30 * 86400000).toISOString().slice(0, 10);
         const [pendingLeave, ending, devices] = await Promise.all([
-          can("leave.approve") ? LeaveRequest.countDocuments({ status: "pending" }) : 0,
+          // Waiting for HR / GM (requests still with a department manager aren't theirs yet).
+          can("leave.approve") ? LeaveRequest.countDocuments({ status: "pending", stage: { $ne: "manager" } }) : 0,
           User.find({ status: "active", contractEnd: { $gte: today, $lte: in30 } }, { ...NAME_FIELDS, contractEnd: 1 }).sort({ contractEnd: 1 }).lean(),
           AttendanceDevice.find({ active: true }, { name: 1, lastSeenAt: 1 }).lean(),
         ]);

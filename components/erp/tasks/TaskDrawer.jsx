@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
-import { useRealtimeEvent, userChannelName } from "@/context/RealtimeContext";
+import { COMPANY_TASKS_CHANNEL, useRealtimeEvent } from "@/context/RealtimeContext";
 import { api, errorText } from "@/lib/clientApi";
 import { formatDate, formatDateTime } from "@/lib/formatTime";
 import Modal from "@/components/erp/ui/Modal";
@@ -220,7 +220,8 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
     load();
   }, [load]);
 
-  useRealtimeEvent(userChannelName(user?.id), "task:updated", (e) => {
+  // Company-wide channel: colleagues looking at someone else's task get updates too.
+  useRealtimeEvent(COMPANY_TASKS_CHANNEL, "task:updated", (e) => {
     if (e.id === taskId) load();
   });
 

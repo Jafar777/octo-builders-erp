@@ -115,14 +115,17 @@ export default function Navbar() {
           ))}
         </div>
 
-        <div className="hidden items-center gap-3 lg:flex">
-          <LanguageSwitch groupId="lang-pill-desktop" />
-          {!loading && user && <MessagesButton />}
+        <div className="flex items-center gap-1 lg:gap-3">
+          <div className="hidden items-center gap-3 lg:flex">
+            <LanguageSwitch groupId="lang-pill-desktop" />
+            {!loading && user && <MessagesButton />}
+          </div>
+          {/* One bell for every screen size: always in the bar, also on phones with the menu open. */}
           {!loading && user && <NotificationBell />}
           {!loading && user && (
             <Link
               href="/dashboard"
-              className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10 text-sm font-semibold text-white"
+              className="hidden h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-white/10 text-sm font-semibold text-white lg:flex"
               aria-label={t("nav.dashboard")}
             >
               {user.avatarUrl ? (
@@ -135,21 +138,21 @@ export default function Navbar() {
           {!loading && !user && (
             <Link
               href="/auth"
-              className="rounded-full bg-brand-orange px-5 py-2 text-sm font-semibold text-white transition-transform hover:scale-105"
+              className="hidden rounded-full bg-brand-orange px-5 py-2 text-sm font-semibold text-white transition-transform hover:scale-105 lg:block"
             >
               {t("nav.login")}
             </Link>
           )}
-        </div>
 
-        <button
-          type="button"
-          onClick={() => setMobileOpen((v) => !v)}
-          className="flex h-10 w-10 items-center justify-center rounded-full text-white lg:hidden"
-          aria-label="Menu"
-        >
-          {mobileOpen ? <X size={22} /> : <Menu size={22} />}
-        </button>
+          <button
+            type="button"
+            onClick={() => setMobileOpen((v) => !v)}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-white lg:hidden"
+            aria-label="Menu"
+          >
+            {mobileOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
       </nav>
 
       <AnimatePresence>
@@ -178,12 +181,7 @@ export default function Navbar() {
 
               <div className="mt-2 flex items-center justify-between border-t border-white/10 px-4 py-3">
                 <LanguageSwitch compact groupId="lang-pill-mobile" />
-                {!loading && user && (
-                  <span className="flex items-center gap-1">
-                    <MessagesButton linkOnly />
-                    <NotificationBell />
-                  </span>
-                )}
+                {!loading && user && <MessagesButton linkOnly />}
               </div>
 
               {!loading && user && (

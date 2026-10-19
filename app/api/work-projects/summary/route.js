@@ -3,7 +3,7 @@ import { requireStaff } from "@/lib/currentUser";
 import { forbidden } from "@/lib/apiUtils";
 import { HOUR, makeCalendar, officeDate } from "@/lib/gantt";
 import { pickName, viewerLang } from "@/lib/personName";
-import { lateTaskCount, projectRisk, RISK_LEVELS } from "@/lib/projectHealth";
+import { lateTaskCount, projectRisk, rejectionCount, RISK_LEVELS } from "@/lib/projectHealth";
 import { buildCells, projectQueryFor } from "@/lib/projects";
 import { getSettings } from "@/lib/settings";
 import { enrichTasks } from "@/lib/tasks";
@@ -75,7 +75,7 @@ export async function GET() {
   const health = live.map((p) => {
     const list = byProject[p._id.toString()] || [];
     const { progress } = buildCells(p, list);
-    const risk = projectRisk(p, progress, lateTaskCount(list, now), list.filter((t) => t.status === "rejected").length, now);
+    const risk = projectRisk(p, progress, lateTaskCount(list, now), rejectionCount(list), now);
     return {
       id: p._id.toString(),
       name: p.name,

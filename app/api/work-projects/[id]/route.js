@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { requireStaff } from "@/lib/currentUser";
+import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
 import { applyFlow, applyStageRouting, cleanProjectFields, cleanStages } from "@/lib/projectPayload";
 import { buildCells, checkStageHandoffs, projectAccess, projectChannel, serializeProject } from "@/lib/projects";
 import { projectScore } from "@/lib/projectHealth";
+import { loadFinance } from "@/lib/finance";
 import { publish } from "@/lib/realtime/server";
 import { getTaskSettings } from "@/lib/settings";
 import { departmentChannel } from "@/lib/tasks";
@@ -30,8 +31,14 @@ export async function GET(request, { params }) {
     { stage: 1, revision: 1, status: 1, kind: 1, createdAt: 1, assignee: 1, number: 1, dueAt: 1, submittedAt: 1 }
   ).lean();
   const board = buildCells(project.toObject(), tasks);
-  // Project KPI: delivery + quality here; the cost part is added on the finance-aware analytics page.
-  const kpi = projectScore(tasks);
+  // Project KPI: delivery + quality, plus the budget part for people who may see finance
+  // (the same score as the Project KPIs page).
+  let cost = null;
+  if (project.budget > 0 && hasPermission(user, "finance.view")) {
+    const finance = await loadFinance(new Date().getFullYear());
+    cost = finance.projects.find((fp) => fp.id === project._id.toString())?.cost ?? null;
+  }
+  const kpi = projectScore(tasks, { budget: project.budget || 0, cost });
 
   return NextResponse.json({ project: serializeProject(project.toObject(), { ...board, kpi }), access });
 }

@@ -10,6 +10,8 @@ import {
   cleanRecurrence,
   enrichTask,
   FINAL_STATUSES,
+  hideReview,
+  isInvolvedInTask,
   logActivity,
   publishTaskChange,
   taskTitle,
@@ -64,28 +66,34 @@ export async function GET(request, { params }) {
   const lang = await viewerLang();
   const names = Object.fromEntries(actors.map((a) => [a._id.toString(), pickName(a, lang)]));
 
+  const involved = isInvolvedInTask(user, task);
+  const enriched = await enrichTask(task);
+
   return NextResponse.json({
-    task: await enrichTask(task),
+    task: involved ? enriched : hideReview(enriched),
     permissions: {
       isAssignee: task.assignee.toString() === user.id,
       canPlan: canRouteStages(user),
       canReview: canReviewTask(user, task),
       canManage: canManageTask(user, task),
     },
-    activity: activity.map((a) => ({
-      id: a._id.toString(),
-      type: a.type,
-      text: a.text,
-      data: a.data,
-      actorName: names[a.actor?.toString()] || "—",
-      createdAt: a.createdAt,
-    })),
+    activity: activity.map((a) => {
+      const review = !involved && ["approved", "rejected"].includes(a.type);
+      return {
+        id: a._id.toString(),
+        type: a.type,
+        text: review ? "" : a.text,
+        data: review ? {} : a.data,
+        actorName: names[a.actor?.toString()] || "—",
+        createdAt: a.createdAt,
+      };
+    }),
     history: history.map((h) => ({
       id: h._id.toString(),
       number: h.number,
       revision: h.revision,
       status: h.status,
-      ratings: h.ratings,
+      ratings: involved ? h.ratings : [],
       submittedAt: h.submittedAt,
     })),
   });

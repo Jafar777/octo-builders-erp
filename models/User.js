@@ -16,6 +16,8 @@ const UserSchema = new mongoose.Schema(
     department: { type: ObjectId, ref: "Department", default: null },
     branch: { type: ObjectId, ref: "Branch", default: null },
     jobTitle: { type: ObjectId, ref: "JobTitle", default: null },
+    // Set by the GM to override the role-based hierarchy (lib/hierarchy.js); null = automatic.
+    reportsTo: { type: ObjectId, ref: "User", default: null },
     status: { type: String, enum: ["active", "inactive"], default: "active" },
     phone: { type: String, default: "" },
     badgeId: { type: String, default: "" }, // fingerprint device ID

@@ -365,6 +365,8 @@ export default function HrCenter({ initialMonth }) {
   const router = useRouter();
   const [viewing, setViewing] = useState(null);
   const perms = useMemo(() => user?.permissions || [], [user]);
+  // HR / GM decide leave last; department managers decide it first for their department.
+  const seesLeave = perms.includes("leave.approve") || (user?.scope === "department" && perms.includes("tasks.review"));
   // HR manages each employee (attendance, profile, salary, documents) from their file on
   // the staff page; department heads only get a read-only look at the month.
   const openPerson = (staff) => (perms.includes("attendance.manage") ? router.push(`/dashboard/staff?person=${staff.id}`) : setViewing(staff));
@@ -378,9 +380,9 @@ export default function HrCenter({ initialMonth }) {
     api(`/api/hr/overview?month=${month}`).then(setData).catch(() => {});
   }, [month]);
   const loadLeaves = useCallback(() => {
-    if (perms.includes("leave.approve")) api("/api/leave?view=all").then((d) => setLeaves(d.leaves)).catch(() => setLeaves([]));
+    if (seesLeave) api("/api/leave?view=all").then((d) => setLeaves(d.leaves)).catch(() => setLeaves([]));
     else setLeaves([]);
-  }, [perms]);
+  }, [seesLeave]);
   const loadSettings = useCallback(() => api("/api/settings").then((d) => setSettings(d.settings)).catch(() => {}), []);
 
   useEffect(() => {
@@ -396,13 +398,13 @@ export default function HrCenter({ initialMonth }) {
   const lookups = { dep: (id) => departments.find((d) => d.id === id)?.name?.[lang] || "—" };
   const visibleTabs = TABS.filter(
     (k) =>
-      (k === "leave" && perms.includes("leave.approve")) ||
+      (k === "leave" && seesLeave) ||
       (k === "payroll" && perms.includes("payroll.manage") && user?.scope === "all") ||
       (k === "devices" && perms.includes("attendance.manage") && user?.scope === "all") ||
       (k === "rules" && perms.includes("payroll.manage") && user?.scope === "all") ||
       k === "attendance"
   );
-  const pending = (leaves || []).filter((l) => l.status === "pending").length;
+  const pending = (leaves || []).filter((l) => l.canDecide).length;
 
   return (
     <div>
@@ -429,7 +431,16 @@ export default function HrCenter({ initialMonth }) {
       {tab === "leave" && !leaves && <SkeletonList rows={5} />}
       {tab === "leave" && leaves && (
         <div className="animate-fade-up space-y-8">
-          <LeaveList leaves={leaves.filter((l) => l.status === "pending")} approver onChanged={loadLeaves} />
+          <div>
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/45">{t("erp.leaveFlow.waitingYou")}</h3>
+            <LeaveList leaves={leaves.filter((l) => l.canDecide)} approver onChanged={loadLeaves} empty={t("erp.leaveFlow.nothingForYou")} />
+          </div>
+          {leaves.some((l) => l.status === "pending" && !l.canDecide) && (
+            <div>
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/45">{t("erp.leaveFlow.inProgress")}</h3>
+              <LeaveList leaves={leaves.filter((l) => l.status === "pending" && !l.canDecide)} approver onChanged={loadLeaves} />
+            </div>
+          )}
           <div>
             <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/45">{t("erp.hr.leaveHistory")}</h3>
             <LeaveList leaves={leaves.filter((l) => l.status !== "pending")} approver onChanged={loadLeaves} />

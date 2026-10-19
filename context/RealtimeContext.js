@@ -11,6 +11,8 @@ const RealtimeContext = createContext({ client: null, connected: false, acquire:
 export const PRESENCE_CHANNEL = "presence-staff";
 export const userChannelName = (id) => (id ? `private-user-${id}` : null);
 export const conversationChannelName = (id) => (id ? `private-conversation-${id}` : null);
+// Same name as COMPANY_TASKS_CHANNEL in lib/tasks.
+export const COMPANY_TASKS_CHANNEL = "private-company-tasks";
 
 export function RealtimeProvider({ children }) {
   const { user } = useAuth();

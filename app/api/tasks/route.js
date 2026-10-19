@@ -11,9 +11,12 @@ import {
   canManageTask,
   canViewTask,
   cleanDependsOn,
+  ACTIVE_STATUSES,
   cleanRecurrence,
   enrichTask,
   enrichTasks,
+  hideReview,
+  isInvolvedInTask,
   logActivity,
   publishTaskChange,
   starSummary,
@@ -29,6 +32,7 @@ import WorkProject from "@/models/WorkProject";
 //   ?view=review          submitted tasks I may review
 //   ?view=project&project=<id>
 //   ?view=all             everything in my scope (managers)
+//   ?view=team            everyone's open work, company-wide (all staff)
 //   ?view=subtasks&parent=<id>
 // Optional: &status=a,b  &assignee=<id>
 export async function GET(request) {
@@ -56,6 +60,8 @@ export async function GET(request) {
     const parent = isObjectId(params.get("parent")) ? await Task.findById(params.get("parent")).lean() : null;
     if (!parent || !canViewTask(user, parent)) return forbidden();
     query.parentTask = parent._id;
+  } else if (view === "team") {
+    query.status = { $in: [...ACTIVE_STATUSES, "submitted"] };
   } else if (view === "all") {
     if (!hasPermission(user, "projects.view") && !hasPermission(user, "tasks.assign")) return forbidden();
     if (user.scope !== "all") query.department = user.department;
@@ -68,9 +74,10 @@ export async function GET(request) {
   const assignee = params.get("assignee");
   if (isObjectId(assignee) && view !== "mine") query.assignee = assignee;
 
-  const tasks = await Task.find(query).sort({ updatedAt: -1 }).limit(500).lean();
+  const tasks = await Task.find(query).sort({ updatedAt: -1 }).limit(view === "team" ? 2000 : 500).lean();
+  const enriched = await enrichTasks(tasks);
   return NextResponse.json({
-    tasks: await enrichTasks(tasks),
+    tasks: enriched.map((t, i) => (isInvolvedInTask(user, tasks[i]) ? t : hideReview(t))),
     // My overall star rating, shown at the top of "My tasks".
     rating: view === "mine" ? await starSummary(user.id) : undefined,
   });
@@ -99,7 +106,7 @@ export async function POST(request) {
   let parent = null;
   if (body.parentTaskId) {
     parent = isObjectId(body.parentTaskId) ? await Task.findById(body.parentTaskId).lean() : null;
-    if (!parent || !canViewTask(user, parent)) return fail("invalid_parent");
+    if (!parent || !isInvolvedInTask(user, parent)) return fail("invalid_parent");
     if (parent.parentTask) return fail("nested_subtask");
     body.projectId = parent.project ? parent.project.toString() : "";
     body.stage = "";
