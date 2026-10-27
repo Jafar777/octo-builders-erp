@@ -6,30 +6,35 @@ import { useAuth } from "@/context/AuthContext";
 import { api, errorText } from "@/lib/clientApi";
 import { Button, ErrorText, Input, Label, Select } from "@/components/erp/ui/fields";
 import { canRouteStages } from "@/components/erp/projects/StageRouting";
-import { AlertTriangle, Timer } from "lucide-react";
+import { Timer } from "lucide-react";
 
 const KINDS = ["task", "meeting", "personal"];
 
 // Create a task. `preset` fixes the project / stage when opened from a board
-// cell, or `preset.parent` (a task) for a sub-task. Time is not entered here: a
-// project task gets its hours from the project scale and its clock starts when the
-// employee presses Start. Only the GM / CEO may set a due date by hand.
+// cell, or `preset.parent` (a task) for a sub-task. A project task gets the working
+// hours entered here and is scheduled in the employee's queue automatically. Only
+// the GM / CEO may set a due date by hand.
 export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
   const canAssign = user?.permissions?.includes("tasks.assign");
+  const isScheduler = canRouteStages(user);
+  const parent = preset.parent || null;
+  // Project work (and its hours) is given out by the GM / CEO; others add meetings,
+  // personal tasks, and steps (sub-tasks) of a task they work on.
+  const kinds = isScheduler || parent ? KINDS : KINDS.filter((k) => k !== "task");
   const [form, setForm] = useState({
-    kind: "task",
+    kind: kinds[0],
     projectId: preset.projectId || "",
     stage: preset.stage || "",
     type: "",
     title: "",
     assigneeId: user?.id || "",
     dueAt: "",
+    hours: "",
     priority: "normal",
     description: "",
   });
-  const parent = preset.parent || null;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const set = (field) => (value) => setForm((f) => ({ ...f, [field]: value }));
@@ -38,11 +43,10 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
   const project = lookups.projects.find((p) => p.id === form.projectId);
   const stage = project?.stages.find((s) => s.key === form.stage);
   const fixedCell = Boolean(preset.stage);
-  const isScheduler = canRouteStages(user);
-  // Project scale: tasks get its hours; only the GM / CEO set their own due date.
-  const scaleProject = project || lookups.projects.find((p) => p.id === parent?.project?.id);
-  const scale = form.kind === "task" ? (lookups.settings.projectScales || []).find((s) => s.key === scaleProject?.scale) : null;
-  const missingScale = form.kind === "task" && Boolean(scaleProject) && !scale && !isScheduler;
+  // Project tasks need their working hours (the GM / CEO may give a due date instead).
+  // An employee's sub-task is a step inside its task's time: no hours of its own.
+  const needsHours = form.kind === "task" && Boolean(project || parent?.project) && (isScheduler || !parent);
+  const missingHours = needsHours && !(Number(form.hours) >= 0.5) && !(isScheduler && form.dueAt);
 
   async function save() {
     setSaving(true);
@@ -52,6 +56,7 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
         ...form,
         type: form.type || stage?.taskType || "",
         dueAt: isScheduler && form.dueAt ? new Date(form.dueAt).toISOString() : null,
+        hours: needsHours ? Number(form.hours) || 0 : 0,
       };
       if (body.kind !== "task" && !body.projectId) {
         body.stage = "";
@@ -76,7 +81,7 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
 
       {!fixedCell && !parent && (
         <div className="flex gap-1 rounded-xl border border-white/10 p-1">
-          {KINDS.map((k) => (
+          {kinds.map((k) => (
             <button
               key={k}
               type="button"
@@ -144,10 +149,13 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
             options={["normal", "important", "urgent"].map((p) => ({ value: p, label: t(`erp.tasks.priority.${p}`) }))}
           />
         )}
+        {needsHours && (
+          <Input type="number" min="0.5" max="200" step="0.5" label={t("erp.plan.hours")} value={form.hours} onChange={set("hours")} dir="ltr" />
+        )}
         {isScheduler && (
           <Input
             type="datetime-local"
-            label={`${t("erp.tasks.dueAt")}${scale || form.kind !== "task" ? ` ${t("dashboard.optional")}` : ""}`}
+            label={`${t("erp.tasks.dueAt")}${needsHours || form.kind !== "task" ? ` ${t("dashboard.optional")}` : ""}`}
             value={form.dueAt}
             onChange={set("dueAt")}
           />
@@ -162,18 +170,13 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
         )}
       </div>
 
-      {scale && (
+      {needsHours && (
         <p className="flex items-start gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2.5 text-sm text-sky-100">
           <Timer size={16} className="mt-0.5 shrink-0" />
           <span>
-            {t("erp.scale.formInfo", { scale: scale.name?.[lang], h: scale.hours })}
-            {isScheduler && <span className="block text-xs text-sky-200/70">{t("erp.scale.formOverride")}</span>}
+            {t("erp.plan.formInfo")}
+            {isScheduler && <span className="block text-xs text-sky-200/70">{t("erp.plan.formOverride")}</span>}
           </span>
-        </p>
-      )}
-      {missingScale && (
-        <p className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-100">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0" /> {t("erp.scale.missing")}
         </p>
       )}
 
@@ -192,7 +195,7 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
         <Button variant="ghost" onClick={onCancel}>
           {t("common.cancel")}
         </Button>
-        <Button onClick={save} disabled={saving || missingScale}>
+        <Button onClick={save} disabled={saving || missingHours}>
           {t("erp.tasks.create")}
         </Button>
       </div>

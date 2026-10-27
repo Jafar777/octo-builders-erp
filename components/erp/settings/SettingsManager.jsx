@@ -8,6 +8,7 @@ import BilingualField from "@/components/dashboard/BilingualField";
 import SaveBar from "@/components/dashboard/SaveBar";
 import { Button, Card, Input, PageHeader, Select } from "@/components/erp/ui/fields";
 import { locale } from "@/lib/formatTime";
+import { daySchedule, monthWorkHours } from "@/lib/workDays";
 
 // Saves one settings group with the shared SaveBar states.
 function useSettingSave(key) {
@@ -33,11 +34,13 @@ function useSettingSave(key) {
 
 const DAYS = [6, 0, 1, 2, 3, 4, 5]; // Saturday first, as in the attendance sheet
 
-function CalendarSettings({ initial }) {
+const dayLabel = (lang, d) => new Intl.DateTimeFormat(locale(lang), { weekday: "long" }).format(new Date(2024, 0, 7 + d));
+
+// The calendar's state lives in SettingsManager: the working-hours card needs it too.
+function CalendarSettings({ value, setValue }) {
   const { t, lang } = useLanguage();
-  const [value, setValue] = useState(initial);
   const { status, error, save } = useSettingSave("calendar");
-  const dayName = (d) => new Intl.DateTimeFormat(locale(lang), { weekday: "long" }).format(new Date(2024, 0, 7 + d));
+  const dayName = (d) => dayLabel(lang, d);
 
   const setHoliday = (i, patch) =>
     setValue((v) => ({ ...v, holidays: v.holidays.map((h, j) => (j === i ? { ...h, ...patch } : h)) }));
@@ -117,38 +120,164 @@ function CalendarSettings({ initial }) {
   );
 }
 
-const WORK_FIELDS = [
-  ["workStart", "time"],
-  ["workEnd", "time"],
-  ["dailyHours", "number"],
-  ["ramadanHours", "number"],
-  ["minHours", "number"],
-  ["graceMinutes", "number"],
-  ["overtimeMultiplier", "number"],
-  ["monthlyRequiredHours", "number"],
-];
+// Required monthly hours aren't typed: they're the sum of each day's hours (see MonthTotal).
+const WORK_FIELDS = ["ramadanHours", "minHours", "graceMinutes", "overtimeMultiplier"];
 
-function WorkHoursSettings({ initial }) {
-  const { t } = useLanguage();
+// The current month's required hours from the (unsaved) day table and calendar — read only,
+// so the month can never ask for more hours than its working days hold.
+function MonthTotal({ calendar, workHours }) {
+  const { t, lang } = useLanguage();
+  const now = new Date();
+  const [y, m] = [now.getFullYear(), now.getMonth() + 1];
+  const month = `${y}-${String(m).padStart(2, "0")}`;
+  const count = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const days = Array.from({ length: count }, (_, i) => daySchedule(`${month}-${String(i + 1).padStart(2, "0")}`, calendar, workHours));
+  const working = days.filter((d) => d.working).length;
+  const hours = Math.round(monthWorkHours(month, { calendar, workHours }) * 100) / 100;
+  const name = new Intl.DateTimeFormat(locale(lang), { month: "long", year: "numeric" }).format(new Date(y, m - 1, 1));
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+      <p className="text-sm font-medium text-white/70">{t("erp.settings.monthlyRequiredHours")}</p>
+      <p className="mt-1 text-2xl font-semibold" dir="ltr">
+        {t("erp.settings.monthTotal", { h: hours })}
+      </p>
+      <p className="mt-1 text-xs text-white/50">{t("erp.settings.monthTotalHint", { month: name, days: count, working, off: count - working })}</p>
+    </div>
+  );
+}
+
+const spanHours = (start, end) => {
+  const m = (x) => (/^\d{2}:\d{2}$/.test(x || "") ? Number(x.slice(0, 2)) * 60 + Number(x.slice(3)) : null);
+  const a = m(start);
+  const b = m(end);
+  return a == null || b == null || b <= a ? 0 : Math.round(((b - a) / 60) * 100) / 100;
+};
+
+// Changing a start / end time also moves the counted hours when they matched the old span.
+function retime(day, patch) {
+  const next = { ...day, ...patch };
+  if (Number(day.hours) === spanHours(day.start, day.end)) next.hours = spanHours(next.start, next.end);
+  return next;
+}
+
+// Start, end and the hours that count for one day (a weekday or a special date).
+function DayTimes({ day, onChange, disabled, t }) {
+  return (
+    <>
+      <Input type="time" dir="ltr" label={t("erp.settings.workStart")} value={day.start} disabled={disabled} onChange={(start) => onChange(retime(day, { start }))} />
+      <Input type="time" dir="ltr" label={t("erp.settings.workEnd")} value={day.end} disabled={disabled} onChange={(end) => onChange(retime(day, { end }))} />
+      <Input
+        type="number"
+        step="0.5"
+        min="0.5"
+        dir="ltr"
+        label={t("erp.settings.dayHours")}
+        value={day.hours}
+        disabled={disabled}
+        onChange={(hours) => onChange({ ...day, hours: hours === "" ? "" : Number(hours) })}
+      />
+    </>
+  );
+}
+
+// Hours of each weekday, special dates with their own hours, and the attendance rules.
+function WorkHoursSettings({ initial, calendar }) {
+  const weekend = calendar.weekend;
+  const { t, lang } = useLanguage();
   const [value, setValue] = useState(initial);
   const { status, error, save } = useSettingSave("workHours");
+  const setDay = (wd, day) => setValue((v) => ({ ...v, days: v.days.map((d, i) => (i === wd ? day : d)) }));
+  const setSpecial = (i, patch) => setValue((v) => ({ ...v, special: v.special.map((s, j) => (j === i ? { ...s, ...patch } : s)) }));
+  const working = DAYS.filter((d) => !weekend.includes(d));
+  const weekTotal = working.reduce((n, d) => n + (Number(value.days[d]?.hours) || 0), 0);
 
   return (
     <Card className="space-y-6">
-      <h2 className="text-lg font-semibold">{t("erp.settings.workHours")}</h2>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {WORK_FIELDS.map(([field, type]) => (
+      <div>
+        <h2 className="text-lg font-semibold">{t("erp.settings.workHours")}</h2>
+        <p className="mt-1 text-xs text-white/45">{t("erp.settings.workHoursHint")}</p>
+      </div>
+
+      <div>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-medium text-white/70">{t("erp.settings.weekHours")}</p>
+          <div className="flex items-center gap-3 text-xs text-white/50">
+            <span>{t("erp.settings.weekTotal", { h: Math.round(weekTotal * 100) / 100 })}</span>
+            {working.length > 1 && (
+              <Button
+                variant="ghost"
+                onClick={() => setValue((v) => ({ ...v, days: v.days.map((d, i) => (weekend.includes(i) ? d : { ...v.days[working[0]] })) }))}
+              >
+                {t("erp.settings.sameAllDays", { day: dayLabel(lang, working[0]) })}
+              </Button>
+            )}
+          </div>
+        </div>
+        <div className="space-y-2">
+          {DAYS.map((wd) => {
+            const off = weekend.includes(wd);
+            return (
+              <div key={wd} className={`grid items-end gap-3 rounded-xl border border-white/10 p-3 sm:grid-cols-[140px_1fr_1fr_1fr] ${off ? "opacity-50" : ""}`}>
+                <div className="text-sm font-medium sm:pb-2.5">
+                  {dayLabel(lang, wd)}
+                  {off && <span className="block text-[11px] font-normal text-white/50">{t("erp.settings.dayOff")}</span>}
+                </div>
+                <DayTimes day={value.days[wd]} disabled={off} onChange={(day) => setDay(wd, day)} t={t} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <MonthTotal calendar={calendar} workHours={value} />
+
+      <div>
+        <p className="mb-1 text-sm font-medium text-white/70">{t("erp.settings.specialDays")}</p>
+        <p className="mb-3 text-xs text-white/40">{t("erp.settings.specialDaysHint")}</p>
+        <div className="space-y-3">
+          {value.special.map((sd, i) => (
+            <div key={i} className="space-y-3 rounded-xl border border-white/10 p-3">
+              <div className="grid items-end gap-3 sm:grid-cols-[170px_1fr_1fr_1fr_auto]">
+                <Input type="date" label={t("erp.settings.date")} value={sd.date} onChange={(date) => setSpecial(i, { date })} />
+                <DayTimes day={sd} onChange={(day) => setSpecial(i, day)} t={t} />
+                <button
+                  type="button"
+                  onClick={() => setValue((v) => ({ ...v, special: v.special.filter((_, j) => j !== i) }))}
+                  className="flex h-10 w-10 items-center justify-center rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10"
+                  aria-label={t("common.delete")}
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+              <BilingualField label={t("erp.settings.specialName")} value={sd.name} onChange={(name) => setSpecial(i, { name })} />
+            </div>
+          ))}
+          <Button
+            variant="ghost"
+            onClick={() =>
+              setValue((v) => ({ ...v, special: [...v.special, { date: "", start: v.workStart, end: v.workEnd, hours: v.dailyHours, name: { ar: "", en: "" } }] }))
+            }
+          >
+            <Plus size={16} />
+            {t("erp.settings.addSpecialDay")}
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {WORK_FIELDS.map((field) => (
           <Input
             key={field}
-            type={type}
-            step={type === "number" ? "0.5" : undefined}
+            type="number"
+            step="0.5"
             dir="ltr"
             label={t(`erp.settings.${field}`)}
             value={value[field]}
-            onChange={(v) => setValue((s) => ({ ...s, [field]: type === "number" ? Number(v) : v }))}
+            onChange={(v) => setValue((s) => ({ ...s, [field]: Number(v) }))}
           />
         ))}
       </div>
+      <p className="text-xs text-white/40">{t("erp.settings.rulesHint")}</p>
       <SaveBar status={status} error={error} onSave={() => save(value, setValue)} />
     </Card>
   );
@@ -243,38 +372,6 @@ function TasksSettings({ initial }) {
       </div>
 
       <div>
-        <p className="mb-1 text-sm font-medium text-white/70">{t("erp.scale.settingsTitle")}</p>
-        <p className="mb-3 text-xs text-white/40">{t("erp.scale.settingsHint")}</p>
-        <div className="space-y-2">
-          {(value.projectScales || []).map((sc, i) => (
-            <div key={i} className="grid items-end gap-2 rounded-xl border border-white/10 p-3 sm:grid-cols-[140px_1fr_130px_auto]">
-              <Input label={t("erp.settings.code")} value={sc.key} dir="ltr" onChange={(key) => setList("projectScales", i, { key })} />
-              <BilingualField label={t("erp.org.name")} value={sc.name} onChange={(name) => setList("projectScales", i, { name })} />
-              <Input
-                type="number"
-                min="0.5"
-                max="200"
-                step="0.5"
-                label={t("erp.scale.hoursPerTask")}
-                value={sc.hours}
-                dir="ltr"
-                onChange={(hours) => setList("projectScales", i, { hours })}
-              />
-              <button type="button" onClick={() => removeFrom("projectScales", i)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-red-500/30 text-red-400" aria-label={t("common.delete")}>
-                <Trash2 size={15} />
-              </button>
-            </div>
-          ))}
-          <Button
-            variant="ghost"
-            onClick={() => setValue((v) => ({ ...v, projectScales: [...(v.projectScales || []), { key: "", name: { ar: "", en: "" }, hours: 4 }] }))}
-          >
-            <Plus size={16} /> {t("erp.scale.add")}
-          </Button>
-        </div>
-      </div>
-
-      <div>
         <p className="mb-1 text-sm font-medium text-white/70">{t("erp.settings.ratingTags")}</p>
         <p className="mb-3 text-xs text-white/40">{t("erp.settings.ratingHint")}</p>
         <div className="space-y-2">
@@ -314,12 +411,13 @@ function TasksSettings({ initial }) {
 
 export default function SettingsManager({ initial }) {
   const { t } = useLanguage();
+  const [calendar, setCalendar] = useState(initial.calendar);
   return (
     <div className="max-w-5xl">
       <PageHeader title={t("erp.nav.settings")} subtitle={t("erp.settings.subtitle")} />
       <div className="space-y-6">
-        <CalendarSettings initial={initial.calendar} />
-        <WorkHoursSettings initial={initial.workHours} />
+        <CalendarSettings value={calendar} setValue={setCalendar} />
+        <WorkHoursSettings initial={initial.workHours} calendar={calendar} />
         <CurrencySettings initial={initial.currencies} />
         <TasksSettings initial={initial.tasks} />
       </div>

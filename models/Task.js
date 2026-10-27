@@ -53,6 +53,9 @@ const TaskSchema = new mongoose.Schema(
     // Saved plan (Gantt "Save baseline") to compare the current dates with.
     baselineStart: { type: Date, default: null },
     baselineEnd: { type: Date, default: null },
+    // Work still going after its due time: when it's now expected to finish. The due
+    // date itself stays (lateness counts against it); the plan uses this instead.
+    expectedEnd: { type: Date, default: null },
     deliveryLink: { type: String, default: "" },
     attachments: [
       new mongoose.Schema({ url: String, name: String, mime: String, size: Number }, { _id: false }),

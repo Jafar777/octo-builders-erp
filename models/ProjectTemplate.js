@@ -9,9 +9,12 @@ export const StageSchema = new mongoose.Schema(
     taskType: { type: String, default: "" }, // key from settings.tasks.taskTypes
     // Optional hand-over to another department (set by the GM / CEO only):
     // `department` does this stage's work (null = the project's department), and
-    // `waitForPrevious` keeps the stage locked until every earlier stage is finished.
+    // `after` lists the earlier stages (keys) it waits for; the stage stays locked until
+    // they're all finished. `waitForPrevious` = it waits for something (older data: for
+    // every earlier stage, when `after` is missing).
     department: { type: mongoose.Schema.Types.ObjectId, ref: "Department", default: null },
     waitForPrevious: { type: Boolean, default: false },
+    after: { type: [String], default: undefined },
   },
   { _id: false }
 );

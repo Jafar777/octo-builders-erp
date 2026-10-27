@@ -10,9 +10,9 @@ import { formatDate } from "@/lib/formatTime";
 import Modal from "@/components/erp/ui/Modal";
 import { Button, PageHeader, Select } from "@/components/erp/ui/fields";
 import ProjectForm from "@/components/erp/projects/ProjectForm";
+import { canRouteStages } from "@/components/erp/projects/StageRouting";
 import ProjectsTimeline from "@/components/erp/projects/ProjectsTimeline";
 import ProjectsSummary from "@/components/erp/projects/ProjectsSummary";
-import { ScaleBadge } from "@/components/erp/projects/ScaleSelect";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { SkeletonList } from "@/components/erp/ui/Loading";
 
@@ -47,9 +47,12 @@ export default function ProjectsList() {
                   <LayoutTemplate size={16} /> {t("erp.projects.templates")}
                 </Button>
               </Link>
-              <Button onClick={() => setCreating(true)}>
-                <Plus size={16} /> {t("erp.projects.new")}
-              </Button>
+              {/* A new project's hours and employees are the GM / CEO's to set. */}
+              {canRouteStages(user) && (
+                <Button onClick={() => setCreating(true)}>
+                  <Plus size={16} /> {t("erp.projects.new")}
+                </Button>
+              )}
             </>
           )
         }
@@ -139,7 +142,6 @@ export default function ProjectsList() {
                 <span className="flex items-center gap-1">
                   <ListChecks size={13} /> {t("erp.projects.openTasks", { count: p.openTasks })}
                 </span>
-                <ScaleBadge scales={lookups.settings.projectScales} value={p.scale} />
                 {p.overdueTasks > 0 && (
                   <span className="text-red-300">{t("erp.projects.overdueTasks", { count: p.overdueTasks })}</span>
                 )}

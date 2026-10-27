@@ -51,8 +51,8 @@ function Detail({ label, children }) {
 
 function ReviewForm({ task, lookups, onDone }) {
   const { user } = useAuth();
-  // Scaled tasks: the revision gets the same allowed hours; only the GM / CEO pick a date.
-  const pickDue = !task.maxHours || canRouteStages(user);
+  // The redo gets the same hours and is scheduled automatically; only the GM / CEO pick a date.
+  const pickDue = canRouteStages(user);
   const { t, lang } = useLanguage();
   const [decision, setDecision] = useState("approve");
   const [ratings, setRatings] = useState([]);
@@ -168,7 +168,7 @@ function ReviewForm({ task, lookups, onDone }) {
           {pickDue ? (
             <Input type="datetime-local" label={t("erp.tasks.revisionDue")} value={newDueAt} onChange={setNewDueAt} />
           ) : (
-            <p className="self-end text-xs text-sky-200">{t("erp.scale.revisionInfo", { h: task.maxHours })}</p>
+            <p className="self-end text-xs text-sky-200">{t("erp.scale.revisionInfo", { h: task.maxHours || task.estimatedHours })}</p>
           )}
           <p className="text-xs text-white/50 sm:col-span-2">{t("erp.tasks.rejectHint", { rev: revisionLabel(task.revision + 1) })}</p>
         </div>
@@ -192,6 +192,8 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
   const [panel, setPanel] = useState(null); // "help" | "submit"
   const [helperId, setHelperId] = useState("");
   const [note, setNote] = useState("");
+  const [helpHours, setHelpHours] = useState("1");
+  const [hoursLeft, setHoursLeft] = useState("");
   const [link, setLink] = useState("");
   const [comment, setComment] = useState("");
   const [manage, setManage] = useState({ assigneeId: "", dueAt: "" });
@@ -360,7 +362,7 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
               <span>
                 {t("erp.tasks.blockedBy")}{" "}
                 {task.dependsOn
-                  .filter((d) => !["approved", "done", "cancelled"].includes(d.status))
+                  .filter((d) => !["submitted", "approved", "done", "cancelled"].includes(d.status))
                   .map((d) => (
                     <button key={d.id} type="button" onClick={() => onOpenTask?.(d.id)} className="me-1 underline" dir="ltr">
                       #{d.number}
@@ -554,9 +556,25 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
                     options={lookups.people.filter((x) => x.id !== user?.id).map((x) => ({ value: x.id, label: x.name }))}
                   />
                   <Input label={t("erp.tasks.helpNote")} value={note} onChange={setNote} />
-                  <Button onClick={() => act("help", { helperId, note })} disabled={!helperId || busy}>
+                  <Input type="number" min="0.5" max="8" step="0.5" label={t("erp.tasks.helpHours")} value={helpHours} onChange={setHelpHours} dir="ltr" />
+                  <Button onClick={() => act("help", { helperId, note, hours: Number(helpHours) || 1 })} disabled={!helperId || busy}>
                     {t("erp.tasks.sendHelp")}
                   </Button>
+                </div>
+              )}
+
+              {/* Past its due time: the employee says how long it still needs, and the plan follows. */}
+              {["in_progress", "help"].includes(s) && task.kind !== "meeting" && task.dueAt && new Date(task.dueAt).getTime() < now && (
+                <div className="space-y-2 rounded-2xl border border-red-500/30 bg-red-500/[0.06] p-4">
+                  <p className="text-xs text-red-200">{t("erp.tasks.hoursLeftHint")}</p>
+                  <div className="flex items-end gap-2">
+                    <div className="w-32">
+                      <Input type="number" min="0.5" max="200" step="0.5" label={t("erp.tasks.hoursLeft")} value={hoursLeft} onChange={setHoursLeft} dir="ltr" />
+                    </div>
+                    <Button variant="ghost" onClick={() => act("hours_left", { hours: Number(hoursLeft) }).then(() => setHoursLeft(""))} disabled={busy || !(Number(hoursLeft) >= 0.5)}>
+                      {t("erp.tasks.hoursLeftSave")}
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -595,7 +613,7 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
                 onChange={(v) => setManage((m) => ({ ...m, assigneeId: v }))}
                 options={lookups.people.map((x) => ({ value: x.id, label: x.name }))}
               />
-              {task.maxHours > 0 && !canRouteStages(user) ? (
+              {(task.maxHours > 0 || task.project) && !canRouteStages(user) ? (
                 <p className="text-xs text-sky-200">{t("erp.scale.lockedHint")}</p>
               ) : (
                 <Input type="datetime-local" label={t("erp.tasks.dueAt")} value={manage.dueAt} onChange={(v) => setManage((m) => ({ ...m, dueAt: v }))} />
@@ -604,7 +622,7 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
                 variant="ghost"
                 onClick={() =>
                   patch(
-                    task.maxHours > 0 && !canRouteStages(user)
+                    (task.maxHours > 0 || task.project) && !canRouteStages(user)
                       ? { assigneeId: manage.assigneeId }
                       : { assigneeId: manage.assigneeId, dueAt: manage.dueAt ? new Date(manage.dueAt).toISOString() : null }
                   )

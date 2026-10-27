@@ -2,20 +2,9 @@
 // landscape PDF (the browser's "Save as PDF"). Loaded on demand from ProjectsTimeline.
 // `m` = { groups, cal, critical, tasksById, people, load, now, lang, t, from, to, opts }
 
-import { DAY, HOUR, milestoneState, officeClock, officeDate, taskProgress, taskSpan, workMsBetween } from "@/lib/gantt";
+import { BAR_HEX, BAR_STATES, barState, dateHours, DAY, HOUR, milestoneState, officeClock, officeDate, taskProgress, taskSpan, workMsBetween } from "@/lib/gantt";
 import { locale } from "@/lib/formatTime";
 
-const STATUS_HEX = {
-  todo: "#94a3b8",
-  in_progress: "#38bdf8",
-  on_hold: "#f59e0b",
-  help: "#a78bfa",
-  submitted: "#f97316",
-  approved: "#10b981",
-  done: "#10b981",
-  rejected: "#ef4444",
-  cancelled: "#cbd5e1",
-};
 const MILESTONE_HEX = { done: "#10b981", late: "#ef4444", risk: "#f87171", ok: "#f97316" };
 
 const heading = (task, lang) => {
@@ -71,7 +60,6 @@ export async function exportExcel(m) {
     { header: t("erp.gantt.col.baselineStart"), key: "bStart", width: 17, style: { numFmt: dateFmt } },
     { header: t("erp.gantt.col.baselineEnd"), key: "bEnd", width: 17, style: { numFmt: dateFmt } },
     { header: t("erp.gantt.col.slip"), key: "slip", width: 10 },
-    { header: t("erp.gantt.critical"), key: "critical", width: 9 },
     { header: t("erp.tasks.dependsOn"), key: "deps", width: 16 },
   ];
   head(ws);
@@ -97,15 +85,13 @@ export async function exportExcel(m) {
         bStart: task.baselineStart ? clock(new Date(task.baselineStart).getTime()) : null,
         bEnd: bEnd ? clock(bEnd) : null,
         slip: bEnd ? Math.round((span.end - bEnd) / DAY) : null,
-        critical: m.critical.has(task.id) ? "●" : "",
         deps: (task.dependsOn || []).map((d) => `#${d.number}`).join(", "),
       });
-      row.getCell("status").fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${(STATUS_HEX[task.status] || "#cbd5e1").slice(1)}` } };
-      if (m.critical.has(task.id)) row.getCell("critical").font = { color: { argb: "FFE11D48" }, bold: true };
+      row.getCell("status").fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${BAR_HEX[barState(task)].slice(1)}` } };
       if (bEnd && span.end - bEnd > DAY / 2) row.getCell("slip").font = { color: { argb: "FFDC2626" }, bold: true };
     }
   }
-  ws.autoFilter = { from: "A1", to: "P1" };
+  ws.autoFilter = { from: "A1", to: "O1" };
 
   // Milestones
   const milestones = m.groups.flatMap((g) => (g.milestones || []).map((ms) => ({ g, ms })));
@@ -143,17 +129,16 @@ export async function exportExcel(m) {
     const wl = wb.addWorksheet(t("erp.gantt.sheet.workload"));
     wl.columns = [
       { header: t("erp.gantt.col.person"), key: "person", width: 24 },
-      { header: t("erp.gantt.col.capacity"), key: "capacity", width: 10 },
       ...dates.map((d) => ({ header: d.slice(5), key: d, width: 7 })),
     ];
     head(wl);
     for (const person of m.people) {
       const days = m.load[person.id];
       if (!days) continue;
-      const row = wl.addRow({ person: person.name, capacity: person.dailyHours, ...Object.fromEntries(dates.map((d) => [d, days[d] ? Math.round(days[d] * 10) / 10 : null])) });
+      const row = wl.addRow({ person: person.name, ...Object.fromEntries(dates.map((d) => [d, days[d] ? Math.round(days[d] * 10) / 10 : null])) });
       for (const d of dates) {
         if (!days[d]) continue;
-        const ratio = days[d] / person.dailyHours;
+        const ratio = days[d] / (person.dailyHours ?? (dateHours(d, cal) || 1));
         const color = ratio > 1.001 ? "FFFCA5A5" : ratio >= 0.8 ? "FFFDE68A" : "FFBBF7D0";
         row.getCell(d).fill = { type: "pattern", pattern: "solid", fgColor: { argb: color } };
       }
@@ -232,31 +217,13 @@ export function exportPdf(m) {
       ticks.push({ at, label: spanDays > 200 ? fmt({ month: "short" }).format(d) : String(d.getDate()) });
     }
   }
-  const nonWorking =
-    spanDays <= 120
-      ? (() => {
-          const out = [];
-          for (let d = new Date(from); d.getTime() < to; d.setDate(d.getDate() + 1)) {
-            const at = new Date(d).setHours(0, 0, 0, 0);
-            const iso = officeDate(at + 12 * HOUR, cal);
-            const weekday = new Date(`${iso}T12:00:00Z`).getUTCDay();
-            if (cal.weekend.includes(weekday) || cal.holidays.includes(iso)) out.push(at);
-          }
-          return out;
-        })()
-      : [];
 
   const svgPage = (rows) => {
     const height = HEAD + rows.reduce((h, r) => h + (r.kind === "group" ? G_H : T_H), 0) + 4;
     const parts = [];
     const rowY = {};
-    // Background, non-working days, grid.
+    // Background, grid.
     parts.push(`<rect x="0" y="0" width="${PAGE_W}" height="${height}" fill="#fff"/>`);
-    for (const at of nonWorking) {
-      const x1 = Math.max(LABEL, X(at));
-      const w = Math.min(X(at + DAY), PAGE_W) - x1;
-      if (w > 0) parts.push(`<rect x="${x1}" y="${HEAD}" width="${w}" height="${height - HEAD}" fill="#f1f5f9"/>`);
-    }
     for (const tk of ticks) {
       const x = X(tk.at);
       if (x < LABEL || x > PAGE_W) continue;
@@ -282,7 +249,7 @@ export function exportPdf(m) {
           const x1 = Math.max(LABEL, X(r.g.span.start));
           const w = Math.max(3, Math.min(PAGE_W, X(r.g.span.end)) - x1);
           parts.push(`<rect x="${x1}" y="${y + 8}" width="${w}" height="8" rx="2" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.5"/>`);
-          parts.push(`<rect x="${x1}" y="${y + 8}" width="${w * pct}" height="8" rx="2" fill="#fb923c"/>`);
+          parts.push(`<text x="${x1 + 3}" y="${y + 14.5}" font-size="6.5" fill="#334155">${Math.round(pct * 100)}%</text>`);
         }
         for (const ms of r.g.milestones || []) {
           const cx = X(new Date(ms.date).getTime());
@@ -298,21 +265,15 @@ export function exportPdf(m) {
       const { task } = r;
       const span = taskSpan(task);
       rowY[task.id] = { y: y + T_H / 2, span };
-      const crit = m.critical.has(task.id);
       const other = r.g.kind === "person" ? task.project?.code || task.project?.name?.[lang] || "" : task.assignee?.name || "";
       parts.push(`<line x1="0" y1="${y + T_H}" x2="${PAGE_W}" y2="${y + T_H}" stroke="#f1f5f9"/>`);
-      parts.push(`<text x="14" y="${y + 13}" font-size="8.5" fill="${crit ? "#e11d48" : "#1e293b"}">#${task.number} ${esc(cut(heading(task, lang), 34))}</text>`);
+      parts.push(`<text x="14" y="${y + 13}" font-size="8.5" fill="#1e293b">#${task.number} ${esc(cut(heading(task, lang), 34))}</text>`);
       parts.push(`<text x="${LABEL - 6}" y="${y + 13}" font-size="7.5" fill="#64748b" text-anchor="end">${esc(cut(other, 16))}</text>`);
-      if (m.opts.baseline && task.baselineStart && task.baselineEnd) {
-        const bx = X(new Date(task.baselineStart).getTime());
-        const bw = Math.max(2, X(new Date(task.baselineEnd).getTime()) - bx);
-        parts.push(`<rect x="${bx}" y="${y + T_H - 5}" width="${bw}" height="2.5" fill="#94a3b8"/>`);
-      }
       const bx = X(span.start);
       const bw = Math.max(3, X(span.end) - bx);
-      const color = STATUS_HEX[task.status] || "#94a3b8";
-      parts.push(`<rect x="${bx}" y="${y + 3}" width="${bw}" height="11" rx="2" fill="${color}" fill-opacity="0.35" stroke="${crit ? "#e11d48" : color}" stroke-width="${crit ? 1.6 : 0.8}"/>`);
-      parts.push(`<rect x="${bx}" y="${y + 3}" width="${bw * taskProgress(task, m.now)}" height="11" rx="2" fill="${color}"/>`);
+      const state = barState(task);
+      parts.push(`<rect x="${bx}" y="${y + 3}" width="${bw}" height="11" rx="2" fill="${BAR_HEX[state]}"/>`);
+      if (bw > 40) parts.push(`<text x="${bx + 3}" y="${y + 11}" font-size="6.5" fill="#fff">${esc(t(`erp.plan.state.${state}`))}</text>`);
       y += T_H;
     }
     // Dependency arrows between bars on this page.
@@ -324,22 +285,17 @@ export function exportPdf(m) {
         if (!a || !b) continue;
         const x1 = X(a.span.end);
         const x2 = X(b.span.start);
-        const crit = m.critical.has(dep.id) && m.critical.has(r.task.id);
-        const stroke = b.span.start < a.span.end ? "#ef4444" : crit ? "#e11d48" : "#64748b";
+        const stroke = "#64748b";
         parts.push(`<path d="M${x1},${a.y} H${x1 + 5} V${b.y} H${x2}" fill="none" stroke="${stroke}" stroke-width="0.8"/>`);
         parts.push(`<path d="M${x2 - 4},${b.y - 2.5} L${x2},${b.y} L${x2 - 4},${b.y + 2.5} z" fill="${stroke}"/>`);
       }
     }
-    if (m.now > from && m.now < to) parts.push(`<line x1="${X(m.now)}" y1="${HEAD}" x2="${X(m.now)}" y2="${height}" stroke="#f97316" stroke-width="1.2"/>`);
+    if (m.now > from && m.now < to) parts.push(`<line x1="${X(m.now)}" y1="${HEAD}" x2="${X(m.now)}" y2="${height}" stroke="#475569" stroke-width="1.2"/>`);
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${PAGE_W}" height="${height}" viewBox="0 0 ${PAGE_W} ${height}" font-family="Segoe UI, Tahoma, Arial, sans-serif">${parts.join("")}</svg>`;
   };
 
   const legend = [
-    [`<span class="sw" style="background:#38bdf8"></span>`, t("erp.gantt.progress")],
-    [`<span class="sw" style="border:1.6px solid #e11d48;background:#fff"></span>`, t("erp.gantt.critical")],
-    [`<span class="sw" style="height:3px;background:#94a3b8"></span>`, t("erp.gantt.baseline")],
-    [`<span class="sw" style="width:9px;height:9px;transform:rotate(45deg);background:#f97316"></span>`, t("erp.gantt.milestone")],
-    [`<span class="sw" style="background:#f1f5f9;border:1px solid #e2e8f0"></span>`, t("erp.gantt.nonWorking")],
+    ...BAR_STATES.map((s) => [`<span class="sw" style="background:${BAR_HEX[s]}"></span>`, t(`erp.plan.legend.${s}`)]),
   ]
     .map(([sw, label]) => `<span class="lg">${sw}${esc(label)}</span>`)
     .join("");

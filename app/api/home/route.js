@@ -85,7 +85,7 @@ export async function GET() {
         const projects = await WorkProject.find({ ...deptFilter, status: { $in: ["active", "on_hold"] } }).lean();
         const tasks = await Task.find(
           { project: { $in: projects.map((p) => p._id) } },
-          { project: 1, item: 1, stage: 1, revision: 1, status: 1, kind: 1, createdAt: 1, assignee: 1, dueAt: 1, submittedAt: 1 }
+          { project: 1, item: 1, stage: 1, revision: 1, status: 1, kind: 1, createdAt: 1, assignee: 1, dueAt: 1, submittedAt: 1, estimatedHours: 1, maxHours: 1 }
         ).lean();
         const rows = projects.map((p) => {
           const list = tasks.filter((t) => idStr(t.project) === p._id.toString());

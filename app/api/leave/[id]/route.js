@@ -4,7 +4,9 @@ import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils"
 import { audit } from "@/lib/audit";
 import { hrMonthState } from "@/lib/hr";
 import { canDecideLeave, finalApprovers, leaveStage } from "@/lib/leave";
+import { cascadeFrom, clearOverlaps, getWorkCalendar } from "@/lib/ganttServer";
 import { notify } from "@/lib/notify";
+import { trackDelays } from "@/lib/projectDelay";
 import LeaveRequest from "@/models/LeaveRequest";
 import User from "@/models/User";
 import { pickName } from "@/lib/personName";
@@ -78,6 +80,15 @@ export async function PATCH(request, { params }) {
   }
 
   await audit(user, `leave.${updated.status}`, { entityType: "leave", entityId: leave._id, summary: `${leave.from} → ${leave.to}` });
+  // Approved leave is time off on the employee's plan: work planned on those days moves after them.
+  if (updated.status === "approved") {
+    const cal = await getWorkCalendar();
+    const moved = await clearOverlaps(owner, cal, user);
+    if (moved.length) {
+      await cascadeFrom(moved, cal, user);
+      await trackDelays({ cause: "leave" }, user);
+    }
+  }
   await notify({
     type: updated.status === "approved" ? "leave.approved" : "leave.rejected",
     recipients: [owner],

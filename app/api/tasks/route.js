@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { notify } from "@/lib/notify";
-import { getWorkCalendar } from "@/lib/ganttServer";
+import { finishTime, holdsTime, HOUR } from "@/lib/gantt";
+import { cascadeFrom, clearOverlaps, findOverlap, freeSlot, getWorkCalendar } from "@/lib/ganttServer";
+import { trackDelays } from "@/lib/projectDelay";
+import { syncStageDependencies } from "@/lib/taskSchedule";
 import { canRouteStages, isStageLocked, projectAccess, stageDepartment } from "@/lib/projects";
-import { projectScale, scaledDue } from "@/lib/projectScale";
 import { getTaskSettings } from "@/lib/settings";
 import { inScope } from "@/lib/scope";
 import {
@@ -140,7 +142,7 @@ export async function POST(request) {
   // or a repeat rule. Everyone else's work starts counting when they press Start.
   const isScheduler = canRouteStages(user);
   let dueAt = isScheduler ? parseDate(body.dueAt) : null;
-  const plannedStart = isScheduler ? parseDate(body.plannedStart) : null;
+  let plannedStart = isScheduler ? parseDate(body.plannedStart) : null;
   if (dueAt === undefined || plannedStart === undefined) return fail("invalid_date");
   let estimatedHours = isScheduler ? Math.max(0, Math.min(1000, Number(body.estimatedHours) || 0)) : 0;
   if (!isScheduler) {
@@ -148,23 +150,41 @@ export async function POST(request) {
     body.recurrence = null;
   }
 
-  // Project scale: the task gets the scale's hours and a due date that many working
-  // hours after it starts (recalculated at Start).
-  const scale = kind === "task" ? projectScale(project, settings) : null;
-  const maxHours = scale?.hours || 0;
-  if (kind === "task" && project && !maxHours && !isScheduler) return fail("project_scale_missing");
+  // Project tasks: the creator sets the working hours, and the task is scheduled in
+  // the employee's queue (after the work they already have planned).
+  let maxHours = 0;
   let dueManual = false;
-  if (maxHours) {
-    if (dueAt) dueManual = true;
-    else {
-      dueAt = scaledDue(plannedStart || new Date(), maxHours, await getWorkCalendar());
-      estimatedHours = maxHours;
-    }
+  // Project work and its hours are set by the GM / CEO. Anyone else can break a task
+  // they work on into sub-tasks: steps inside its time, with no hours of their own.
+  const step = Boolean(parent) && !isScheduler;
+  if (kind === "task" && project && !isScheduler && !parent) return fail("hours_by_ceo", 403);
+  if (kind === "task" && project && !step) {
+    const hours = Number(body.hours);
+    if (Number.isFinite(hours) && hours >= 0.5 && hours <= 200) maxHours = Math.round(hours * 2) / 2;
+    else if (!(isScheduler && dueAt)) return fail("invalid_task_hours");
   }
-  if (kind === "task" && !dueAt) return fail("due_required");
-
   const deps = await cleanDependsOn(body.dependsOn);
   if (deps.error) return fail(deps.error);
+  if (maxHours) {
+    dueManual = true;
+    estimatedHours = maxHours;
+    if (!dueAt) {
+      // The employee's first free time that fits (from the chosen start, if any), once
+      // the tasks it waits for are planned to finish.
+      const preds = deps.ids.length ? await Task.find({ _id: { $in: deps.ids }, status: { $ne: "cancelled" } }).lean() : [];
+      const earliest = Math.max(Date.now(), plannedStart?.getTime() || 0, ...preds.map(finishTime));
+      const slot = await freeSlot(assigneeId, earliest, maxHours * HOUR, await getWorkCalendar());
+      plannedStart = new Date(slot.start);
+      dueAt = new Date(slot.end);
+    }
+  }
+  if (kind === "task" && !dueAt && !step) return fail("due_required");
+  // An employee works on one task at a time.
+  if (holdsTime({ kind, status: "todo", plannedStart, dueAt })) {
+    const clash = await findOverlap(assigneeId, plannedStart, dueAt);
+    if (clash) return fail("schedule_overlap", 409, { number: clash.number });
+  }
+
   // Stage tasks follow the revision chain, so they can't repeat.
   const recurrence = stage ? cleanRecurrence(null) : cleanRecurrence(body.recurrence, dueAt);
   if (recurrence.error) return fail(recurrence.error);
@@ -195,7 +215,10 @@ export async function POST(request) {
 
   await logActivity(task._id, user, "created");
   if (parent) await logActivity(parent._id, user, "subtask_added", "", { number: task.number });
-  const enriched = await enrichTask(task);
+  // New stage work: the stages after it wait for it too, and it waits for the stages
+  // before it (it may move after them).
+  if (project && stage) await syncStageDependencies(project, await getWorkCalendar(), user);
+  const enriched = await enrichTask(project && stage ? await Task.findById(task._id) : task);
 
   if (assigneeId !== user.id) {
     await notify({
@@ -210,6 +233,13 @@ export async function POST(request) {
   }
   await publishTaskChange(task);
   if (parent) await publishTaskChange(parent);
+  // A meeting takes the employee's time: planned work it lands on moves after it.
+  if (kind === "meeting" && plannedStart && dueAt) {
+    const cal = await getWorkCalendar();
+    const moved = await clearOverlaps(assigneeId, cal, user);
+    if (moved.length) await cascadeFrom(moved, cal, user);
+  }
+  if ((project || kind === "meeting") && dueAt) await trackDelays({ cause: "task_added", task }, user);
 
   return NextResponse.json({ task: enriched, canManage: canManageTask(user, task) }, { status: 201 });
 }

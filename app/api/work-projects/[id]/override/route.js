@@ -3,9 +3,21 @@ import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
 import { canManageStage, checkStageHandoffs, projectChannel } from "@/lib/projects";
+import { getWorkCalendar } from "@/lib/ganttServer";
+import { notify } from "@/lib/notify";
+import { trackDelays } from "@/lib/projectDelay";
 import { publish } from "@/lib/realtime/server";
-import { departmentChannel } from "@/lib/tasks";
+import { syncStageDependencies } from "@/lib/taskSchedule";
+import { canStartNow, departmentChannel, notifyReady } from "@/lib/tasks";
+import Task from "@/models/Task";
 import WorkProject from "@/models/WorkProject";
+
+// Not-started tasks of the project that can't start yet (waiting for tasks or a stage).
+async function waitingIds(projectId) {
+  const out = new Set();
+  for (const t of await Task.find({ project: projectId, status: "todo" }).lean()) if (!(await canStartNow(t))) out.add(t._id.toString());
+  return out;
+}
 
 // Manual cell state, like the Excel "تجاوز يدوي" / "إنجاز يدوي".
 // Body: { stage, status: "skip" | "done" | "clear", reason }
@@ -25,6 +37,7 @@ export async function POST(request, { params }) {
   const reason = String(body.reason || "").trim().slice(0, 500);
   if (body.status !== "clear" && !reason) return fail("reason_required");
 
+  const waitingBefore = await waitingIds(project._id);
   project.overrides = project.overrides.filter((o) => o.stage !== stage.key);
   if (body.status !== "clear") {
     project.overrides.push({ stage: stage.key, status: body.status, reason, by: user.id, at: new Date() });
@@ -41,6 +54,15 @@ export async function POST(request, { params }) {
     id: project._id.toString(),
   });
   await checkStageHandoffs(project._id, user);
+
+  // Skip / Done releases the tasks waiting for this stage (their predecessors and the
+  // stage lock); clearing it makes them wait again.
+  const changed = await syncStageDependencies(project.toObject(), await getWorkCalendar(), user);
+  // Tell only the people whose task was waiting and now can start.
+  for (const t of await Task.find({ project: project._id, status: "todo", _id: { $in: [...waitingBefore] } })) {
+    if (await canStartNow(t)) await notifyReady(t, notify);
+  }
+  if (changed.length) await trackDelays({ cause: "rescheduled" }, user);
 
   return NextResponse.json({ ok: true });
 }

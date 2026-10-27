@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { forbidden } from "@/lib/apiUtils";
-import { localParts, monthDays } from "@/lib/attendance";
+import { localParts } from "@/lib/attendance";
+import { monthWorkHours } from "@/lib/workDays";
 import { hrStaff, todayIn } from "@/lib/hr";
 import { buildCells } from "@/lib/projects";
 import { lateTaskCount, projectRisk, projectScore, rejectionCount } from "@/lib/projectHealth";
@@ -20,16 +21,6 @@ function addMonths(month, n) {
   return new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 7);
 }
 
-// Working hours of one person in a month from the company calendar.
-function monthCapacity(month, { calendar, workHours }) {
-  return monthDays(month).reduce((sum, date) => {
-    const wd = new Date(`${date}T00:00:00Z`).getUTCDay();
-    if (calendar.weekend.includes(wd) || calendar.holidays.some((h) => h.date === date)) return sum;
-    const ramadan = calendar.ramadan?.start && date >= calendar.ramadan.start && date <= calendar.ramadan.end;
-    return sum + (ramadan ? workHours.ramadanHours : workHours.dailyHours);
-  }, 0);
-}
-
 export async function GET() {
   const user = await requireStaff();
   if (!user || !hasPermission(user, "analytics.view")) return forbidden();
@@ -45,7 +36,7 @@ export async function GET() {
   const projectFilter = user.scope === "all" ? {} : { $or: [{ department: user.department }, { "stages.department": user.department }] };
   const TASK_FIELDS = {
     status: 1, kind: 1, type: 1, dueAt: 1, submittedAt: 1, reviewedAt: 1, assignee: 1, project: 1, item: 1,
-    stage: 1, revision: 1, createdAt: 1, estimatedHours: 1, title: 1, department: 1, number: 1, activeMs: 1,
+    stage: 1, revision: 1, createdAt: 1, estimatedHours: 1, maxHours: 1, title: 1, department: 1, number: 1, activeMs: 1,
   };
   const [tasks, projects, staff] = await Promise.all([
     Task.find(deptFilter, TASK_FIELDS).lean(),
@@ -155,7 +146,7 @@ export async function GET() {
       people,
       months: [0, 1, 2].map((i) => {
         const m = addMonths(month, i);
-        const available = people * monthCapacity(m, settings);
+        const available = people * monthWorkHours(m, settings);
         const reserved = open
           .filter((t) => idStr(t.department) === dep)
           .filter((t) => (t.dueAt ? monthOf(t.dueAt) === m : i === 0) || (i === 0 && t.dueAt && monthOf(t.dueAt) < month))

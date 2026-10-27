@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Lock, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { api, errorText } from "@/lib/clientApi";
@@ -71,7 +71,7 @@ function TemplateEditor({ template, lookups, onSaved, onClose }) {
             </button>
             {canRoute && (
               <div className="sm:col-span-3">
-                <StageRouting stage={stage} index={i} departments={lookups.departments} canRoute onChange={(patch) => setStage(i, patch)} />
+                <StageRouting stage={stage} departments={lookups.departments} onChange={(patch) => setStage(i, patch)} />
               </div>
             )}
           </div>
@@ -154,7 +154,6 @@ export default function TemplatesManager() {
                   <span className="rounded-full bg-white/10 px-2.5 py-1 text-white/75">
                     {s.name?.[lang]}
                     {s.department && s.department !== tpl.department && <span className="text-brand-orange"> · {lookups.departmentName(s.department)}</span>}
-                    {s.waitForPrevious && <Lock size={11} className="ms-1 inline text-white/45" />}
                   </span>
                 </span>
               ))}

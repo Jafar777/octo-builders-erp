@@ -6,9 +6,8 @@ import { useAuth } from "@/context/AuthContext";
 import { api, errorText } from "@/lib/clientApi";
 import BilingualField from "@/components/dashboard/BilingualField";
 import { Button, ErrorText, Input, Select } from "@/components/erp/ui/fields";
-import ScaleSelect from "@/components/erp/projects/ScaleSelect";
-import { FlowSelect } from "@/components/erp/projects/StageRouting";
-import { ArrowDownToLine, Shuffle } from "lucide-react";
+import StageFlowEditor from "@/components/erp/projects/StageFlowEditor";
+import { stageAfter, stepByStep } from "@/lib/stageFlow";
 
 export default function ProjectForm({ lookups, onCreated, onCancel }) {
   const { t, lang } = useLanguage();
@@ -23,11 +22,11 @@ export default function ProjectForm({ lookups, onCreated, onCancel }) {
     startDate: "",
     dueDate: "",
     priority: "normal",
-    scale: "",
-    flow: "",
-    stageWaits: {}, // mixed projects: { stageKey: true = waits for the earlier stages }
+    tasks: {}, // { stageKey: { hours, assigneeId } } — one scheduled task per template stage
     folderLink: "",
   });
+  // The template's stages in the chosen order, each with the stages it waits for.
+  const [stages, setStages] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const set = (field) => (value) => setForm((f) => ({ ...f, [field]: value }));
@@ -38,19 +37,40 @@ export default function ProjectForm({ lookups, onCreated, onCancel }) {
       .catch(() => {});
   }, []);
 
+  // A template opens step by step; the GM can then reorder and branch it.
+  function pickTemplate(templateId) {
+    if (templateId === form.templateId) return;
+    setForm((f) => ({ ...f, templateId }));
+    const next = templates.find((x) => x.id === templateId);
+    setStages(next ? stepByStep(next.stages) : []);
+  }
+
   // Suggest the department's template when the department changes.
   function pickDepartment(department) {
     const match = templates.find((x) => x.department === department);
-    setForm((f) => ({ ...f, department, templateId: match?.id || f.templateId }));
+    setForm((f) => ({ ...f, department }));
+    if (match) pickTemplate(match.id);
   }
 
   const template = templates.find((x) => x.id === form.templateId);
+  const taskOf = (key) => form.tasks[key] || { hours: "", assigneeId: "" };
+  const setTask = (key, patch) => setForm((f) => ({ ...f, tasks: { ...f.tasks, [key]: { ...taskOf(key), ...patch } } }));
+  const tasksReady = Boolean(stages.length) && stages.every((s) => Number(taskOf(s.key).hours) >= 0.5 && taskOf(s.key).assigneeId);
+  // The stage's own department first in the employee list.
+  const peopleFor = (stage) => {
+    const dep = stage.department || form.department;
+    return [...lookups.people]
+      .sort((a, b) => (a.department === dep ? 0 : 1) - (b.department === dep ? 0 : 1) || a.name.localeCompare(b.name))
+      .map((p) => ({ value: p.id, label: p.name }));
+  };
 
   async function save() {
     setSaving(true);
     setError("");
     try {
-      const { project } = await api("/api/work-projects", { method: "POST", body: form });
+      const tasks = Object.fromEntries(stages.map((s) => [s.key, { hours: Number(taskOf(s.key).hours), assigneeId: taskOf(s.key).assigneeId }]));
+      const stagePlan = stages.map((s, i) => ({ key: s.key, after: stageAfter(stages, i) }));
+      const { project } = await api("/api/work-projects", { method: "POST", body: { ...form, tasks, stagePlan } });
       onCreated(project);
     } catch (err) {
       setError(errorText(t, err));
@@ -75,7 +95,7 @@ export default function ProjectForm({ lookups, onCreated, onCancel }) {
         <Select
           label={t("erp.projects.template")}
           value={form.templateId}
-          onChange={set("templateId")}
+          onChange={pickTemplate}
           placeholder="—"
           options={templates.map((x) => ({ value: x.id, label: x.name?.[lang] }))}
         />
@@ -88,56 +108,48 @@ export default function ProjectForm({ lookups, onCreated, onCancel }) {
           options={["normal", "important", "urgent"].map((p) => ({ value: p, label: t(`erp.tasks.priority.${p}`) }))}
         />
         <Input label={t("erp.projects.folderLink")} value={form.folderLink} onChange={set("folderLink")} dir="ltr" />
-        <div className="sm:col-span-2">
-          <ScaleSelect scales={lookups.settings.projectScales} value={form.scale} onChange={set("scale")} />
-        </div>
       </div>
 
-      <FlowSelect value={form.flow} onChange={set("flow")} />
-      {form.flow === "mixed" && template && (
+      {template && (
         <div className="rounded-xl border border-white/10 p-3">
-          <p className="mb-2 text-xs text-white/50">{t("erp.flow.mixedPick")}</p>
-          <ol className="space-y-1.5">
-            {template.stages.map((s, i) => {
-              const waits = i > 0 && (s.key in form.stageWaits ? form.stageWaits[s.key] : Boolean(s.waitForPrevious));
-              return (
-                <li key={s.key} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/[0.03] px-3 py-2 text-sm">
-                  <span className="flex items-center gap-2">
-                    <span className="w-5 text-xs text-white/40">{i + 1}</span> {s.name?.[lang]}
-                  </span>
-                  {i === 0 ? (
-                    <span className="text-xs text-white/40">{t("erp.flow.first")}</span>
-                  ) : (
-                    <span className="flex gap-1 rounded-lg border border-white/10 p-0.5">
-                      {[false, true].map((w) => {
-                        const Icon = w ? ArrowDownToLine : Shuffle;
-                        return (
-                          <button
-                            key={String(w)}
-                            type="button"
-                            onClick={() => setForm((f) => ({ ...f, stageWaits: { ...f.stageWaits, [s.key]: w } }))}
-                            className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs ${waits === w ? "bg-brand-orange text-white" : "text-white/55 hover:text-white"}`}
-                          >
-                            <Icon size={12} /> {t(w ? "erp.flow.waits" : "erp.flow.anytime")}
-                          </button>
-                        );
-                      })}
-                    </span>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
+          <p className="mb-1 text-sm font-medium text-white/70">{t("erp.plan.tasksTitle")}</p>
+          <p className="mb-3 text-xs text-white/50">{t("erp.plan.tasksHint")}</p>
+          <StageFlowEditor
+            stages={stages}
+            onChange={setStages}
+            renderRow={(s) => (
+              <div className="grid gap-2 sm:grid-cols-[110px_1fr]">
+                <Input
+                  type="number"
+                  min="0.5"
+                  max="200"
+                  step="0.5"
+                  label={t("erp.plan.hours")}
+                  value={taskOf(s.key).hours}
+                  onChange={(hours) => setTask(s.key, { hours })}
+                  dir="ltr"
+                />
+                <Select
+                  label={t("erp.tasks.assignee")}
+                  value={taskOf(s.key).assigneeId}
+                  onChange={(assigneeId) => setTask(s.key, { assigneeId })}
+                  placeholder="—"
+                  options={peopleFor(s)}
+                />
+              </div>
+            )}
+          />
         </div>
       )}
       <p className="text-xs text-white/40">{t("erp.projects.mainDepartmentHint")}</p>
       <p className="text-xs text-white/40">{t("erp.projects.dueRequiredNote")}</p>
+      <p className="text-xs text-white/40">{t("erp.plan.scheduleNote")}</p>
       <ErrorText>{error}</ErrorText>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onCancel}>
           {t("common.cancel")}
         </Button>
-        <Button onClick={save} disabled={saving || !form.templateId || !form.scale || !form.flow}>
+        <Button onClick={save} disabled={saving || !form.templateId || !tasksReady}>
           {t("erp.projects.create")}
         </Button>
       </div>

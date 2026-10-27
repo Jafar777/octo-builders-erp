@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowDown, ArrowUp, CalendarDays, ExternalLink, Lock, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarDays, ExternalLink, Lock, Plus, Trash2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import ProjectScore from "@/components/erp/projects/ProjectScore";
@@ -19,12 +19,13 @@ import TaskDrawer from "@/components/erp/tasks/TaskDrawer";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { revisionLabel, STATUS_STYLE, toDateInput, useNow } from "@/components/erp/tasks/taskUi";
 import { PageSkeleton } from "@/components/erp/ui/Loading";
-import StageRouting, { canRouteStages, FlowBadge, FlowSelect } from "@/components/erp/projects/StageRouting";
-import ScaleSelect, { ScaleBadge } from "@/components/erp/projects/ScaleSelect";
+import StageRouting, { canRouteStages, FlowBadge } from "@/components/erp/projects/StageRouting";
+import StageFlowEditor from "@/components/erp/projects/StageFlowEditor";
+import ProjectDelivery, { DeliverySummary } from "@/components/erp/projects/ProjectDelivery";
 
-const TABS = ["board", "tasks", "settings"];
+const TABS = ["board", "tasks", "delivery", "settings"];
 
-function CellModal({ project, cell, canManage, lookups, onOpenTask, onNewTask, onChanged, onClose }) {
+function CellModal({ project, cell, canManage, canPlan, lookups, onOpenTask, onNewTask, onChanged, onClose }) {
   const { t, lang } = useLanguage();
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
@@ -80,7 +81,8 @@ function CellModal({ project, cell, canManage, lookups, onOpenTask, onNewTask, o
             {t("erp.projects.openTask")}
           </Button>
         )}
-        {project.status === "active" && !locked && (
+        {/* Stage work and its hours are given out by the GM / CEO. */}
+        {project.status === "active" && !locked && canPlan && (
           <Button onClick={onNewTask}>
             <Plus size={16} /> {state?.taskId ? t("erp.projects.newRevision") : t("erp.tasks.new")}
           </Button>
@@ -121,8 +123,6 @@ function ProjectSettings({ project, lookups, onSaved }) {
     client: project.client,
     status: project.status,
     priority: project.priority,
-    scale: project.scale || "",
-    flow: project.flow || "mixed",
     startDate: toDateInput(project.startDate),
     dueDate: toDateInput(project.dueDate),
     folderLink: project.folderLink,
@@ -162,14 +162,6 @@ function ProjectSettings({ project, lookups, onSaved }) {
     }
   }
 
-  const move = (list, i, to) => {
-    if (to < 0 || to >= list.length) return list;
-    const next = [...list];
-    const [x] = next.splice(i, 1);
-    next.splice(to, 0, x);
-    return next;
-  };
-
   return (
     <div className="max-w-4xl space-y-6">
       <Card className="space-y-4">
@@ -193,8 +185,6 @@ function ProjectSettings({ project, lookups, onSaved }) {
           />
         </div>
         <Input label={t("erp.projects.folderLink")} value={form.folderLink} onChange={set("folderLink")} dir="ltr" />
-        <ScaleSelect scales={lookups.settings.projectScales} value={form.scale} onChange={set("scale")} />
-        <FlowSelect value={form.flow} onChange={set("flow")} />
         <div>
           <Label>{t("erp.projects.participants")}</Label>
           <div className="flex flex-wrap gap-1.5">
@@ -220,45 +210,45 @@ function ProjectSettings({ project, lookups, onSaved }) {
       <Card className="space-y-3">
         <p className="font-semibold">{t("erp.projects.stages")}</p>
         {canRoute && <p className="text-xs text-white/45">{t("erp.projects.routingHint")}</p>}
-        {stages.map((stage, i) => (
-          <div key={i} className="grid items-end gap-2 rounded-xl border border-white/10 p-3 sm:grid-cols-[1fr_180px_auto]">
-            <BilingualField
-              label={`${t("erp.projects.stage")} ${i + 1}`}
-              value={stage.name}
-              onChange={(name) => setStages((l) => l.map((x, j) => (j === i ? { ...x, name } : x)))}
-            />
-            <Select
-              label={t("erp.tasks.type")}
-              value={stage.taskType}
-              onChange={(taskType) => setStages((l) => l.map((x, j) => (j === i ? { ...x, taskType } : x)))}
-              options={lookups.settings.taskTypes.map((tt) => ({ value: tt.key, label: tt.name?.[lang] }))}
-            />
-            <div className="flex">
-              <button type="button" onClick={() => setStages((l) => move(l, i, i - 1))} className="p-1.5 text-white/50 hover:text-white">
-                <ArrowUp size={14} />
-              </button>
-              <button type="button" onClick={() => setStages((l) => move(l, i, i + 1))} className="p-1.5 text-white/50 hover:text-white">
-                <ArrowDown size={14} />
-              </button>
-              <button type="button" onClick={() => setStages((l) => l.filter((_, j) => j !== i))} className="p-1.5 text-red-400">
-                <Trash2 size={14} />
-              </button>
-            </div>
-            {(canRoute || form.flow === "mixed") && (
-              <div className="sm:col-span-3">
-                <StageRouting
-                  stage={stage}
-                  index={i}
-                  departments={lookups.departments}
-                  canRoute={canRoute}
-                  flow={form.flow}
-                  onChange={(patch) => setStages((l) => l.map((x, j) => (j === i ? { ...x, ...patch } : x)))}
-                />
+        <StageFlowEditor
+          stages={stages}
+          onChange={setStages}
+          renderRow={(stage, i) => {
+            const patch = (p) => setStages((l) => l.map((x, j) => (j === i ? { ...x, ...p } : x)));
+            return (
+              <div className="space-y-2">
+                <div className="grid items-end gap-2 sm:grid-cols-[1fr_180px_auto]">
+                  <BilingualField label={`${t("erp.projects.stage")} ${i + 1}`} value={stage.name} onChange={(name) => patch({ name })} />
+                  <Select
+                    label={t("erp.tasks.type")}
+                    value={stage.taskType}
+                    onChange={(taskType) => patch({ taskType })}
+                    options={lookups.settings.taskTypes.map((tt) => ({ value: tt.key, label: tt.name?.[lang] }))}
+                  />
+                  <button
+                    type="button"
+                    // Stages that waited for this one stop waiting for it.
+                    onClick={() => setStages((l) => l.filter((_, j) => j !== i).map((x) => ({ ...x, after: (x.after || []).filter((k) => k !== stage.key) })))}
+                    className="p-1.5 text-red-400"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                {canRoute && <StageRouting stage={stage} departments={lookups.departments} onChange={patch} />}
               </div>
-            )}
-          </div>
-        ))}
-        <Button variant="ghost" onClick={() => setStages((l) => [...l, { key: "", name: { ar: "", en: "" }, taskType: "other" }])}>
+            );
+          }}
+        />
+        <Button
+          variant="ghost"
+          // A new stage gets its key now so others can wait for it; by default it waits for the last one.
+          onClick={() =>
+            setStages((l) => [
+              ...l,
+              { key: `stage_${Date.now().toString(36)}`, name: { ar: "", en: "" }, taskType: "other", after: l.length ? [l[l.length - 1].key] : [] },
+            ])
+          }
+        >
           <Plus size={16} /> {t("erp.projects.addStage")}
         </Button>
       </Card>
@@ -345,7 +335,6 @@ export default function ProjectBoard({ projectId }) {
               <CalendarDays size={14} /> {formatDate(project.dueDate, lang)}
             </span>
             <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs">{t(`erp.projects.status.${project.status}`)}</span>
-            <ScaleBadge scales={lookups.settings.projectScales} value={project.scale} />
             <FlowBadge flow={project.flow} />
             {project.folderLink && (
               <a href={project.folderLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-brand-orange hover:underline">
@@ -353,6 +342,9 @@ export default function ProjectBoard({ projectId }) {
               </a>
             )}
           </p>
+          <div className="mt-2">
+            <DeliverySummary project={project} />
+          </div>
         </div>
         <div className="w-64">
           <div className="mb-1.5 flex justify-between text-xs text-white/55">
@@ -445,6 +437,7 @@ export default function ProjectBoard({ projectId }) {
         </div>
       )}
 
+      {tab === "delivery" && <ProjectDelivery project={project} onOpenTask={setOpenTaskId} />}
       {tab === "settings" && canManage && <ProjectSettings key={project.id} project={project} lookups={lookups} onSaved={load} />}
 
       <Modal open={Boolean(cell)} onClose={() => setCell(null)} title={t("erp.projects.cell")}>
@@ -453,6 +446,7 @@ export default function ProjectBoard({ projectId }) {
             project={project}
             cell={cell}
             canManage={canManageStage(project.stages.find((s) => s.key === cell.stage))}
+            canPlan={canRoute}
             lookups={lookups}
             onClose={() => setCell(null)}
             onChanged={load}

@@ -17,7 +17,7 @@ const WorkProjectSchema = new mongoose.Schema(
     participants: [{ type: ObjectId, ref: "User" }],
     status: { type: String, enum: ["active", "on_hold", "finished", "archived"], default: "active" },
     priority: { type: String, enum: ["normal", "important", "urgent"], default: "normal" },
-    // settings.tasks.projectScales key: the maximum hours each task of the project may take.
+    // Former project scale (no longer used — each task's hours are set when the project is created).
     scale: { type: String, default: "" },
     // How tasks may start: "ordered" (each stage waits for the earlier ones), "random"
     // (any stage, any time) or "mixed" (each stage's waitForPrevious decides).
@@ -60,6 +60,42 @@ const WorkProjectSchema = new mongoose.Schema(
       }),
     ],
     taskBaselineAt: { type: Date, default: null }, // last "Save baseline" on the Gantt
+    // Expected start and delivery saved over time: Baseline 1 when the project is created,
+    // then Baseline 2, 3… from the Gantt. `start` = when its first task was planned to
+    // start, `end` = when the last task was planned to finish.
+    baselines: [
+      new mongoose.Schema(
+        {
+          n: { type: Number, required: true },
+          start: { type: Date, default: null },
+          end: { type: Date, required: true },
+          at: { type: Date, default: Date.now },
+          by: { type: ObjectId, ref: "User", default: null },
+        },
+        { _id: false }
+      ),
+    ],
+    // When the first task starts (once work began: when it did) and when the last task is
+    // planned to finish now, and every change of them with its cause.
+    forecastStart: { type: Date, default: null },
+    forecastEnd: { type: Date, default: null },
+    delays: [
+      new mongoose.Schema({
+        at: { type: Date, default: Date.now },
+        from: { type: Date, required: true },
+        to: { type: Date, required: true },
+        workMs: { type: Number, default: 0 }, // working time between them (negative = earlier)
+        field: { type: String, default: "end" }, // "start" (expected start) | "end" (expected delivery)
+        // rejected | overrun | started | submitted | approved | cancelled | rescheduled |
+        // reassigned | task_added | order_changed
+        cause: { type: String, required: true },
+        task: { type: ObjectId, ref: "Task", default: null },
+        taskNumber: { type: Number, default: null },
+        taskProject: { type: ObjectId, ref: "WorkProject", default: null }, // when it's another project's task
+        note: { type: String, default: "" },
+        by: { type: ObjectId, ref: "User", default: null },
+      }),
+    ],
     // Waiting stages whose department was already told "ready for you".
     handedOff: [{ type: String }],
     finishedAt: { type: Date, default: null },

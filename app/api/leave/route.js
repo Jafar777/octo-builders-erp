@@ -41,7 +41,7 @@ export async function POST(request) {
   if ((await hrMonthState(body.from.slice(0, 7))).closed) return fail("month_closed", 409);
 
   const settings = await getSettings();
-  const days = leaveWorkingDays(body.from, body.to, settings.calendar);
+  const days = leaveWorkingDays(body.from, body.to, settings.calendar, settings.workHours);
   if (!days) return fail("no_working_days");
   const overlap = await LeaveRequest.exists({ user: user.id, status: { $in: ["pending", "approved"] }, from: { $lte: body.to }, to: { $gte: body.from } });
   if (overlap) return fail("leave_overlap", 409);

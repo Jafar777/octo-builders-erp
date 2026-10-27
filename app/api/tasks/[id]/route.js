@@ -16,6 +16,10 @@ import {
   publishTaskChange,
   taskTitle,
 } from "@/lib/tasks";
+import { holdsTime } from "@/lib/gantt";
+import { cascadeFrom, findOverlap, getWorkCalendar, leaveClash, personCalendar } from "@/lib/ganttServer";
+import { trackDelays } from "@/lib/projectDelay";
+import { hoursFields, placeForAssignee } from "@/lib/taskSchedule";
 import Task from "@/models/Task";
 import TaskActivity from "@/models/TaskActivity";
 import User from "@/models/User";
@@ -118,8 +122,8 @@ export async function PATCH(request, { params }) {
   const changes = {};
   if (typeof body.deliveryLink === "string") changes.deliveryLink = body.deliveryLink.trim().slice(0, 1000);
   if (typeof body.employeeNotes === "string") changes.employeeNotes = body.employeeNotes.slice(0, 2000);
-  // Tasks of a scaled project keep the scale's hours; only the GM / CEO change them.
-  const scaleLocked = task.maxHours > 0 && !canRouteStages(user);
+  // Project work: its hours (and so its due time) are set by the GM / CEO only.
+  const scaleLocked = (task.maxHours > 0 || Boolean(task.project)) && !canRouteStages(user);
   if (body.estimatedHours !== undefined && !scaleLocked) changes.estimatedHours = Math.max(0, Math.min(1000, Number(body.estimatedHours) || 0));
 
   // Planning fields (predecessors, repeat rule): GM / CEO only.
@@ -142,6 +146,8 @@ export async function PATCH(request, { params }) {
     if (body.dueAt !== undefined && !scaleLocked) {
       const d = body.dueAt ? new Date(body.dueAt) : null;
       if (d && Number.isNaN(d.getTime())) return fail("invalid_date");
+      // Not into the past (keeping a due time that has already passed is fine).
+      if (d && d.getTime() < Math.min(Date.now() - 5 * 60 * 1000, task.dueAt ? task.dueAt.getTime() : Infinity)) return fail("date_in_past");
       changes.dueAt = d;
       changes.dueReminderSent = false;
       changes.overdueNotified = false;
@@ -155,6 +161,34 @@ export async function PATCH(request, { params }) {
       if (task.status !== "todo") return fail("reassign_only_todo");
       reassignedFrom = task.assignee.toString();
       changes.assignee = body.assigneeId;
+    }
+  }
+
+  // A planned task moves into the new employee's first free gap, keeping its length.
+  const cal = await getWorkCalendar();
+  if (reassignedFrom && holdsTime(task) && !("dueAt" in changes)) {
+    const slot = await placeForAssignee(task, changes.assignee, cal);
+    changes.plannedStart = new Date(slot.start);
+    changes.dueAt = new Date(slot.end);
+  }
+  // Hours count on the employee's own calendar (personal hours, leave).
+  const pc = await personCalendar(changes.assignee || task.assignee, cal);
+  // A new due time of a planned task changes its hours too.
+  if ("dueAt" in changes && changes.dueAt && task.plannedStart && !("estimatedHours" in changes)) {
+    const start = changes.plannedStart || task.plannedStart;
+    if (changes.dueAt <= start) return fail("invalid_range");
+    Object.assign(changes, hoursFields(task, start, changes.dueAt, pc));
+  }
+
+  // An employee works on one task at a time: new dates or a new employee can't double-book.
+  if (["dueAt", "plannedStart", "assignee"].some((k) => k in changes)) {
+    const next = { ...task.toObject(), ...changes };
+    if (holdsTime(next)) {
+      const clash = await findOverlap(next.assignee, next.plannedStart, next.dueAt, [task._id]);
+      if (clash) return fail("schedule_overlap", 409, { number: clash.number });
+      // Not on the employee's approved leave.
+      const leave = await leaveClash(next.assignee, next.plannedStart, next.dueAt, cal);
+      if (leave) return fail("on_leave", 409, { date: leave });
     }
   }
 
@@ -177,6 +211,9 @@ export async function PATCH(request, { params }) {
     });
   }
   await publishTaskChange(task, reassignedFrom ? [reassignedFrom] : []);
+  // Tasks waiting for this one move after its new time; new predecessors move it after them.
+  if ("dueAt" in changes || changes.dependsOn) await cascadeFrom([...(changes.dependsOn || []), task._id], cal, user);
+  if (reassignedFrom || "dueAt" in changes || changes.dependsOn) await trackDelays({ cause: reassignedFrom ? "reassigned" : "rescheduled", task }, user);
 
   return NextResponse.json({ task: enriched });
 }

@@ -32,7 +32,7 @@ export async function GET() {
     { project: { $in: projects.map((p) => p._id) }, status: { $ne: "cancelled" } },
     {
       number: 1, title: 1, project: 1, stage: 1, kind: 1, status: 1, assignee: 1, createdAt: 1, dueAt: 1,
-      submittedAt: 1, reviewedAt: 1, activeMs: 1, maxHours: 1, stars: 1, revision: 1, dependsOn: 1, parentTask: 1,
+      submittedAt: 1, reviewedAt: 1, activeMs: 1, maxHours: 1, estimatedHours: 1, stars: 1, revision: 1, dependsOn: 1, parentTask: 1,
     }
   ).lean();
 

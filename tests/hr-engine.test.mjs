@@ -39,7 +39,8 @@ ok("summary counts (single late punch on the 5th also late)", summary.lateCount 
 const pay = computePayroll({ salary: { amount: 500, currency: "USD" }, summary, settings, kpiBonus: 30 });
 ok("hourly rate = 500 / 200", pay.hourlyRate === 2.5);
 ok("4 warnings → 5% (Excel rule)", pay.warningPercent === 5 && pay.warningDeduction === 25);
-ok("net = base − missing hours + overtime + bonus", Math.abs(pay.net - (500 - pay.hoursDeduction - pay.warningDeduction + pay.overtimePay + 50)) < 0.02, JSON.stringify(pay));
+ok("absent days cost exactly their hours: 2 days × 8h × 2.5 = 40", pay.absentDays === 2 && pay.absenceDeduction === 40, JSON.stringify(pay));
+ok("net = base − absences − missing hours − warnings + overtime + bonus", Math.abs(pay.net - (500 - pay.absenceDeduction - pay.hoursDeduction - pay.warningDeduction + pay.overtimePay + 50)) < 0.02, JSON.stringify(pay));
 const pay5 = computePayroll({ salary: { amount: 500 }, summary: { ...summary, warnings: 5 }, settings });
 ok("5 warnings → 15% deduction (Excel rule)", pay5.warningPercent === 15 && pay5.warningDeduction === 75);
 

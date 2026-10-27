@@ -74,7 +74,73 @@ function DayEditor({ day, userId, onSaved, onClose }) {
   );
 }
 
-export function Payslip({ payroll, closed }) {
+// What was actually paid (typed in by payroll) against the calculated salary.
+function ReceivedPay({ payroll, received, canRecord, userId, month, onSaved }) {
+  const { t, lang } = useLanguage();
+  const [amount, setAmount] = useState(received ? String(received.amount) : "");
+  const [note, setNote] = useState(received?.note || "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const c = received?.currency || payroll.currency;
+  const diff = received ? received.amount - payroll.net : null;
+
+  async function save(value) {
+    setBusy(true);
+    setError("");
+    try {
+      await api("/api/hr/payments", { method: "PUT", body: { userId, month, amount: value, currency: payroll.currency, note } });
+      onSaved?.();
+    } catch (err) {
+      setError(errorText(t, err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 space-y-2 border-t border-white/10 pt-3 text-sm">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-white/70">{t("erp.hr.pay.received")}</span>
+        <span className="font-semibold tabular-nums">{received ? money(received.amount, c, lang) : "—"}</span>
+      </div>
+      {diff !== null && Math.abs(diff) >= 0.005 && (
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <span className="text-white/50">{t("erp.hr.pay.receivedDiff")}</span>
+          <span className={`tabular-nums ${diff > 0 ? "text-amber-200" : "text-red-300"}`} dir="ltr">
+            {diff > 0 ? "+" : ""}
+            {money(diff, c, lang)}
+          </span>
+        </div>
+      )}
+      {received?.note && <p className="text-xs text-white/45" dir="auto">“{received.note}”</p>}
+      {canRecord && (
+        <div className="space-y-2 pt-1">
+          <div className="flex items-end gap-2">
+            <div className="w-32">
+              <Input type="number" min="0" step="0.01" label={t("erp.hr.pay.receivedInput", { c: payroll.currency })} value={amount} onChange={setAmount} dir="ltr" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <Input label={t("erp.hr.pay.receivedNote")} value={note} onChange={setNote} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => save(amount === "" ? null : Number(amount))} disabled={busy}>
+              {t("common.save")}
+            </Button>
+            {received && (
+              <Button variant="ghost" onClick={() => save(null)} disabled={busy}>
+                {t("erp.hr.pay.receivedClear")}
+              </Button>
+            )}
+          </div>
+          {error && <ErrorText>{error}</ErrorText>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Payslip({ payroll, closed, received = null, canRecord = false, userId, month, onSaved }) {
   const { t, lang } = useLanguage();
   if (!payroll) return null;
   const c = payroll.currency;
@@ -86,6 +152,7 @@ export function Payslip({ payroll, closed }) {
       ]
     : [
         ["base", payroll.base],
+        ["absenceDeduction", -(payroll.absenceDeduction || 0), `${payroll.absentDays || 0} · ${hm(payroll.absentHours || 0)} h`],
         ["hoursDeduction", -payroll.hoursDeduction, `${hm(payroll.missingHours)} h`],
         ["warningDeduction", -payroll.warningDeduction, `${payroll.warnings} · ${payroll.warningPercent}%`],
         ["overtimePay", payroll.overtimePay, `${hm(payroll.overtimeHours)} h`],
@@ -121,12 +188,13 @@ export function Payslip({ payroll, closed }) {
             ))}
           </div>
           <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3">
-            <span className="font-semibold">{t("erp.hr.pay.net")}</span>
+            <span className="font-semibold">{t("erp.hr.pay.entitled")}</span>
             <span className="text-xl font-bold tabular-nums text-brand-orange">{money(payroll.net, c, lang)}</span>
           </div>
           <p className="mt-2 text-xs text-white/40">
             {t("erp.hr.hourlyRate")}: <span dir="ltr">{money(payroll.hourlyRate, c, lang)}</span>
           </p>
+          {(received || canRecord) && <ReceivedPay key={`${userId}-${month}-${received?.amount ?? ""}`} payroll={payroll} received={received} canRecord={canRecord} userId={userId} month={month} onSaved={onSaved} />}
         </>
       )}
     </div>
@@ -254,7 +322,7 @@ export default function PersonMonth({ userId, month, onData }) {
         </div>
 
         <div className="space-y-4">
-          {data.salaryLocked ? <SalaryUnlock compact onUnlocked={load} /> : <Payslip payroll={data.payroll} closed={data.closed} />}
+          {data.salaryLocked ? <SalaryUnlock compact onUnlocked={load} /> : <Payslip payroll={data.payroll} closed={data.closed} received={data.received} canRecord={data.canRecordPay} userId={data.person.id} month={data.month} onSaved={load} />}
           {data.kpi && (
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
               <p className="text-sm text-white/60">{t("erp.nav.kpi")}</p>

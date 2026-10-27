@@ -5,6 +5,7 @@ import { computeMonth, hrStaff, leaveBalance, todayIn } from "@/lib/hr";
 import { canSeePerson, MONTH_OK } from "@/lib/hrAccess";
 import { getSettings } from "@/lib/settings";
 import { salaryUnlocked } from "@/lib/salaryLock";
+import SalaryPayment from "@/models/SalaryPayment";
 
 // One person's month: attendance days, summary, payslip and KPI.
 // ?month=YYYY-MM&userId=<id>  (userId defaults to me)
@@ -37,12 +38,16 @@ export async function GET(request) {
   ]);
 
   const unlocked = canPay && (await salaryUnlocked(user));
+  const received = unlocked ? await SalaryPayment.findOne({ user: userId, month }).lean() : null;
   return NextResponse.json({
     month,
     closed: data.state.closed,
     person,
     attendance: row.attendance,
     payroll: unlocked ? row.payroll : null,
+    // What was actually paid (typed in), and whether I may record it.
+    received: received ? { amount: received.amount, currency: received.currency, note: received.note } : null,
+    canRecordPay: Boolean(unlocked && !self && hasPermission(user, "payroll.manage") && (await canSeePerson(user, userId, "payroll.manage"))),
     salaryLocked: Boolean(canPay && !unlocked),
     kpi: canKpi && row.kpi ? { score: row.kpi.score, grade: row.kpi.grade, rank: row.kpi.rank, of: row.kpi.of } : null,
     leave,
