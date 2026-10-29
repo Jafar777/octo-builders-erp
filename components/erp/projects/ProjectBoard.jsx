@@ -22,6 +22,7 @@ import { PageSkeleton } from "@/components/erp/ui/Loading";
 import StageRouting, { canRouteStages, FlowBadge } from "@/components/erp/projects/StageRouting";
 import StageFlowEditor from "@/components/erp/projects/StageFlowEditor";
 import ProjectDelivery, { DeliverySummary } from "@/components/erp/projects/ProjectDelivery";
+import { CustomerSelect } from "@/components/erp/projects/ProjectForm";
 
 const TABS = ["board", "tasks", "delivery", "settings"];
 
@@ -120,7 +121,7 @@ function ProjectSettings({ project, lookups, onSaved }) {
   const [form, setForm] = useState({
     name: project.name,
     code: project.code,
-    client: project.client,
+    customer: project.customer || "",
     status: project.status,
     priority: project.priority,
     startDate: toDateInput(project.startDate),
@@ -129,6 +130,7 @@ function ProjectSettings({ project, lookups, onSaved }) {
     participants: project.participants,
   });
   const [stages, setStages] = useState(project.stages);
+  const [customers, setCustomers] = useState([]);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const set = (field) => (value) => setForm((f) => ({ ...f, [field]: value }));
@@ -147,6 +149,12 @@ function ProjectSettings({ project, lookups, onSaved }) {
       setError(errorText(t, err));
     }
   }
+
+  useEffect(() => {
+    api("/api/customers")
+      .then((d) => setCustomers(d.customers))
+      .catch(() => {});
+  }, []);
 
   async function saveAsTemplate() {
     const name = window.prompt(t("erp.projects.templateName"), project.name.en);
@@ -168,7 +176,7 @@ function ProjectSettings({ project, lookups, onSaved }) {
         <BilingualField label={t("erp.projects.name")} value={form.name} onChange={set("name")} />
         <div className="grid gap-4 sm:grid-cols-3">
           <Input label={t("erp.projects.code")} value={form.code} onChange={set("code")} dir="ltr" />
-          <Input label={t("erp.projects.client")} value={form.client} onChange={set("client")} />
+          <CustomerSelect customers={customers} value={form.customer} onChange={set("customer")} t={t} legacy={project.customer ? "" : project.client} currentName={project.client} />
           <Select
             label={t("erp.projects.statusLabel")}
             value={form.status}

@@ -51,7 +51,7 @@ const scheduleOut = (s) => ({
 export async function GET(request, { params }) {
   const user = await requireStaff();
   const { id } = await params;
-  if (!user || !(await canSeePerson(user, id, "attendance.view"))) return forbidden();
+  if (!user || !isObjectId(id) || !(await canSeePerson(user, id, "attendance.view"))) return forbidden();
   const u = await User.findById(id).lean();
   if (!u) return notFound();
 

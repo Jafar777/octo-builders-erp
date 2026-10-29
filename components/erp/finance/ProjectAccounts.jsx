@@ -53,7 +53,7 @@ export default function ProjectAccounts({ lookups, summary, projectId, onProject
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end gap-3">
-        <div className="w-80">
+        <div className="w-full sm:w-80">
           <Select
             label={t("erp.tasks.project")}
             value={projectId || ""}

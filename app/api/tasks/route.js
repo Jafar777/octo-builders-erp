@@ -28,6 +28,8 @@ import { nextNumber } from "@/models/Counter";
 import Task, { TASK_STATUSES } from "@/models/Task";
 import User from "@/models/User";
 import WorkProject from "@/models/WorkProject";
+import { queueQuery } from "@/lib/taskReview";
+import { cleanReviewFlags } from "@/lib/reviewFlow";
 
 // Views:
 //   ?view=mine            my tasks (default)
@@ -48,10 +50,10 @@ export async function GET(request) {
   if (view === "mine") {
     query.assignee = user.id;
   } else if (view === "review") {
-    if (!hasPermission(user, "tasks.review")) return forbidden();
-    query.status = "submitted";
-    query.assignee = { $ne: user.id };
-    if (user.scope !== "all") query.department = user.department;
+    // The work waiting for my level of review (lib/taskReview).
+    const queue = await queueQuery(user);
+    if (!queue) return forbidden();
+    Object.assign(query, queue);
   } else if (view === "project") {
     const projectId = params.get("project");
     if (!isObjectId(projectId)) return fail("invalid_request");
@@ -165,6 +167,9 @@ export async function POST(request) {
   }
   const deps = await cleanDependsOn(body.dependsOn);
   if (deps.error) return fail(deps.error);
+  // Who reviews project work: the GM / CEO choose (manager, GM / CEO, customer); otherwise the manager.
+  const review = kind === "task" && project && isScheduler && !parent ? cleanReviewFlags(body.review, { hasCustomer: Boolean(project.customer) }) : cleanReviewFlags(null);
+  if (review.error) return fail(review.error);
   if (maxHours) {
     dueManual = true;
     estimatedHours = maxHours;
@@ -211,6 +216,7 @@ export async function POST(request) {
     parentTask: parent?._id || null,
     dependsOn: deps.ids,
     recurrence: recurrence.value,
+    review: review.value,
   });
 
   await logActivity(task._id, user, "created");

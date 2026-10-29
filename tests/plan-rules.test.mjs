@@ -75,6 +75,18 @@ ok("work in progress keeps the next stage locked", board([task("a", "in_progress
 ok("handed-in work releases the next stage before review", !board([task("a", "submitted", 1)]).locked.includes("b"));
 ok("one task handed in, another not started: still locked", board([task("a", "submitted", 1), task("a", "todo", 2)]).locked.includes("b"));
 ok("a rejection locks it again until the redo is handed in", board([task("a", "rejected", 1), task("a", "todo", 2, 0, 1)]).locked.includes("b"));
+// Cancelling the only work of a stage (task 1) doesn't leave the stages after it stuck.
+const chain = { stages: [{ key: "a", after: [] }, { key: "b", after: ["a"] }], overrides: [] };
+const cancelledA = buildCells(chain, [task("a", "cancelled", 1), task("b", "todo", 2)]);
+ok("a stage whose work was cancelled shows as cancelled", cancelledA.cells.a.status === "cancelled", cancelledA.cells.a.status);
+ok("the stage after a cancelled stage isn't locked", !cancelledA.locked.includes("b"), JSON.stringify(cancelledA.locked));
+ok("a cancelled stage leaves the progress", cancelledA.total === 1 && cancelledA.progress === 0, `${cancelledA.total} ${cancelledA.progress}`);
+// …but it passes on its own waits: z → a (cancelled) → b, so b still waits for z.
+const three = { stages: [{ key: "z", after: [] }, { key: "a", after: ["z"] }, { key: "b", after: ["a"] }], overrides: [] };
+ok("a cancelled stage passes on what it waited for", buildCells(three, [task("z", "todo", 1), task("a", "cancelled", 2), task("b", "todo", 3)]).locked.includes("b"));
+ok("…and releases once that's handed in", !buildCells(three, [task("z", "submitted", 1), task("a", "cancelled", 2), task("b", "todo", 3)]).locked.includes("b"));
+// New work in the stage (or the task restored) makes it wait again.
+ok("new work in a cancelled stage locks the next one again", buildCells(chain, [task("a", "cancelled", 1), task("a", "todo", 4), task("b", "todo", 2)]).locked.includes("b"));
 ok("Skip releases the next stage", !board([], [{ stage: "a", status: "skip", at: d(1) }]).locked.includes("b"));
 ok("handed in isn't counted as progress yet", board([task("a", "submitted", 1, 6)]).progress === 0);
 

@@ -14,7 +14,7 @@ const result = (u) => ({ skills: u.skills || [], skillRequests: serializeSkillRe
 export async function POST(request, { params }) {
   const user = await requireStaff();
   const { id } = await params;
-  if (!user || id !== user.id) return forbidden();
+  if (!user || !isObjectId(id) || id !== user.id) return forbidden();
   const name = cleanSkill((await readJson(request)).name);
   if (!name) return fail("skill_required");
 
@@ -45,7 +45,7 @@ export async function POST(request, { params }) {
 export async function DELETE(request, { params }) {
   const user = await requireStaff();
   const { id } = await params;
-  if (!user || id !== user.id) return forbidden();
+  if (!user || !isObjectId(id) || id !== user.id) return forbidden();
   const name = cleanSkill(new URL(request.url).searchParams.get("name"));
   const me = await User.findById(id);
   if (!me) return notFound();

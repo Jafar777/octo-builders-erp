@@ -9,6 +9,7 @@ import { lateTaskCount, projectRisk, rejectionCount } from "@/lib/projectHealth"
 import { buildCells } from "@/lib/projects";
 import { getSettings } from "@/lib/settings";
 import { ACTIVE_STATUSES, enrichTasks } from "@/lib/tasks";
+import { queueQuery } from "@/lib/taskReview";
 import AttendanceDevice from "@/models/AttendanceDevice";
 import LeaveRequest from "@/models/LeaveRequest";
 import Notification from "@/models/Notification";
@@ -71,9 +72,10 @@ export async function GET() {
   if (can("tasks.review")) {
     jobs.push(
       (async () => {
-        const query = { status: "submitted", assignee: { $ne: user.id }, ...deptFilter };
-        const list = await Task.find(query).sort({ submittedAt: 1 }).limit(5).lean();
-        out.reviews = { count: await Task.countDocuments(query), list: await enrichTasks(list) };
+        // Only the work waiting for this reviewer's level (lib/taskReview).
+        const query = await queueQuery(user);
+        const list = query ? await Task.find(query).sort({ submittedAt: 1 }).limit(5).lean() : [];
+        out.reviews = { count: query ? await Task.countDocuments(query) : 0, list: await enrichTasks(list) };
       })()
     );
   }
@@ -160,7 +162,9 @@ export async function GET() {
   if (can("users.manage")) {
     jobs.push(
       (async () => {
-        out.pendingSignups = await User.countDocuments({ role: "user", status: "active" });
+        // Customers linked to a project have no role on purpose: they're not waiting for one.
+        const customers = await WorkProject.distinct("customer", { customer: { $ne: null } });
+        out.pendingSignups = await User.countDocuments({ role: "user", status: "active", _id: { $nin: customers } });
       })()
     );
   }

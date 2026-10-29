@@ -74,6 +74,82 @@ function HomeSkeleton() {
   );
 }
 
+// A customer's home: their projects (progress, stages, expected delivery) and the
+// work waiting for their review.
+const STAGE_TONE = {
+  approved: "border-emerald-400/40 bg-emerald-500/15 text-emerald-200",
+  done: "border-emerald-400/40 bg-emerald-500/15 text-emerald-200",
+  skip: "border-white/10 text-white/40 line-through",
+  cancelled: "border-white/10 text-white/40 line-through",
+  pending: "border-amber-400/40 bg-amber-500/10 text-amber-200",
+  in_progress: "border-sky-400/40 bg-sky-500/10 text-sky-200",
+  on_hold: "border-sky-400/40 bg-sky-500/10 text-sky-200",
+  help: "border-sky-400/40 bg-sky-500/10 text-sky-200",
+};
+
+function CustomerHome() {
+  const { t, lang } = useLanguage();
+  const [projects, setProjects] = useState(null);
+  useEffect(() => {
+    api("/api/customer/projects")
+      .then((d) => setProjects(d.projects))
+      .catch(() => setProjects([]));
+  }, []);
+  if (!projects) return <SkeletonList rows={3} avatar={false} />;
+  const waiting = projects.reduce((n, p) => n + p.waitingForYou, 0);
+  return (
+    <div className="space-y-4">
+      {waiting > 0 && (
+        <Link
+          href="/dashboard/reviews"
+          className="animate-fade-up flex items-center gap-3 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm hover:bg-amber-500/15"
+        >
+          <CheckCircle2 size={18} className="text-amber-300" />
+          <span className="flex-1">{t("erp.customer.waiting", { n: waiting })}</span>
+          <ArrowUpRight size={15} className="rtl:-scale-x-100" />
+        </Link>
+      )}
+      <Section title={t("erp.customer.projects")}>
+        <div className="space-y-4">
+          {projects.map((p) => (
+            <div key={p.id} className="rounded-xl border border-white/[0.06] p-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="min-w-0 flex-1 font-semibold" dir="auto">
+                  {p.name?.[lang]} {p.code && <span className="text-xs font-normal text-white/40">· {p.code}</span>}
+                </span>
+                <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs">{t(`erp.projects.status.${p.status}`)}</span>
+              </div>
+              <div className="mt-3 flex items-center gap-3">
+                <span className="block h-2 flex-1 rounded-full bg-white/[0.06]">
+                  <span className="block h-full rounded-full bg-[#3987e5]" style={{ width: `${p.progress}%` }} />
+                </span>
+                <span className="text-sm tabular-nums text-white/70">{p.progress}%</span>
+              </div>
+              <p className="mt-2 text-xs text-white/50">
+                {[
+                  p.startDate && `${t("erp.projects.startDate")}: ${formatDate(p.startDate, lang)}`,
+                  p.dueDate && `${t("erp.projects.dueDate")}: ${formatDate(p.dueDate, lang)}`,
+                  p.expectedEnd && `${t("erp.customer.expected")}: ${formatDate(p.expectedEnd, lang)}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {p.stages.map((s) => (
+                  <span key={s.key} className={`rounded-full border px-2.5 py-0.5 text-[11px] ${STAGE_TONE[s.status] || "border-white/10 text-white/50"}`} title={t(`erp.customer.stage.${s.status}`)}>
+                    {s.name?.[lang]}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+          {!projects.length && <p className="py-6 text-center text-sm text-white/40">{t("erp.projects.none")}</p>}
+        </div>
+      </Section>
+    </div>
+  );
+}
+
 // New accounts are sent to their profile until the name is filled in both languages.
 function CompleteProfileNote({ user }) {
   const { t } = useLanguage();
@@ -129,7 +205,9 @@ export default function DashboardOverview({ user }) {
         </p>
       </div>
 
-      {!user?.isStaff && (
+      {user?.isCustomer && <CustomerHome />}
+
+      {!user?.isStaff && !user?.isCustomer && (
         <div className="flex max-w-lg items-start gap-3 rounded-2xl border border-brand-orange/30 bg-brand-orange/10 p-5 text-sm text-white/80">
           <Clock size={20} className="mt-0.5 shrink-0 text-brand-orange" />
           {t("erp.pendingRole")}
@@ -301,7 +379,7 @@ export default function DashboardOverview({ user }) {
                     </div>
                   ))}
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+                <div className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
                   <div>
                     <p className="text-xs text-white/50">{t("erp.finance.receivables")}</p>
                     <p className="font-semibold tabular-nums text-amber-300">{m(d.finance.receivables)}</p>

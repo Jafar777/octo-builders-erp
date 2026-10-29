@@ -9,6 +9,8 @@ const KpiResultSchema = new mongoose.Schema(
     // Department managers: the system part and the GM / CEO rating (0–100) behind `total`.
     systemScore: { type: Number, default: null },
     manualScore: { type: Number, default: null },
+    // Department managers' hybrid KPI (lib/kpi/hybrid): share, management, execution, team metrics.
+    hybrid: { type: mongoose.Schema.Types.Mixed, default: null },
     grade: { type: mongoose.Schema.Types.Mixed, default: {} },
     rank: { type: Number, default: 0 },
     of: { type: Number, default: 0 },

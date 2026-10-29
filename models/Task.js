@@ -77,7 +77,65 @@ const TaskSchema = new mongoose.Schema(
     ratings: [{ type: String }], // settings.tasks.ratingTags keys
     stars: { type: Number, min: 0, max: 5, default: 0 }, // 1–5 from the head; 0 = not rated
     headNotes: { type: String, default: "" },
-    rejectCause: { type: String, enum: ["", "employee", "management", "project"], default: "" },
+    rejectCause: { type: String, enum: ["", "employee", "management", "project", "customer"], default: "" },
+    // A redo's reason: the rejectCause of the task it redoes ("" on older redos). KPIs
+    // only count redos the employee caused (not management, project or customer ones).
+    revisionCause: { type: String, default: "" },
+    // Who reviews the handed-in work, in this order: the department manager, then the
+    // GM / CEO, then the project's customer (lib/reviewFlow). Set per task when the
+    // project is created; a redo keeps the same reviewers.
+    review: {
+      manager: { type: Boolean, default: true },
+      gm: { type: Boolean, default: false },
+      customer: { type: Boolean, default: false },
+    },
+    // While handed in: the level whose review it waits for ("" on older tasks = manager).
+    reviewLevel: { type: String, enum: ["", "manager", "gm", "customer"], default: "" },
+    // Every review it got. The summary above (status, stars, ratings, reviewedBy…) is set
+    // by the last one: an approval once every level approved, or the rejection.
+    reviews: [
+      new mongoose.Schema(
+        {
+          level: { type: String, enum: ["manager", "gm", "customer"], required: true },
+          // Levels this review counts for: a GM / CEO stepping in covers the internal ones.
+          covers: [{ type: String }],
+          by: { type: ObjectId, ref: "User", required: true },
+          at: { type: Date, default: Date.now },
+          decision: { type: String, enum: ["approve", "reject"], required: true },
+          stars: { type: Number, min: 0, max: 5, default: 0 },
+          ratings: [{ type: String }],
+          notes: { type: String, default: "" },
+          rejectCause: { type: String, default: "" },
+          // The GM / CEO reviewing in the customer's place.
+          onBehalf: { type: Boolean, default: false },
+        },
+        { _id: false }
+      ),
+    ],
+
+    // The plan before work started, so a start pressed by mistake can be undone.
+    startUndo: {
+      plannedStart: { type: Date, default: null },
+      dueAt: { type: Date, default: null },
+    },
+    // Cancelling works like an inactive task in MS Project: the task stays on the plan
+    // (greyed out, with the time already spent), but no longer takes the employee's time
+    // or holds up other work, and the GM / CEO can restore it. Project work is only
+    // cancelled by the GM / CEO: the employee asks with a reason (cancelRequest).
+    cancelRequest: {
+      status: { type: String, enum: ["", "pending", "approved", "rejected"], default: "" },
+      by: { type: ObjectId, ref: "User", default: null },
+      at: { type: Date, default: null },
+      reason: { type: String, default: "" },
+      decidedBy: { type: ObjectId, ref: "User", default: null },
+      decidedAt: { type: Date, default: null },
+      note: { type: String, default: "" },
+    },
+    cancelledAt: { type: Date, default: null },
+    cancelledBy: { type: ObjectId, ref: "User", default: null },
+    cancelReason: { type: String, default: "" },
+    // Tasks that waited for it and now wait for its own predecessors instead (linked back on restore).
+    cancelRelinked: [{ type: ObjectId, ref: "Task" }],
 
     dueReminderSent: { type: Boolean, default: false },
     overdueNotified: { type: Boolean, default: false },
@@ -91,5 +149,7 @@ TaskSchema.index({ department: 1, status: 1 });
 TaskSchema.index({ parentTask: 1 });
 TaskSchema.index({ dependsOn: 1 });
 TaskSchema.index({ "recurrence.nextAt": 1 });
+TaskSchema.index({ status: 1, reviewLevel: 1 });
+TaskSchema.index({ "reviews.by": 1 });
 
 export default mongoose.models.Task || mongoose.model("Task", TaskSchema);

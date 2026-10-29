@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
-import { applyStageRouting, cleanProjectFields, cleanStages, orderStages } from "@/lib/projectPayload";
+import { applyStageRouting, cleanCustomer, cleanProjectFields, cleanStages, orderStages } from "@/lib/projectPayload";
+import { cleanReviewFlags } from "@/lib/reviewFlow";
 import { flowOf, stageAfter } from "@/lib/stageFlow";
 import { saveFirstBaseline } from "@/lib/projectDelay";
 import { canRouteStages, dueRiskOf, listProjectsWithProgress, officeTz, projectQueryFor, serializeProject } from "@/lib/projects";
@@ -11,6 +12,11 @@ import { notify } from "@/lib/notify";
 import { getTaskSettings } from "@/lib/settings";
 import { inScope } from "@/lib/scope";
 import { logActivity, publishTaskChange } from "@/lib/tasks";
+import { canSeeIntakeFinance } from "@/lib/intake";
+import { checkMoney, convertible, finishIntake, linkIntake, lockIntake, projectFieldsFrom, releaseIntake } from "@/lib/intakeConvert";
+import { viewerLang } from "@/lib/personName";
+import { getSettings } from "@/lib/settings";
+import ProjectIntake from "@/models/ProjectIntake";
 import { planProjectStages } from "@/lib/taskSchedule";
 import { nextNumber } from "@/models/Counter";
 import Department from "@/models/Department";
@@ -28,7 +34,11 @@ export async function GET() {
 // Body: project fields + department + templateId (or stages/items)
 // + stagePlan: [{ key, after: [keys] }] — the template's stages in the chosen order and
 //   what each waits for (default: step by step)
-// + tasks: { stageKey: { hours, assigneeId } } — every stage's working hours and employee.
+// + tasks: { stageKey: { hours, assigneeId, review: { manager, gm, customer } } } — every
+//   stage's working hours, employee and who reviews it (lib/reviewFlow)
+// + customer: a signed-up account with no role (optional).
+// + intakeId: a priced intake form it comes from (lib/intakeConvert): its details fill the
+//   project's notes, its money becomes the project's finance entries and budget.
 export async function POST(request) {
   const user = await requireStaff();
   if (!user) return forbidden();
@@ -45,6 +55,10 @@ export async function POST(request) {
   if (error) return fail(error);
   if (!fields.name) return fail("bilingual_required");
   if (!fields.dueDate) return fail("due_required");
+  const customer = await cleanCustomer(body.customer);
+  if (customer.error) return fail(customer.error);
+  fields.customer = customer.customer;
+  if (customer.customer) fields.client = customer.name;
 
   const settings = await getTaskSettings();
   let stages = body.stages;
@@ -71,13 +85,45 @@ export async function POST(request) {
     const assigneeId = input[stage.key]?.assigneeId;
     if (!Number.isFinite(hours) || hours < 0.5 || hours > 200) return fail("invalid_task_hours");
     if (!isObjectId(assigneeId)) return fail("invalid_assignee");
-    plan[stage.key] = { hours: Math.round(hours * 2) / 2, assigneeId };
+    const review = cleanReviewFlags(input[stage.key]?.review, { hasCustomer: Boolean(customer.customer) });
+    if (review.error) return fail(review.error);
+    plan[stage.key] = { hours: Math.round(hours * 2) / 2, assigneeId, review: review.value };
   }
   const assigneeIds = [...new Set(Object.values(plan).map((p) => p.assigneeId))];
   if ((await User.countDocuments({ _id: { $in: assigneeIds }, status: "active", role: { $ne: "user" } })) !== assigneeIds.length) {
     return fail("invalid_assignee");
   }
 
+  // From an intake form: everything is checked before it's locked, and it's locked
+  // before the project is created, so it becomes exactly one project.
+  let intake = null;
+  let appSettings = null;
+  if (body.intakeId) {
+    if (!canSeeIntakeFinance(user)) return forbidden();
+    if (!isObjectId(body.intakeId)) return fail("intake_not_ready", 409);
+    appSettings = await getSettings();
+    const pending = await ProjectIntake.findOne({ _id: body.intakeId, ...convertible() });
+    if (!pending) return fail("intake_not_ready", 409);
+    const moneyError = await checkMoney(pending, appSettings);
+    if (moneyError) return fail(moneyError);
+    intake = await lockIntake(body.intakeId);
+    if (!intake) return fail("intake_not_ready", 409);
+    const from = projectFieldsFrom(intake, await viewerLang());
+    if (!fields.notes) fields.notes = from.notes;
+    if (!fields.client) fields.client = from.client;
+    fields.budget = intake.finance.budget || 0;
+    fields.intake = intake._id;
+  }
+  try {
+    return await createProject({ user, body, fields, stagesWithFlow, plan, intake, appSettings });
+  } catch (err) {
+    // Back to "ready" if no project was made from it; closed if one was.
+    if (intake) await releaseIntake(intake);
+    throw err;
+  }
+}
+
+async function createProject({ user, body, fields, stagesWithFlow, plan, intake, appSettings }) {
   const project = await WorkProject.create({
     ...fields,
     department: body.department,
@@ -87,6 +133,7 @@ export async function POST(request) {
     createdBy: user.id,
   });
   await audit(user, "project.created", { entityType: "project", entityId: project._id, summary: fields.name.en });
+  if (intake) await linkIntake(intake, project);
 
   // Schedule the tasks in each employee's queue (and after the stages they wait for).
   const cal = await getWorkCalendar();
@@ -109,6 +156,7 @@ export async function POST(request) {
       estimatedHours: slot.hours,
       maxHours: slot.hours,
       dueManual: true,
+      review: plan[slot.stage.key].review,
       // It can't start before the stages it waits for are done (arrows on the chart too).
       dependsOn: stageAfter(stagesWithFlow, i).map((k) => stageTask[k]).filter(Boolean),
     });
@@ -130,6 +178,8 @@ export async function POST(request) {
 
   // Baseline 1: when the project is expected to be delivered, as planned right now.
   await saveFirstBaseline(project, user);
+  // The intake's money becomes the project's finance entries; the intake is closed.
+  if (intake) await finishIntake(intake, project, user, appSettings);
 
   return NextResponse.json({ project: serializeProject(project.toObject(), { dueRisk: dueRiskOf(project, await officeTz()) }) }, { status: 201 });
 }

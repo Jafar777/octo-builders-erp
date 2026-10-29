@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-detect-module tests/hr-engine.test.mjs && node --experimental-detect-module tests/finance-engine.test.mjs && node --experimental-detect-module tests/work-days.test.mjs && node --experimental-detect-module tests/salary-days.test.mjs && node --experimental-detect-module tests/stage-flow.test.mjs && node --experimental-detect-module tests/scheduling.test.mjs && node --experimental-detect-module tests/plan-rules.test.mjs"
+    "test": "node --experimental-detect-module tests/hr-engine.test.mjs && node --experimental-detect-module tests/finance-engine.test.mjs && node --experimental-detect-module tests/work-days.test.mjs && node --experimental-detect-module tests/salary-days.test.mjs && node --experimental-detect-module tests/stage-flow.test.mjs && node --experimental-detect-module tests/scheduling.test.mjs && node --experimental-detect-module tests/plan-rules.test.mjs && node --experimental-detect-module tests/review-flow.test.mjs && node --experimental-detect-module tests/kpi-hybrid.test.mjs && node --experimental-detect-module tests/intake.test.mjs"
   },
   "dependencies": {
     "exceljs": "^4.4.0",

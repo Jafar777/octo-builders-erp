@@ -22,6 +22,7 @@ import {
   Eye,
   ListChecks,
   ClipboardCheck,
+  ClipboardList,
   FolderKanban,
   CalendarClock,
   Gauge,
@@ -47,6 +48,7 @@ import MiniChat from "@/components/erp/messages/MiniChat";
 
 // Sidebar entries; `perm` hides an entry from roles without that permission,
 // `staff` hides it from accounts that have no role yet, and `when(user)` is a custom rule.
+// `show(user)` replaces all of them (entries customers see too).
 const NAV = [
   {
     group: "main",
@@ -58,12 +60,20 @@ const NAV = [
       { href: "/dashboard/task-log", key: "taskLog", icon: ScrollText, when: (u) => u.permissions.includes("projects.manage") && u.scope === "all" },
       { href: "/dashboard/team-tasks", key: "teamTasks", icon: UsersRound, staff: true },
       { href: "/dashboard/projects", key: "projects", icon: FolderKanban, staff: true },
-      { href: "/dashboard/reviews", key: "reviews", icon: ClipboardCheck, perm: "tasks.review", badge: "reviews" },
+      // New-project intake forms: the secretary fills them, the GM / CEO price them.
+      {
+        href: "/dashboard/intake",
+        key: "intake",
+        icon: ClipboardList,
+        when: (u) => u.permissions.includes("projects.intake") || (u.scope === "all" && u.permissions.includes("projects.manage")),
+      },
+      // Reviewers, and customers reviewing the tasks marked for them.
+      { href: "/dashboard/reviews", key: "reviews", icon: ClipboardCheck, badge: "reviews", show: (u) => (u.isStaff && u.permissions.includes("tasks.review")) || u.isCustomer },
       { href: "/dashboard/attendance", key: "attendance", icon: CalendarClock, staff: true },
       { href: "/dashboard/kpi", key: "kpi", icon: Gauge, staff: true },
       { href: "/dashboard/bonus", key: "bonus", icon: Gift, staff: true },
       { href: "/dashboard/messages", key: "messages", icon: MessagesSquare, staff: true, badge: "messages", exact: true },
-      { href: "/dashboard/notifications", key: "notifications", icon: Bell, staff: true },
+      { href: "/dashboard/notifications", key: "notifications", icon: Bell, show: (u) => u.isStaff || u.isCustomer },
     ],
   },
   {
@@ -102,7 +112,7 @@ export default function DashboardShell({ user, children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [pendingReviews, setPendingReviews] = useState(0);
-  const canReview = user.permissions.includes("tasks.review");
+  const canReview = (user.isStaff && user.permissions.includes("tasks.review")) || user.isCustomer;
 
   const loadUnread = useCallback(() => {
     if (!user.isStaff) return;
@@ -114,7 +124,7 @@ export default function DashboardShell({ user, children }) {
 
   const loadReviews = useCallback(() => {
     if (!canReview) return;
-    fetch("/api/tasks?view=review", { cache: "no-store" })
+    fetch("/api/reviews?tab=queue", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => setPendingReviews(data.tasks?.length || 0))
       .catch(() => {});
@@ -139,7 +149,10 @@ export default function DashboardShell({ user, children }) {
   const groups = NAV.map((g) => ({
     ...g,
     items: g.items.filter(
-      (item) => (!item.staff || user.isStaff) && (!item.perm || user.permissions.includes(item.perm)) && (!item.when || (user.isStaff && item.when(user)))
+      (item) =>
+        item.show
+          ? item.show(user)
+          : (!item.staff || user.isStaff) && (!item.perm || user.permissions.includes(item.perm)) && (!item.when || (user.isStaff && item.when(user)))
     ),
   })).filter((g) => g.items.length > 0);
 

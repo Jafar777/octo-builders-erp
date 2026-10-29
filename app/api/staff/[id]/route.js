@@ -12,6 +12,10 @@ import Role from "@/models/Role";
 import Department from "@/models/Department";
 import Branch from "@/models/Branch";
 import JobTitle from "@/models/JobTitle";
+import Task from "@/models/Task";
+import { DEFAULT_ROLE } from "@/lib/permissions";
+import { usersWithPermissionFor } from "@/lib/scope";
+import { ACTIVE_STATUSES } from "@/lib/tasks";
 
 const REF_FIELDS = { department: Department, branch: Branch, jobTitle: JobTitle };
 
@@ -84,6 +88,24 @@ export async function PATCH(request, { params }) {
   }
   if (changes.status === "inactive" && before.status !== "inactive") {
     await notify({ type: "user.deactivated", recipients: [id], actor });
+  }
+  // Someone who can no longer work (deactivated, or left without a role) still holds
+  // their open tasks on the plan, and the work waiting for them is stuck: the GM / CEO
+  // are told to give those tasks to someone else (nothing is moved on its own).
+  const leaving = (changes.status === "inactive" && before.status !== "inactive") || (changes.role === DEFAULT_ROLE && before.role !== DEFAULT_ROLE);
+  if (leaving) {
+    const open = await Task.countDocuments({ assignee: id, status: { $in: ACTIVE_STATUSES } });
+    if (open) {
+      await notify({
+        type: "user.left_with_tasks",
+        recipients: await usersWithPermissionFor("projects.manage", null),
+        actor,
+        params: { name: after.name || target.email, n: open },
+        link: "/dashboard/projects",
+        entityType: "user",
+        entityId: id,
+      });
+    }
   }
 
   // The user's open tabs reload their permissions and navigation.

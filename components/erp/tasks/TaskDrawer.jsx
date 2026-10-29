@@ -25,6 +25,9 @@ import Avatar from "@/components/erp/ui/Avatar";
 import { Button, ErrorText, Input, Label, Select } from "@/components/erp/ui/fields";
 import { StatusBadge, taskHeading } from "@/components/erp/tasks/TaskRow";
 import TaskForm from "@/components/erp/tasks/TaskForm";
+import TaskCancel from "@/components/erp/tasks/TaskCancel";
+import LevelBadge from "@/components/erp/tasks/LevelBadge";
+import { pendingLevel, reviewPlan } from "@/lib/reviewFlow";
 import { canRouteStages } from "@/components/erp/projects/StageRouting";
 import Stars from "@/components/erp/tasks/Stars";
 import { DependencyPicker, recurrenceText } from "@/components/erp/tasks/TaskPlanning";
@@ -49,17 +52,20 @@ function Detail({ label, children }) {
   );
 }
 
-function ReviewForm({ task, lookups, onDone }) {
+function ReviewForm({ task, lookups, access, onDone }) {
   const { user } = useAuth();
   // The redo gets the same hours and is scheduled automatically; only the GM / CEO pick a date.
-  const pickDue = canRouteStages(user);
+  const pickHours = canRouteStages(user);
+  const originalHours = task.maxHours || task.estimatedHours || "";
+  // The GM / CEO reviewing in the customer's place: stars and notes, like the customer.
+  const forCustomer = access?.level === "customer";
   const { t, lang } = useLanguage();
   const [decision, setDecision] = useState("approve");
   const [ratings, setRatings] = useState([]);
   const [stars, setStars] = useState(0);
   const [notes, setNotes] = useState("");
   const [cause, setCause] = useState("employee");
-  const [newDueAt, setNewDueAt] = useState("");
+  const [redoHours, setRedoHours] = useState(String(originalHours));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -78,7 +84,7 @@ function ReviewForm({ task, lookups, onDone }) {
           ratings,
           notes,
           rejectCause: cause,
-          newDueAt: newDueAt ? new Date(newDueAt).toISOString() : null,
+          redoHours: decision === "reject" && pickHours && redoHours !== "" ? Number(redoHours) : null,
         },
       });
       onDone();
@@ -91,7 +97,10 @@ function ReviewForm({ task, lookups, onDone }) {
 
   return (
     <div className="space-y-4 rounded-2xl border border-brand-orange/30 bg-brand-orange/[0.06] p-4">
-      <p className="font-semibold">{t("erp.tasks.reviewTitle")}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="font-semibold">{t("erp.tasks.reviewTitle")}</p>
+        {access?.level && <LevelBadge level={access.level} onBehalf={access.onBehalf} />}
+      </div>
       <div className="grid grid-cols-2 gap-2">
         {["approve", "reject"].map((d) => (
           <button
@@ -117,35 +126,37 @@ function ReviewForm({ task, lookups, onDone }) {
         <Stars value={stars} onChange={setStars} size={26} />
       </div>
 
-      <div>
-        <Label>{t("erp.tasks.ratings")}</Label>
-        <div className="space-y-2">
-          {TAG_KINDS.map((kind) => {
-            const tags = lookups.settings.ratingTags.filter((r) => r.kind === kind);
-            if (!tags.length) return null;
-            return (
-              <div key={kind} className="flex flex-wrap gap-1.5">
-                {tags.map((r) => (
-                  <button
-                    key={r.key}
-                    type="button"
-                    onClick={() => toggle(r.key)}
-                    className={`rounded-full border px-3 py-1 text-xs ${
-                      ratings.includes(r.key)
-                        ? kind === "error"
-                          ? "border-red-400 bg-red-500/20 text-red-200"
-                          : "border-emerald-400 bg-emerald-500/20 text-emerald-200"
-                        : "border-white/10 text-white/60 hover:text-white"
-                    }`}
-                  >
-                    {r.name?.[lang]}
-                  </button>
-                ))}
-              </div>
-            );
-          })}
+      {!forCustomer && (
+        <div>
+          <Label>{t("erp.tasks.ratings")}</Label>
+          <div className="space-y-2">
+            {TAG_KINDS.map((kind) => {
+              const tags = lookups.settings.ratingTags.filter((r) => r.kind === kind);
+              if (!tags.length) return null;
+              return (
+                <div key={kind} className="flex flex-wrap gap-1.5">
+                  {tags.map((r) => (
+                    <button
+                      key={r.key}
+                      type="button"
+                      onClick={() => toggle(r.key)}
+                      className={`rounded-full border px-3 py-1 text-xs ${
+                        ratings.includes(r.key)
+                          ? kind === "error"
+                            ? "border-red-400 bg-red-500/20 text-red-200"
+                            : "border-emerald-400 bg-emerald-500/20 text-emerald-200"
+                          : "border-white/10 text-white/60 hover:text-white"
+                      }`}
+                    >
+                      {r.name?.[lang]}
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       <div>
         <Label>{t("erp.tasks.headNotes")}</Label>
@@ -159,14 +170,21 @@ function ReviewForm({ task, lookups, onDone }) {
 
       {decision === "reject" && (
         <div className="grid gap-4 sm:grid-cols-2">
-          <Select
+          {forCustomer ? (
+            <p className="self-end text-xs text-white/50">{t("erp.tasks.cause.customer")}</p>
+          ) : (
+            <Select
             label={t("erp.tasks.rejectCause")}
             value={cause}
             onChange={setCause}
             options={["employee", "management", "project"].map((c) => ({ value: c, label: t(`erp.tasks.cause.${c}`) }))}
           />
-          {pickDue ? (
-            <Input type="datetime-local" label={t("erp.tasks.revisionDue")} value={newDueAt} onChange={setNewDueAt} />
+          )}
+          {pickHours ? (
+            <div>
+              <Input type="number" min="0.5" max="200" step="0.5" label={t("erp.tasks.revisionHours")} value={redoHours} onChange={setRedoHours} dir="ltr" />
+              <p className="mt-1 text-[11px] text-white/45">{t("erp.tasks.revisionHoursHint", { h: originalHours || "—" })}</p>
+            </div>
           ) : (
             <p className="self-end text-xs text-sky-200">{t("erp.scale.revisionInfo", { h: task.maxHours || task.estimatedHours })}</p>
           )}
@@ -175,10 +193,40 @@ function ReviewForm({ task, lookups, onDone }) {
       )}
 
       <ErrorText>{error}</ErrorText>
-      <Button onClick={submit} disabled={busy || (decision === "approve" && !stars)} className="w-full">
+      <Button
+        onClick={submit}
+        disabled={busy || (decision === "approve" && !stars) || (decision === "reject" && pickHours && redoHours !== "" && !(Number(redoHours) >= 0.5 && Number(redoHours) <= 200))}
+        className="w-full"
+      >
         {busy && <Loader2 size={16} className="animate-spin" />}
         {t("erp.tasks.confirmReview")}
       </Button>
+    </div>
+  );
+}
+
+// The task's reviewers in order: done, waiting now, or still to come.
+function ReviewChain({ task }) {
+  const { t } = useLanguage();
+  const levels = reviewPlan(task);
+  const waiting = task.status === "submitted" ? pendingLevel(task) : null;
+  const approved = new Set(task.status === "approved" ? levels : task.reviews.filter((r) => r.decision === "approve").map((r) => r.level));
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      <span className="text-white/45">{t("erp.reviews.chain")}</span>
+      {levels.map((l, i) => (
+        <span key={l} className="flex items-center gap-2">
+          {i > 0 && <span className="text-white/25">→</span>}
+          <span
+            className={`rounded-full border px-2.5 py-0.5 ${
+              approved.has(l) ? "border-emerald-400/40 text-emerald-200" : waiting === l ? "border-amber-400/60 bg-amber-500/10 text-amber-200" : "border-white/10 text-white/50"
+            }`}
+          >
+            {approved.has(l) ? "✓ " : waiting === l ? "⏳ " : ""}
+            {t(`erp.reviews.level.${l}`)}
+          </span>
+        </span>
+      ))}
     </div>
   );
 }
@@ -489,8 +537,34 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
             )}
           </div>
 
-          {/* Review result */}
-          {task.reviewedAt && (
+          {/* Who reviews it, in order, and where it stands (lib/reviewFlow). */}
+          {["task", "revision", "help"].includes(task.kind) && <ReviewChain task={task} />}
+
+          {/* Each level's review */}
+          {task.reviews?.length > 0 &&
+            task.reviews.map((r, i) => (
+              <div key={i} className={`rounded-2xl border p-4 text-sm ${r.decision === "approve" ? "border-emerald-500/30 bg-emerald-500/[0.06]" : "border-red-500/30 bg-red-500/[0.06]"}`}>
+                <p className="flex flex-wrap items-center gap-2 font-semibold">
+                  <LevelBadge level={r.level} onBehalf={r.onBehalf} />
+                  {t(`erp.reviews.decision.${r.decision}`)} · {r.by?.name} · {formatDateTime(r.at, lang)}
+                </p>
+                {r.stars > 0 && <Stars value={r.stars} size={18} className="mt-2" />}
+                {r.ratings.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {r.ratings.map((x) => (
+                      <span key={x} className={`rounded-full px-2.5 py-0.5 text-xs ${lookups.tag(x)?.kind === "error" ? "bg-red-500/20 text-red-200" : "bg-emerald-500/20 text-emerald-200"}`}>
+                        {lookups.tag(x)?.name?.[lang] || x}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {r.notes && <p className="mt-2 whitespace-pre-wrap text-white/80">{r.notes}</p>}
+                {r.rejectCause && <p className="mt-1 text-xs text-white/50">{t(`erp.tasks.cause.${r.rejectCause}`)}</p>}
+              </div>
+            ))}
+
+          {/* Review result (tasks reviewed before review levels) */}
+          {task.reviewedAt && !task.reviews?.length && (
             <div className={`rounded-2xl border p-4 text-sm ${s === "approved" ? "border-emerald-500/30 bg-emerald-500/[0.06]" : "border-red-500/30 bg-red-500/[0.06]"}`}>
               <p className="font-semibold">
                 {t(`erp.tasks.status.${s}`)} · {task.reviewedBy?.name} · {formatDateTime(task.reviewedAt, lang)}
@@ -537,11 +611,6 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
                 {["in_progress", "on_hold", "help"].includes(s) && (
                   <Button onClick={() => setPanel(panel === "submit" ? null : "submit")} disabled={busy}>
                     <Send size={16} className="rtl:rotate-180" /> {t(`erp.tasks.submit_${task.kind === "meeting" || task.kind === "personal" ? "finish" : "review"}`)}
-                  </Button>
-                )}
-                {["todo", "in_progress", "on_hold", "help"].includes(s) && (
-                  <Button variant="danger" onClick={() => window.confirm(t("erp.tasks.confirmCancel")) && act("cancel")} disabled={busy}>
-                    {t("erp.tasks.cancelTask")}
                   </Button>
                 )}
               </div>
@@ -601,8 +670,18 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
             </div>
           )}
 
+          {/* Undo a mistaken start; cancel (or ask the GM / CEO to); decide; restore. */}
+          <TaskCancel
+            task={task}
+            who={{ isAssignee: p.isAssignee, canManage: p.canManage, canPlan: p.canPlan }}
+            onDone={() => {
+              load();
+              onChanged?.();
+            }}
+          />
+
           {/* Head review */}
-          {p.canReview && s === "submitted" && <ReviewForm task={task} lookups={lookups} onDone={() => { load(); onChanged?.(); }} />}
+          {p.canReview && s === "submitted" && <ReviewForm task={task} lookups={lookups} access={p.review} onDone={() => { load(); onChanged?.(); }} />}
 
           {/* Manager tools */}
           {p.canManage && s === "todo" && !p.isAssignee && (

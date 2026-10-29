@@ -1,42 +1,45 @@
 import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
-import { audit } from "@/lib/audit";
 import { notify } from "@/lib/notify";
 import { cascadeFrom, clearOverlaps, getWorkCalendar, personCalendar } from "@/lib/ganttServer";
-import { canRouteStages, checkStageEmptied, checkStageHandoffs, isStageLocked } from "@/lib/projects";
+import { canRouteStages, checkStageHandoffs, isStageLocked } from "@/lib/projects";
 import WorkProject from "@/models/WorkProject";
 import { scaledDue } from "@/lib/projectScale";
-import { insertRedo } from "@/lib/taskSchedule";
 import { replanPaused, setHoursLeft, trackDelays } from "@/lib/projectDelay";
-import { addWorkHours, holdsTime, HOUR, isRedo, nextWorkMoment, taskSpan, workMsBetween } from "@/lib/gantt";
-import { getTaskSettings } from "@/lib/settings";
+import { addWorkHours, cancelNeedsApproval, holdsTime, isRedo, nextWorkMoment } from "@/lib/gantt";
+import { cancelTask, rejectCancel, requestCancel, restoreTask } from "@/lib/taskCancel";
+import { reviewTask, startReview } from "@/lib/taskReview";
 import {
   applyTransition,
   canManageTask,
-  canReviewTask,
   enrichTask,
   logActivity,
-  notifyPredecessorRejected,
   notifyUnblocked,
   openBlockers,
   publishTaskChange,
-  reviewersFor,
   taskTitle,
 } from "@/lib/tasks";
 import { nextNumber } from "@/models/Counter";
 import Task from "@/models/Task";
 import User from "@/models/User";
 
-const ASSIGNEE_ACTIONS = ["start", "pause", "resume", "help", "submit", "cancel", "hours_left"];
+const ASSIGNEE_ACTIONS = ["start", "undo_start", "pause", "resume", "help", "submit", "hours_left"];
 
 // Body: { action, ...fields }
-//   start | pause | resume | cancel
+//   start | pause | resume
+//   undo_start                                 → a start pressed by mistake (first 15 min):
+//                                                back to its plan as if never started
+//   cancel  { reason }                         → project work: the GM / CEO cancel it, anyone
+//                                                else asks them; own meetings / personal tasks
+//                                                are cancelled straight away
+//   cancel_decision { decision: approve|reject, note }   (GM / CEO)
+//   restore                                    → a cancelled task comes back (GM / CEO)
 //   help    { helperId, note, hours }          → creates a help task for the colleague,
 //                                                planned in their schedule (default 1 h)
 //   submit  { deliveryLink, employeeNotes }    → to the head (or done for meetings)
 //   hours_left { hours }                       → work still going: when it's expected to finish
-//   review  { decision: approve|reject, stars, ratings[], notes, rejectCause, newDueAt }
+//   review  { decision: approve|reject, stars, ratings[], notes, rejectCause, redoHours }
 export async function POST(request, { params }) {
   const user = await requireStaff();
   if (!user) return forbidden();
@@ -52,10 +55,10 @@ export async function POST(request, { params }) {
   const now = new Date();
 
   if (action === "review") return review(user, task, body, now);
+  if (["cancel", "cancel_decision", "restore"].includes(action)) return cancelling(user, task, body, isAssignee);
 
   if (!ASSIGNEE_ACTIONS.includes(action)) return fail("invalid_action");
-  // Managers may cancel tasks in their scope; everything else is the assignee's.
-  if (!isAssignee && !(action === "cancel" && canManageTask(user, task))) return forbidden();
+  if (!isAssignee) return forbidden();
 
   // The employee says how long the work still needs; the plan moves to match.
   if (action === "hours_left") {
@@ -113,6 +116,8 @@ export async function POST(request, { params }) {
     task.dueReminderSent = false;
     task.overdueNotified = false;
   }
+  // Handed in: a cancellation it was waiting on no longer applies.
+  if (action === "submit" && task.cancelRequest?.status === "pending") task.cancelRequest.status = "";
   await task.save();
   // Its new due time can run into the employee's next planned tasks: they move later.
   // The tasks waiting for it (in anyone's plan) move after its new finish too.
@@ -122,7 +127,13 @@ export async function POST(request, { params }) {
     await cascadeFrom([task._id, ...moved], cal, user);
   }
   // Paused work can only go on after what the employee works on now.
-  if (["start", "resume", "pause", "submit", "cancel"].includes(action) && task.kind !== "meeting") {
+  // Back to its plan: other work it pushed may sit there now, and paused work moves up.
+  if (action === "undo_start") {
+    const cal = await getWorkCalendar();
+    const moved = await clearOverlaps(task.assignee, cal, user);
+    if (moved.length) await cascadeFrom(moved, cal, user);
+  }
+  if (["start", "undo_start", "resume", "pause", "submit"].includes(action) && task.kind !== "meeting") {
     await replanPaused(task.assignee, await getWorkCalendar(), user);
   }
   await logActivity(task._id, user, action, action === "help" ? String(body.note || "").slice(0, 1000) : "", {
@@ -171,120 +182,48 @@ export async function POST(request, { params }) {
     await publishTaskChange(helpTask);
   }
 
-  if (action === "submit" && task.status === "submitted") {
-    extra = await reviewersFor(task);
-    await notify({
-      type: "task.submitted",
-      recipients: extra,
-      actor: user,
-      params: notifyParams,
-      link: `/dashboard/reviews?task=${task._id}`,
-      entityType: "task",
-      entityId: task._id,
-    });
-  }
+  // Handed in: the first of its reviewers (manager, GM / CEO or customer) is told.
+  if (action === "submit" && task.status === "submitted") extra = await startReview(task, user);
 
   await publishTaskChange(task, extra);
-  if (action === "submit" || action === "cancel") await notifyUnblocked(task, notify);
+  if (action === "submit") await notifyUnblocked(task, notify);
   // Handed-in work releases the stages waiting for it (they don't wait for the review).
-  if ((action === "submit" || action === "cancel") && task.project && task.stage) await checkStageHandoffs(task.project, user);
-  // A stage left with no work holds up the stages after it: the GM / CEO must act.
-  if (action === "cancel") await checkStageEmptied(task, user);
-  // Starting, handing in or cancelling can move the projects' expected delivery.
-  if (["start", "submit", "cancel"].includes(action)) {
-    const cause = { start: "started", submit: "submitted", cancel: "cancelled" }[action];
+  if (action === "submit" && task.project && task.stage) await checkStageHandoffs(task.project, user);
+  // Starting (or taking a start back) and handing in can move the projects' expected delivery.
+  if (["start", "undo_start", "submit"].includes(action)) {
+    const cause = { start: "started", undo_start: "start_undone", submit: "submitted" }[action];
     await trackDelays({ cause, task }, user);
   }
   return NextResponse.json({ task: enriched });
 }
 
-async function review(user, task, body, now) {
-  if (!canReviewTask(user, task)) return forbidden();
-  if (task.status !== "submitted") return fail("not_submitted", 409);
-  if (!["approve", "reject"].includes(body.decision)) return fail("invalid_request");
-
-  const settings = await getTaskSettings();
-  const validTags = new Set(settings.ratingTags.map((r) => r.key));
-  const ratings = [...new Set((Array.isArray(body.ratings) ? body.ratings : []).filter((r) => validTags.has(r)))];
-  const approve = body.decision === "approve";
-  // Every approved task carries a 1–5 star rating; on a rejection it is optional.
-  const stars = Math.round(Number(body.stars));
-  const validStars = stars >= 1 && stars <= 5;
-  if (approve && !validStars) return fail("stars_required");
-
-  task.stars = validStars ? stars : 0;
-  task.status = approve ? "approved" : "rejected";
-  task.reviewedBy = user.id;
-  task.reviewedAt = now;
-  task.ratings = ratings;
-  task.headNotes = String(body.notes || "").slice(0, 2000);
-  task.rejectCause = approve ? "" : ["employee", "management", "project"].includes(body.rejectCause) ? body.rejectCause : "employee";
-  await task.save();
-  await logActivity(task._id, user, approve ? "approved" : "rejected", task.headNotes, { ratings, stars: task.stars, rejectCause: task.rejectCause });
-  await audit(user, approve ? "task.approved" : "task.rejected", { entityType: "task", entityId: task._id, summary: `#${task.number}` });
-
-  const enriched = await enrichTask(task);
-  const title = taskTitle(enriched);
-  let revisionTask = null;
-
-  if (approve) {
-    await notify({
-      type: "task.approved",
-      recipients: [task.assignee.toString()],
-      actor: user,
-      params: { number: task.number, title },
-      link: `/dashboard/tasks?task=${task._id}`,
-      entityType: "task",
-      entityId: task._id,
-    });
+// Cancelling (see lib/taskCancel). The GM / CEO cancel, decide on requests and restore;
+// for project work everyone else asks them, with a reason.
+async function cancelling(user, task, body, isAssignee) {
+  const planner = canRouteStages(user);
+  const reason = String(body.reason || body.note || "").trim().slice(0, 1000);
+  let error;
+  if (body.action === "restore") {
+    if (!planner) return forbidden();
+    error = await restoreTask(task, user);
+  } else if (body.action === "cancel_decision") {
+    if (!planner) return forbidden();
+    if (task.cancelRequest?.status !== "pending") return fail("no_cancel_request", 409);
+    if (body.decision === "approve") error = await cancelTask(task, user, reason);
+    else if (body.decision === "reject") error = await rejectCancel(task, user, reason);
+    else return fail("invalid_request");
   } else {
-    // Rejection opens the next revision for the same person — the Excel "طلبات التعديلات".
-    // The redo gets the same hours as the original and goes straight into the employee's
-    // schedule, pushing their other planned tasks later (a custom date only from the GM / CEO).
-    const cal = await getWorkCalendar();
-    const span = taskSpan(task);
-    const hours = task.maxHours || task.estimatedHours || Math.max(0.5, Math.round((workMsBetween(span.start, span.end, cal) / HOUR) * 2) / 2);
-    const custom = body.newDueAt && canRouteStages(user) ? new Date(body.newDueAt) : null;
-    revisionTask = await Task.create({
-      number: await nextNumber("task"),
-      kind: task.project && task.stage ? "revision" : task.kind,
-      title: task.title,
-      project: task.project,
-      stage: task.stage,
-      department: task.department,
-      type: task.type,
-      assignee: task.assignee,
-      createdBy: user.id,
-      priority: task.priority,
-      revision: task.revision + 1,
-      previousTask: task._id,
-      maxHours: hours,
-      estimatedHours: hours,
-      dueManual: true,
-      description: task.headNotes,
-    });
-    await insertRedo(revisionTask, hours, cal, user, custom && !Number.isNaN(custom.getTime()) ? custom : null);
-    // Tasks waiting for the rejected task now wait for its redo (and move after it).
-    await Task.updateMany({ dependsOn: task._id }, { $set: { "dependsOn.$": revisionTask._id } });
-    await cascadeFrom([revisionTask._id], cal, user);
-    await notifyPredecessorRejected(task, revisionTask, notify);
-    await logActivity(revisionTask._id, user, "created", task.headNotes, { revisionOf: task.number });
-    await notify({
-      type: "task.rejected",
-      recipients: [task.assignee.toString()],
-      actor: user,
-      params: { number: task.number, title, revision: String(revisionTask.revision).padStart(2, "0") },
-      link: `/dashboard/tasks?task=${revisionTask._id}`,
-      entityType: "task",
-      entityId: revisionTask._id,
-    });
-    await publishTaskChange(revisionTask);
+    if (!isAssignee && !planner && !canManageTask(user, task)) return forbidden();
+    const needsApproval = cancelNeedsApproval(task);
+    if (needsApproval && !reason && !(planner && task.cancelRequest?.status === "pending")) return fail("cancel_reason_required");
+    error = planner || !needsApproval ? await cancelTask(task, user, reason) : await requestCancel(task, user, reason);
   }
+  if (error) return fail(error, 409);
+  return NextResponse.json({ task: await enrichTask(task) });
+}
 
-  await publishTaskChange(task, [user.id]);
-  // The next tasks and stages were released when the work was handed in. A rejection
-  // locks the stages after it again until the redo is handed in.
-  if (task.project && task.stage) await checkStageHandoffs(task.project, user);
-  await trackDelays({ cause: approve ? "approved" : "rejected", task, note: approve ? "" : task.headNotes }, user);
-  return NextResponse.json({ task: enriched, revisionTaskId: revisionTask?._id?.toString() || null });
+async function review(user, task, body, now) {
+  const res = await reviewTask(user, task, body, now);
+  if (res.error) return fail(res.error, res.status);
+  return NextResponse.json({ task: res.task, revisionTaskId: res.revisionTaskId });
 }

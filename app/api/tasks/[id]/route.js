@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
+import { reviewAccess } from "@/lib/taskReview";
 import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { notify } from "@/lib/notify";
 import {
   canManageTask,
-  canReviewTask,
   canViewTask,
   cleanDependsOn,
   cleanRecurrence,
@@ -71,6 +71,7 @@ export async function GET(request, { params }) {
   const names = Object.fromEntries(actors.map((a) => [a._id.toString(), pickName(a, lang)]));
 
   const involved = isInvolvedInTask(user, task);
+  const access = await reviewAccess(user, task);
   const enriched = await enrichTask(task);
 
   return NextResponse.json({
@@ -78,7 +79,9 @@ export async function GET(request, { params }) {
     permissions: {
       isAssignee: task.assignee.toString() === user.id,
       canPlan: canRouteStages(user),
-      canReview: canReviewTask(user, task),
+      // The level this viewer may review now (null = none); see lib/taskReview.
+      review: access,
+      canReview: Boolean(access),
       canManage: canManageTask(user, task),
     },
     activity: activity.map((a) => {

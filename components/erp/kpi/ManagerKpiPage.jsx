@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CalendarClock, ClipboardCheck, Cpu, Plus, Settings2, Trash2, UserCheck } from "lucide-react";
+import { Briefcase, CalendarClock, ClipboardCheck, Cpu, Plus, Settings2, Trash2, UserCheck, Users } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
 import { formatDateTime } from "@/lib/formatTime";
@@ -12,6 +12,7 @@ import { MonthPicker } from "@/components/erp/hr/hrUi";
 import { SkeletonCards } from "@/components/erp/ui/Loading";
 import Stars from "@/components/erp/tasks/Stars";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
+import { TEAM_METRICS } from "@/lib/kpi/hybrid";
 
 const tone = (v) => (v === null || v === undefined ? "text-white/40" : v >= 80 ? "text-emerald-300" : v >= 60 ? "text-amber-200" : "text-red-300");
 
@@ -77,11 +78,48 @@ function RatingForm({ manager, criteria, month, onSaved }) {
   );
 }
 
+// The GM / CEO set a head's management share (empty = the company default).
+function ShareForm({ manager, data, onSaved }) {
+  const { t } = useLanguage();
+  const [value, setValue] = useState(manager.share === null ? "" : String(manager.share));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function save(share) {
+    setBusy(true);
+    setError("");
+    try {
+      await api("/api/manager-kpi", { method: "PATCH", body: { userId: manager.id, share } });
+      onSaved();
+    } catch (err) {
+      setError(errorText(t, err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <div className="w-32">
+        <Input type="number" min="0" max="100" label={t("erp.managerKpi.shareLabel")} value={value} onChange={setValue} dir="ltr" placeholder={String(data.managementShare)} />
+      </div>
+      <Button variant="ghost" onClick={() => save(value === "" ? null : Number(value))} loading={busy}>
+        {t("common.save")}
+      </Button>
+      {manager.share !== null && (
+        <Button variant="ghost" onClick={() => save(null)} disabled={busy}>
+          {t("erp.managerKpi.useDefault", { n: data.managementShare })}
+        </Button>
+      )}
+      <ErrorText>{error}</ErrorText>
+    </div>
+  );
+}
+
 function ManagerCard({ manager, data, month, departmentName, onSaved }) {
   const { t, lang } = useLanguage();
   const k = manager.kpi;
   const a = manager.attendance;
-  const w = data.weight;
+  const h = k?.hybrid;
+  const w = h ? h.ratingWeight : data.weight;
   const editable = data.canRate && !data.closed;
   const attendanceInd = k?.indicators.find((i) => i.key === "attendance");
 
@@ -111,24 +149,63 @@ function ManagerCard({ manager, data, month, departmentName, onSaved }) {
       ) : (
         <>
           {/* How the final score is made */}
-          <div className="flex flex-wrap items-center gap-2 rounded-xl bg-white/[0.04] px-4 py-2.5 text-sm" dir="ltr">
-            <span className="flex items-center gap-1.5 text-sky-200">
-              <Cpu size={14} /> {k.systemScore}
-            </span>
-            <span className="text-white/40">× {100 - w}% +</span>
-            <span className="flex items-center gap-1.5 text-amber-200">
-              <UserCheck size={14} /> {k.manualScore ?? "?"}
-            </span>
-            <span className="text-white/40">× {w}% =</span>
-            <span className={`font-semibold ${tone(k.score)}`}>{k.score}</span>
-            {k.manualScore === null && <span className="ms-2 text-xs text-amber-200">({t("erp.managerKpi.notRatedYet")})</span>}
-          </div>
+          {h ? (
+            <div className="space-y-3 rounded-xl bg-white/[0.04] px-4 py-3 text-sm">
+              <div className="flex flex-wrap items-center gap-2" dir="ltr">
+                <span className="flex items-center gap-1.5 text-violet-200">
+                  <Users size={14} /> {h.management ?? "—"}
+                </span>
+                <span className="text-white/40">× {h.managementWeight}% +</span>
+                <span className="flex items-center gap-1.5 text-sky-200">
+                  <Briefcase size={14} /> {h.execution ?? "—"}
+                </span>
+                <span className="text-white/40">× {h.executionWeight}% =</span>
+                <span className={`font-semibold ${tone(k.score)}`}>{k.score}</span>
+              </div>
+              <p className="text-xs text-white/55">
+                {t("erp.managerKpi.shareLine", { share: h.share, kind: t(manager.share === null ? "erp.managerKpi.shareDefault" : "erp.managerKpi.shareOwn") })}
+                {h.measuredShare !== null && <> · {t("erp.managerKpi.measured", { n: h.measuredShare })}</>}
+                {h.management !== null && h.execution !== null && h.managementWeight !== h.share && <> · {t("erp.managerKpi.fewTasks")}</>}
+              </p>
+              {editable && <ShareForm key={`${manager.id}-${manager.share}`} manager={manager} data={data} onSaved={onSaved} />}
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl bg-white/[0.04] px-4 py-2.5 text-sm" dir="ltr">
+              <span className="flex items-center gap-1.5 text-sky-200">
+                <Cpu size={14} /> {k.systemScore}
+              </span>
+              <span className="text-white/40">× {100 - w}% +</span>
+              <span className="flex items-center gap-1.5 text-amber-200">
+                <UserCheck size={14} /> {k.manualScore ?? "?"}
+              </span>
+              <span className="text-white/40">× {w}% =</span>
+              <span className={`font-semibold ${tone(k.score)}`}>{k.score}</span>
+            </div>
+          )}
+
+          {/* Management: the team's results (from the plan and reviews) */}
+          {h && (
+            <div className="space-y-3">
+              <p className="flex items-center gap-2 text-sm font-medium text-violet-200">
+                <Users size={15} /> {t("erp.managerKpi.managementPart")} · <span className="tabular-nums">{h.management ?? "—"}</span>
+                <span className="text-xs font-normal text-white/45">
+                  {t("erp.managerKpi.teamLine", { n: h.teamSize, team: h.teamScore ?? "—", rw: 100 - h.ratingWeight, w: h.ratingWeight })}
+                </span>
+              </p>
+              <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                {TEAM_METRICS.map((m) => (
+                  <Bar key={m} label={`${t(`erp.managerKpi.metric.${m}`)} · ${data.teamWeights?.[m] ?? 0}%`} value={h.metrics?.[m] ?? null} />
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="grid gap-5 lg:grid-cols-2">
             {/* System part: attendance (mandatory) + tasks */}
             <div className="space-y-3">
               <p className="flex items-center gap-2 text-sm font-medium text-sky-200">
-                <Cpu size={15} /> {t("erp.managerKpi.systemPart", { n: 100 - w })} · <span className="tabular-nums">{k.systemScore}</span>
+                {h ? <Briefcase size={15} /> : <Cpu size={15} />}
+                {h ? t("erp.managerKpi.executionPart") : t("erp.managerKpi.systemPart", { n: 100 - w })} · <span className="tabular-nums">{k.systemScore}</span>
               </p>
               {a && (
                 <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/10 p-3 text-xs sm:grid-cols-4">
@@ -162,7 +239,8 @@ function ManagerCard({ manager, data, month, departmentName, onSaved }) {
             {/* Manual part: the GM / CEO rating */}
             <div className="space-y-3">
               <p className="flex items-center gap-2 text-sm font-medium text-amber-200">
-                <UserCheck size={15} /> {t("erp.managerKpi.manualPart", { n: w })} · <span className="tabular-nums">{manager.rating?.percent ?? "—"}</span>
+                <UserCheck size={15} /> {h ? t("erp.managerKpi.ratingPart", { n: w }) : t("erp.managerKpi.manualPart", { n: w })} ·{" "}
+                <span className="tabular-nums">{manager.rating?.percent ?? "—"}</span>
               </p>
               {editable ? (
                 <RatingForm key={`${manager.id}-${month}-${manager.rating?.updatedAt || ""}`} manager={manager} criteria={data.criteria} month={month} onSaved={onSaved} />
@@ -193,9 +271,15 @@ function ManagerCard({ manager, data, month, departmentName, onSaved }) {
 }
 
 // GM / CEO: the rating's weight and its criteria (Settings key "managerKpi").
-function ManagerKpiSettings({ weight, criteria, onSaved }) {
+function ManagerKpiSettings({ weight, criteria, managementShare, ratingWeight, teamWeights, onSaved }) {
   const { t } = useLanguage();
-  const [value, setValue] = useState({ weight: String(weight), criteria });
+  const [value, setValue] = useState({
+    weight: String(weight),
+    criteria,
+    managementShare: String(managementShare),
+    ratingWeight: String(ratingWeight),
+    teamWeights: Object.fromEntries(TEAM_METRICS.map((m) => [m, String(teamWeights?.[m] ?? 0)])),
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const setCriterion = (i, patch) => setValue((v) => ({ ...v, criteria: v.criteria.map((c, j) => (j === i ? { ...c, ...patch } : c)) }));
@@ -204,7 +288,19 @@ function ManagerKpiSettings({ weight, criteria, onSaved }) {
     setBusy(true);
     setError("");
     try {
-      await api("/api/settings", { method: "PUT", body: { key: "managerKpi", value: { weight: Number(value.weight), criteria: value.criteria } } });
+      await api("/api/settings", {
+        method: "PUT",
+        body: {
+          key: "managerKpi",
+          value: {
+            weight: Number(value.weight),
+            criteria: value.criteria,
+            managementShare: Number(value.managementShare),
+            ratingWeight: Number(value.ratingWeight),
+            teamWeights: Object.fromEntries(TEAM_METRICS.map((m) => [m, Number(value.teamWeights[m]) || 0])),
+          },
+        },
+      });
       onSaved();
     } catch (err) {
       setError(errorText(t, err));
@@ -218,8 +314,35 @@ function ManagerKpiSettings({ weight, criteria, onSaved }) {
       <p className="flex items-center gap-2 font-semibold">
         <Settings2 size={16} /> {t("erp.managerKpi.settings")}
       </p>
-      <div className="max-w-xs">
-        <Input type="number" min="0" max="100" label={t("erp.managerKpi.weight")} value={value.weight} onChange={(w) => setValue((v) => ({ ...v, weight: w }))} dir="ltr" />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Input
+          type="number"
+          min="0"
+          max="100"
+          label={t("erp.managerKpi.defaultShare")}
+          value={value.managementShare}
+          onChange={(n) => setValue((v) => ({ ...v, managementShare: n }))}
+          dir="ltr"
+        />
+        <Input type="number" min="0" max="100" label={t("erp.managerKpi.ratingWeight")} value={value.ratingWeight} onChange={(n) => setValue((v) => ({ ...v, ratingWeight: n }))} dir="ltr" />
+      </div>
+      <div>
+        <Label>{t("erp.managerKpi.teamWeights")}</Label>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {TEAM_METRICS.map((m) => (
+            <Input
+              key={m}
+              type="number"
+              min="0"
+              max="100"
+              label={t(`erp.managerKpi.metric.${m}`)}
+              value={value.teamWeights[m]}
+              onChange={(n) => setValue((v) => ({ ...v, teamWeights: { ...v.teamWeights, [m]: n } }))}
+              dir="ltr"
+            />
+          ))}
+        </div>
+        <p className="mt-1 text-xs text-white/40">{t("erp.managerKpi.teamWeightsHint")}</p>
       </div>
       <div>
         <Label>{t("erp.managerKpi.criteria")}</Label>
@@ -295,11 +418,14 @@ export default function ManagerKpiPage({ initialMonth }) {
       {data && (
         <div className="space-y-5">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3 text-sm">
+            <span className="flex items-center gap-2 text-violet-200">
+              <Users size={15} /> {t("erp.managerKpi.formulaManagement", { n: data.managementShare })}
+            </span>
             <span className="flex items-center gap-2 text-sky-200">
-              <Cpu size={15} /> {t("erp.managerKpi.formulaSystem", { n: 100 - data.weight })}
+              <Briefcase size={15} /> {t("erp.managerKpi.formulaExecution", { n: 100 - data.managementShare })}
             </span>
             <span className="flex items-center gap-2 text-amber-200">
-              <UserCheck size={15} /> {t("erp.managerKpi.formulaManual", { n: data.weight })}
+              <UserCheck size={15} /> {t("erp.managerKpi.formulaRating", { n: data.ratingWeight })}
             </span>
             <span className="flex items-center gap-2 text-white/55">
               <CalendarClock size={15} /> {t("erp.managerKpi.formulaAttendance")}
@@ -313,9 +439,12 @@ export default function ManagerKpiPage({ initialMonth }) {
 
           {showSettings && data.canRate && (
             <ManagerKpiSettings
-              key={`${data.weight}-${data.criteria.map((c) => c.key).join()}`}
+              key={`${data.weight}-${data.managementShare}-${data.ratingWeight}-${data.criteria.map((c) => c.key).join()}`}
               weight={data.weight}
               criteria={data.criteria}
+              managementShare={data.managementShare}
+              ratingWeight={data.ratingWeight}
+              teamWeights={data.teamWeights}
               onSaved={() => {
                 setShowSettings(false);
                 load();

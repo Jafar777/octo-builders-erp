@@ -110,7 +110,14 @@ export async function GET() {
         hoursWorked: Math.round(list.reduce((h, t) => h + (t.activeMs || 0), 0) / 360000) / 10,
         participants: new Set(list.map((t) => idStr(t.assignee))).size,
         ...risk,
-        kpi: projectScore(list, { budget: p.budget || 0, cost: costs[p._id.toString()] ?? null, now: at }),
+        kpi: projectScore(list, {
+          budget: p.budget || 0,
+          cost: costs[p._id.toString()] ?? null,
+          now: at,
+          baseline: (p.baselines || []).find((b) => b.n === 1) || null,
+          // The expected delivery: once finished, when its last task was handed in.
+          end: p.forecastEnd || (finished ? p.finishedAt : null),
+        }),
       };
     })
     .sort((a, b) => b.score - a.score);

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ChevronDown, ChevronsDownUp, ChevronsUpDown, Crosshair, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Sparkles } from "lucide-react";
+import { AlertTriangle, Ban, ChevronDown, ChevronsDownUp, ChevronsUpDown, Crosshair, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Plus, Sparkles, UserCheck } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
 import { locale } from "@/lib/formatTime";
@@ -16,6 +16,7 @@ import {
   dateHours,
   DAY,
   heldSpan,
+  HOLDING_STATUSES,
   HOUR,
   nextWorkMoment,
   officeDate,
@@ -28,15 +29,20 @@ import {
   workMsBetween,
   workWindows,
 } from "@/lib/gantt";
+import Avatar from "@/components/erp/ui/Avatar";
 import Modal from "@/components/erp/ui/Modal";
 import { Button, ErrorText, Input, Select, Toggle } from "@/components/erp/ui/fields";
 import { SkeletonList } from "@/components/erp/ui/Loading";
 import { DependencyPicker } from "@/components/erp/tasks/TaskPlanning";
+import TaskCancel from "@/components/erp/tasks/TaskCancel";
+import TaskForm from "@/components/erp/tasks/TaskForm";
 import { taskHeading } from "@/components/erp/tasks/TaskRow";
 import { revisionLabel, toLocalInput, useNow } from "@/components/erp/tasks/taskUi";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 
+// The task-name column: narrower on phones so the chart keeps most of the screen.
 const LABEL_W = 270;
+const LABEL_W_PHONE = 150;
 const HEADER_H = 52;
 const GROUP_H = 44;
 const TASK_H = 36;
@@ -54,12 +60,13 @@ const ZOOMS = {
   month: { px: 4, snap: 24 },
 };
 
-// The only three bar colours: done (accepted), scheduled, rejected.
+// Bar colours by state (lib/gantt barState). Cancelled bars stay, greyed and struck through.
 const BAR_STYLE = {
   done: "border-emerald-400/60 bg-emerald-500/80 text-white",
   scheduled: "border-blue-400/60 bg-blue-500/80 text-white",
   ongoing: "border-orange-400/60 bg-orange-500/80 text-white",
   rejected: "border-red-400/60 bg-red-500/80 text-white",
+  cancelled: "border-slate-400/40 bg-slate-500/35 text-white/60 line-through",
 };
 
 const FINISHED = ["approved", "done", "cancelled"];
@@ -102,17 +109,26 @@ export default function ProjectsTimeline({ projects, status }) {
   const [data, setData] = useState(null);
   const [zoom, setZoom] = useState("day");
   const [groupBy, setGroupBy] = useState("project");
-  const [opts, setOpts] = useState({ workdays: true, autoShift: true, critical: true });
+  const [opts, setOpts] = useState({ workdays: true, autoShift: true, critical: true, cancelled: true });
   const [collapsed, setCollapsed] = useState({});
   const [drag, setDrag] = useState(null);
   const [editing, setEditing] = useState(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [assignFor, setAssignFor] = useState(null); // an employee with free time
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const scrollRef = useRef(null);
   const chartRef = useRef(null);
   const scrolledFor = useRef("");
   const now = useNow(true, 60000);
+  const [labelW, setLabelW] = useState(LABEL_W);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 639px)");
+    const apply = () => setLabelW(media.matches ? LABEL_W_PHONE : LABEL_W);
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, []);
 
   const load = useCallback(() => {
     api(`/api/work-projects/timeline?status=${status}`)
@@ -161,7 +177,9 @@ export default function ProjectsTimeline({ projects, status }) {
   const forecastStartOf = useMemo(() => Object.fromEntries((data?.projects || []).map((p) => [p.id, p.forecastStart])), [data]);
 
   const groups = useMemo(() => {
-    const visible = tasks.filter((x) => x.project && visibleIds.has(x.project.id)).map((x) => ({ ...x, span: taskSpan(x) }));
+    const visible = tasks
+      .filter((x) => x.project && visibleIds.has(x.project.id) && (opts.cancelled || x.status !== "cancelled"))
+      .map((x) => ({ ...x, span: taskSpan(x) }));
     const sortTasks = (list) => list.sort((a, b) => a.span.start - b.span.start);
     if (groupBy === "person") {
       const byPerson = {};
@@ -184,7 +202,7 @@ export default function ProjectsTimeline({ projects, status }) {
       const end = Math.max(start + HOUR, forecast, ...live.map((x) => heldSpan(x).end));
       return { id: project.id, kind: "project", project, span: { start, end }, tasks: list };
     });
-  }, [tasks, projects, visibleIds, groupBy, data, forecastOf]);
+  }, [tasks, projects, visibleIds, groupBy, data, forecastOf, opts.cancelled]);
 
   // Rows with their y position, and the visible date range.
   const layout = useMemo(() => {
@@ -276,6 +294,32 @@ export default function ProjectsTimeline({ projects, status }) {
     return [top, bottom];
   }, [scale, zoom, from, to, lang, cal]);
   const taskRows = useMemo(() => Object.fromEntries(rows.filter((r) => r.kind === "task").map((r) => [r.task.id, r])), [rows]);
+
+  // Employees' free time on the chart. By person: on their row. By project: on the row
+  // of their task that waits after the gap (else the one before it), where the empty
+  // stretch shows.
+  const freeBlocks = useMemo(() => {
+    const out = [];
+    const MIN = 60000;
+    for (const person of data?.freeTime || []) {
+      const mine = rows.filter((r) => r.kind === "task" && r.task.assignee?.id === person.id && r.task.status !== "cancelled");
+      const personRow = rows.find((r) => r.kind === "person" && r.group.person.id === person.id);
+      for (const gap of person.gaps) {
+        let row = personRow;
+        if (!row) {
+          const after = mine.filter((r) => r.task.span.start >= gap.end - MIN).sort((a, b) => a.task.span.start - b.task.span.start)[0];
+          const before = mine.filter((r) => r.task.span.end <= gap.start + MIN).sort((a, b) => b.task.span.end - a.task.span.end)[0];
+          row = after || before;
+        }
+        if (row) out.push({ key: `${person.id}-${gap.start}`, person, gap, row });
+      }
+    }
+    return out;
+  }, [data, rows]);
+
+  const scrollTo = (ms) => {
+    if (scrollRef.current) scrollRef.current.scrollLeft = Math.max(0, x(ms) - 160);
+  };
 
   const scrollToToday = useCallback(() => {
     if (scrollRef.current) scrollRef.current.scrollLeft = Math.max(0, x(Date.now()) - 160);
@@ -477,6 +521,9 @@ export default function ProjectsTimeline({ projects, status }) {
     }
   }
 
+  // Employees' requests to cancel project work, waiting for the GM / CEO.
+  const cancelRequests = tasks.filter((x) => x.cancelRequest?.status === "pending" && x.status !== "cancelled" && x.project && visibleIds.has(x.project.id));
+
   const allCollapsed = groups.length > 0 && groups.every((g) => collapsed[g.id]);
   const nowFmt = new Intl.DateTimeFormat(locale(lang), { weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", ...(cal?.tz ? { timeZone: cal.tz } : {}) });
   const hourLabel = (n) => t("erp.gantt.hours", { n: Math.round(n * 10) / 10 });
@@ -546,7 +593,34 @@ export default function ProjectsTimeline({ projects, status }) {
         <Toggle checked={opts.workdays} onChange={setOpt("workdays")} label={t("erp.gantt.workdays")} />
         {canSchedule && <Toggle checked={opts.autoShift} onChange={setOpt("autoShift")} label={t("erp.gantt.autoShift")} />}
         <Toggle checked={opts.critical} onChange={setOpt("critical")} label={t("erp.gantt.critical")} />
+        <Toggle checked={opts.cancelled} onChange={setOpt("cancelled")} label={t("erp.gantt.showCancelled")} />
       </div>
+
+      {canSchedule && cancelRequests.length > 0 && (
+        <div className="mb-3 rounded-xl border border-amber-400/40 bg-amber-500/[0.07] px-4 py-2.5">
+          <p className="flex items-center gap-2 text-sm font-semibold text-amber-100">
+            <Ban size={15} /> {t("erp.gantt.cancelRequests", { n: cancelRequests.length })}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {cancelRequests.map((task) => (
+              <button
+                key={task.id}
+                type="button"
+                onClick={() => setEditing(task)}
+                className="rounded-md border border-amber-400/30 bg-white/5 px-2 py-1 text-xs text-white/80 hover:border-amber-300 hover:text-white"
+                dir="auto"
+                title={task.cancelRequest.reason}
+              >
+                #{task.number} · {barTitle(task, lang)} · {task.cancelRequest.by?.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {canSchedule && data.freeTime?.length > 0 && (
+        <FreeTimePanel people={data.freeTime} now={now} cal={cal} lang={lang} t={t} onAssign={setAssignFor} onShow={scrollTo} />
+      )}
 
       <p className="mb-3 text-xs text-white/45">
         {t(canSchedule ? "erp.gantt.editHint" : "erp.gantt.readOnlyHint")}
@@ -559,10 +633,10 @@ export default function ProjectsTimeline({ projects, status }) {
       )}
 
       <div ref={scrollRef} dir="ltr" className={`relative max-h-[72vh] overflow-auto rounded-2xl border border-white/10 bg-white/[0.02] ${drag ? "select-none" : ""}`}>
-        <div style={{ width: LABEL_W + width }}>
+        <div style={{ width: labelW + width }}>
           {/* Header: time scale */}
           <div className="sticky top-0 z-20 flex border-b border-white/10 bg-brand-navy" style={{ height: HEADER_H }}>
-            <div className="sticky left-0 z-10 shrink-0 border-e border-white/10 bg-brand-navy" style={{ width: LABEL_W }} />
+            <div className="sticky left-0 z-10 shrink-0 border-e border-white/10 bg-brand-navy" style={{ width: labelW }} />
             <div className="relative" style={{ width }}>
               {topTicks.map((tick) => (
                 <div
@@ -591,7 +665,7 @@ export default function ProjectsTimeline({ projects, status }) {
 
           <div className="flex">
             {/* Y axis */}
-            <div className="sticky left-0 z-10 shrink-0 border-e border-white/10 bg-brand-navy" style={{ width: LABEL_W }}>
+            <div className="sticky left-0 z-10 shrink-0 border-e border-white/10 bg-brand-navy" style={{ width: labelW }}>
               {rows.map((row) =>
                 row.kind === "task" ? (
                   <div
@@ -605,7 +679,7 @@ export default function ProjectsTimeline({ projects, status }) {
                       #{row.task.number}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-white/80">{barTitle(row.task, lang)}</span>
-                    <span className="max-w-[80px] shrink-0 truncate text-white/40">
+                    <span className="hidden max-w-[80px] shrink-0 truncate text-white/40 sm:inline">
                       {groupBy === "person" ? row.task.project?.code || row.task.project?.name?.[lang] : row.task.assignee?.name}
                     </span>
                   </div>
@@ -682,6 +756,29 @@ export default function ProjectsTimeline({ projects, status }) {
                   })
                 )}
 
+              {/* Free time: nothing planned for the employee — a place to give them work. */}
+              {freeBlocks.map(({ key, person, gap, row }) => {
+                const left = x(gap.start);
+                const w = Math.max(6, x(gap.end) - left);
+                const h = hourLabel(gap.ms / HOUR);
+                return (
+                  <button
+                    key={`f${key}`}
+                    type="button"
+                    onClick={() => setAssignFor(person)}
+                    title={t("erp.gantt.freeHint", { name: person.name, from: nowFmt.format(gap.start), to: nowFmt.format(gap.end), h })}
+                    className="absolute z-[4] flex items-center justify-center overflow-hidden rounded-md border border-dashed border-emerald-400/70 bg-[repeating-linear-gradient(135deg,rgba(52,211,153,0.18)_0_6px,transparent_6px_12px)] text-[10px] font-semibold text-emerald-200 hover:border-emerald-300 hover:bg-emerald-500/20"
+                    style={{ left, width: w, top: row.y + 5, height: row.h - 10 }}
+                  >
+                    {w > 90 && (
+                      <span className="flex items-center gap-1 whitespace-nowrap rounded bg-brand-navy/70 px-1.5 py-px" dir="auto">
+                        <UserCheck size={11} /> {t("erp.gantt.freeBlock")} · {h}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+
               {rows.map((row) => {
                 if (row.kind === "project") {
                   const { project, span } = row.group;
@@ -723,7 +820,10 @@ export default function ProjectsTimeline({ projects, status }) {
                 const state = barState(task);
                 const onCritical = opts.critical && critical.has(task.id) && !FINISHED.includes(task.status);
                 const label = `#${task.number} · ${barTitle(task, lang)}`;
-                const badge = `${BAR_ICON[state]} ${t(`erp.plan.state.${state}`)}`;
+                const cancelAsked = task.cancelRequest?.status === "pending" && state !== "cancelled";
+                const badge = `${BAR_ICON[state]} ${t(`erp.plan.state.${state}`)}${cancelAsked ? ` · ⊘ ${t("erp.gantt.cancelRequested")}` : ""}${
+                  state === "cancelled" && task.cancelReason ? ` · ${task.cancelReason}` : ""
+                }`;
                 const top = row.y + (TASK_H - BAR_H) / 2;
                 return (
                   <div key={task.id} data-task-id={task.id} className="absolute" style={{ left, top, width: barW, height: BAR_H }}>
@@ -733,7 +833,9 @@ export default function ProjectsTimeline({ projects, status }) {
                       title={`${label} — ${badge}${canSchedule && !canEdit ? ` · ${t("erp.plan.locked")}` : ""}`}
                       className={`relative flex h-full items-center gap-1 overflow-hidden rounded-md border text-[11px] ${BAR_STYLE[state]} ${canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${
                         drag?.id === task.id ? "z-10 shadow-lg shadow-black/40" : ""
-                      } ${clashing ? "cursor-not-allowed opacity-70 ring-2 ring-red-500" : onCritical ? "ring-2 ring-rose-300" : ""}`}
+                      } ${clashing ? "cursor-not-allowed opacity-70 ring-2 ring-red-500" : onCritical ? "ring-2 ring-rose-300" : ""} ${
+                        cancelAsked ? "outline-dashed outline-2 outline-offset-1 outline-amber-300" : ""
+                      }`}
                     >
                       {canEdit && <span onPointerDown={(e) => beginDrag(e, task, "start")} className="absolute inset-y-0 left-0 z-[1] w-2 cursor-ew-resize hover:bg-white/30" />}
                       <span className="relative shrink-0 ps-1.5 text-[10px]">{BAR_ICON[state]}</span>
@@ -750,14 +852,14 @@ export default function ProjectsTimeline({ projects, status }) {
                         className="absolute -right-3 top-1/2 h-2.5 w-2.5 -translate-y-1/2 cursor-crosshair rounded-full border border-white/60 bg-brand-navy hover:scale-125 hover:bg-white/40"
                       />
                     )}
-                    {task.expectedEnd && new Date(task.expectedEnd).getTime() > span.end && (
+                    {task.expectedEnd && HOLDING_STATUSES.includes(task.status) && new Date(task.expectedEnd).getTime() > span.end && (
                       <span
                         className="absolute inset-y-1 left-full rounded-e-md border border-s-0 border-red-400/60 bg-[repeating-linear-gradient(135deg,rgba(248,113,113,0.55)_0_4px,transparent_4px_8px)]"
                         style={{ width: Math.max(4, x(new Date(task.expectedEnd).getTime()) - x(span.end)) }}
                         title={t("erp.gantt.overrun", { at: nowFmt.format(new Date(task.expectedEnd)) })}
                       />
                     )}
-                    {task.estimatedHours > 0 && !task.expectedEnd && (
+                    {task.estimatedHours > 0 && !(task.expectedEnd && HOLDING_STATUSES.includes(task.status)) && (
                       <span className="pointer-events-none absolute left-full top-1/2 ms-4 -translate-y-1/2 whitespace-nowrap text-[10px] text-white/40">{hourLabel(task.estimatedHours)}</span>
                     )}
                   </div>
@@ -795,14 +897,32 @@ export default function ProjectsTimeline({ projects, status }) {
         {groups.length > 0 && tasks.length === 0 && <p className="py-10 text-center text-sm text-white/40">{t("erp.gantt.noTasks")}</p>}
       </div>
 
-      <Legend t={t} />
+      <Legend t={t} free={canSchedule} />
+
+      <Modal open={Boolean(assignFor)} onClose={() => setAssignFor(null)} title={`${t("erp.gantt.freeAssign")} · ${assignFor?.name || ""}`} wide>
+        {assignFor && (
+          <AssignTask
+            person={assignFor}
+            onCancel={() => setAssignFor(null)}
+            onCreated={() => {
+              setAssignFor(null);
+              load();
+            }}
+          />
+        )}
+      </Modal>
 
       <Modal open={Boolean(editing)} onClose={() => setEditing(null)} title={t("erp.gantt.editTask")}>
         {editing && (
           <ScheduleForm
             task={editing}
             canEdit={editable(editing)}
+            canPlan={canSchedule}
             cal={cal}
+            onChanged={() => {
+              setEditing(null);
+              load();
+            }}
             onCancel={() => setEditing(null)}
             onSave={async (body) => (await save(editing, body)) && setEditing(null)}
           />
@@ -893,7 +1013,7 @@ function GroupLabel({ group, lang, t, collapsed, onToggle, load, today, cal, bas
 }
 
 // What the three bar colours mean.
-function Legend({ t }) {
+function Legend({ t, free }) {
   return (
     <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-xs text-white/60">
       {BAR_STATES.map((state) => (
@@ -926,14 +1046,80 @@ function Legend({ t }) {
         <span className="h-3 w-6 rounded-sm border border-red-400/60 bg-[repeating-linear-gradient(135deg,rgba(248,113,113,0.55)_0_4px,transparent_4px_8px)]" />
         {t("erp.gantt.overrunLegend")}
       </span>
+      {free && (
+        <span className="flex items-center gap-2">
+          <span className="h-3 w-6 rounded-sm border border-dashed border-emerald-400/70 bg-[repeating-linear-gradient(135deg,rgba(52,211,153,0.3)_0_4px,transparent_4px_8px)]" />
+          {t("erp.gantt.freeLegend")}
+        </span>
+      )}
     </div>
   );
+}
+
+// Who has free time in the coming two weeks (GM / CEO): free now first, then the most
+// free. Each gap jumps the chart to it; "Assign a task" opens a new task for them.
+function FreeTimePanel({ people, now, cal, lang, t, onAssign, onShow }) {
+  const [open, setOpen] = useState(true);
+  const fmt = new Intl.DateTimeFormat(locale(lang), { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", ...(cal?.tz ? { timeZone: cal.tz } : {}) });
+  const hours = (ms) => t("erp.gantt.hours", { n: Math.round((ms / HOUR) * 10) / 10 });
+  const freeNow = (p) => p.gaps[0].start <= now + 15 * 60000;
+  const list = [...people].sort((a, b) => freeNow(b) - freeNow(a) || b.freeMs - a.freeMs);
+  return (
+    <div className="mb-3 rounded-xl border border-emerald-400/30 bg-emerald-500/[0.06]">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 px-4 py-2.5 text-start text-sm">
+        <UserCheck size={16} className="shrink-0 text-emerald-300" />
+        <span className="font-semibold text-emerald-100">{t("erp.gantt.freeTitle", { n: people.length })}</span>
+        <span className="hidden text-xs text-white/45 md:inline">{t("erp.gantt.freeSub")}</span>
+        <span className="ms-auto flex shrink-0 items-center gap-1 text-xs text-white/50">
+          {t(open ? "erp.gantt.freeHide" : "erp.gantt.freeShow")}
+          <ChevronDown size={14} className={`transition-transform ${open ? "" : "-rotate-90"}`} />
+        </span>
+      </button>
+      {open && (
+        <ul className="divide-y divide-white/5 border-t border-white/5">
+          {list.map((p) => (
+            <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2">
+              <span className="flex min-w-[140px] items-center gap-2 text-sm font-medium" dir="auto">
+                <Avatar name={p.name} src={p.avatarUrl} size={24} />
+                {p.name}
+              </span>
+              {freeNow(p) && <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-bold text-brand-navy">{t("erp.gantt.freeNow")}</span>}
+              <span className="text-xs font-medium text-emerald-200">{hours(p.freeMs)}</span>
+              <span className="flex flex-wrap gap-1.5">
+                {p.gaps.slice(0, 3).map((g) => (
+                  <button
+                    key={g.start}
+                    type="button"
+                    onClick={() => onShow(g.start)}
+                    className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-white/70 hover:border-emerald-400/50 hover:text-white"
+                    dir="auto"
+                  >
+                    {fmt.format(g.start)} → {fmt.format(g.end)} · {hours(g.ms)}
+                  </button>
+                ))}
+                {p.gaps.length > 3 && <span className="px-1 text-[11px] text-white/40">{t("erp.gantt.freeMore", { n: p.gaps.length - 3 })}</span>}
+              </span>
+              <Button variant="ghost" className="ms-auto" onClick={() => onAssign(p)}>
+                <Plus size={14} /> {t("erp.gantt.freeAssign")}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// A new task for an employee with free time; the server puts it in their first free slot.
+function AssignTask({ person, onCreated, onCancel }) {
+  const lookups = useTaskLookups();
+  return <TaskForm lookups={lookups} preset={{ assigneeId: person.id }} onCreated={onCreated} onCancel={onCancel} />;
 }
 
 // Edit a task from the chart. Start, due time and working hours move together (the
 // hours are the working time between them), and a new employee without new times puts
 // the task in their first free time. Only what changed is sent.
-function ScheduleForm({ task, canEdit, cal, onSave, onCancel }) {
+function ScheduleForm({ task, canEdit, canPlan, cal, onSave, onCancel, onChanged }) {
   const { t, lang } = useLanguage();
   const lookups = useTaskLookups();
   const span = taskSpan(task);
@@ -1014,6 +1200,8 @@ function ScheduleForm({ task, canEdit, cal, onSave, onCancel }) {
         />
         {canEdit && task.project && <DependencyPicker value={form.dependsOn} onChange={set("dependsOn")} projectId={task.project.id} excludeId={task.id} />}
       </fieldset>
+      {/* Cancel requests and cancelling / restoring, for the GM / CEO. */}
+      {canPlan && <TaskCancel task={task} who={{ canPlan: true }} onDone={onChanged} />}
       <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
         <Link href={`/dashboard/tasks?task=${task.id}`} className="inline-flex items-center gap-1.5 text-sm text-white/60 hover:text-white">
           <ExternalLink size={14} /> {t("erp.gantt.openTask")}

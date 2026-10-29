@@ -1,4 +1,4 @@
-import { gapFrom, makeCalendar, untangle } from "../lib/gantt.js";
+import { barState, cancelNeedsApproval, canUndoStart, freeGaps, gapFrom, heldSpan, makeCalendar, taskSpan, untangle, UNDO_START_MS } from "../lib/gantt.js";
 
 let fails = 0;
 const ok = (name, c, x = "") => { console.log(`${c ? "PASS" : "FAIL"} ${name} ${c ? "" : x}`); if (!c) fails++; };
@@ -18,6 +18,37 @@ ok("new work fills the first free gap that fits", same(gap, span(0, 11, 14)), sh
 // A 4h task doesn't fit that gap: it goes after the later work, into the next day.
 const gap4 = gapFrom(at(0, 9), 4 * H, [span(0, 9, 11), span(0, 14, 17)], cal);
 ok("work that doesn't fit a gap goes after the busy time", same(gap4, span(1, 9, 13)), show(gap4));
+
+// Free time: busy 9–11 and day 1 13–17, looking at days 0–1. 11:00 day 0 to 13:00 day 1
+// is one gap across the night (6h + 4h); a 1h gap is left out with a 2h minimum.
+let free = freeGaps([span(0, 9, 11), span(1, 13, 17)], at(0, 9), at(2, 0), cal, 2 * H);
+ok("free time runs across the night as one gap", free.length === 1 && same(free[0], { start: at(0, 11), end: at(1, 13) }) && free[0].ms === 10 * H, JSON.stringify(free));
+free = freeGaps([span(0, 9, 11), span(0, 12, 17)], at(0, 9), at(1, 0), cal, 2 * H);
+ok("short gaps aren't free time", free.length === 0, JSON.stringify(free));
+
+// Cancelled work stays on the chart: not started → its plan; started → until it was cancelled.
+const planned = { status: "cancelled", plannedStart: new Date(at(0, 9)), dueAt: new Date(at(0, 13)), cancelledAt: new Date(at(0, 10)) };
+ok("a cancelled task never started keeps its planned bar", same(taskSpan(planned), span(0, 9, 13)), show(taskSpan(planned)));
+const spent = { ...planned, startedAt: new Date(at(0, 9)), cancelledAt: new Date(at(0, 11)) };
+ok("a cancelled started task shows the time spent", same(taskSpan(spent), span(0, 9, 11)), show(taskSpan(spent)));
+ok("cancelled tasks get their own bar state", barState(planned) === "cancelled");
+// Undo start: only shortly after pressing it.
+const started = { status: "in_progress", startedAt: new Date(at(0, 9)) };
+ok("a start can be undone right after", canUndoStart(started, at(0, 9) + UNDO_START_MS - 1000));
+ok("a start can't be undone later", !canUndoStart(started, at(0, 9) + UNDO_START_MS + 1000));
+ok("a submitted task can't undo its start", !canUndoStart({ ...started, status: "submitted" }, at(0, 9) + 1000));
+// Project work needs the GM / CEO to cancel; own meetings and personal tasks don't.
+ok("project work needs approval to cancel", cancelNeedsApproval({ kind: "task", project: "p" }));
+ok("a meeting is cancelled straight away", !cancelNeedsApproval({ kind: "meeting", project: "p" }));
+ok("a personal task is cancelled straight away", !cancelNeedsApproval({ kind: "personal", project: null }));
+
+// Rejected work: the bar runs from the start to the hand-in, even if it had run late
+// (an old expected finish no longer stretches it); running late work still stretches.
+const rejected = { status: "rejected", plannedStart: new Date(at(0, 9)), dueAt: new Date(at(0, 11)), startedAt: new Date(at(0, 9)), submittedAt: new Date(at(0, 12)), expectedEnd: new Date(at(0, 14)) };
+ok("a rejected bar ends at its hand-in", same(heldSpan(rejected), span(0, 9, 12)), show(heldSpan(rejected)));
+ok("rejected work has its own bar state", barState(rejected) === "rejected");
+const late = { ...rejected, status: "in_progress", submittedAt: null };
+ok("work still running late holds until its expected finish", same(heldSpan(late), span(0, 9, 14)), show(heldSpan(late)));
 
 // Started work running 9–12 pushes a waiting task planned 10–12.
 let out = untangle([span(0, 9, 12)], [{ id: "a", span: span(0, 10, 12), priority: "normal" }], cal);

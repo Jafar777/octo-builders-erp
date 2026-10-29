@@ -7,11 +7,13 @@ import { api, errorText } from "@/lib/clientApi";
 import { Button, ErrorText, Input, Label, Select } from "@/components/erp/ui/fields";
 import { canRouteStages } from "@/components/erp/projects/StageRouting";
 import { Timer } from "lucide-react";
+import { ReviewBoxes } from "@/components/erp/projects/ProjectForm";
 
 const KINDS = ["task", "meeting", "personal"];
 
 // Create a task. `preset` fixes the project / stage when opened from a board
-// cell, or `preset.parent` (a task) for a sub-task. A project task gets the working
+// cell, `preset.assigneeId` the employee (free time on the Gantt), or `preset.parent`
+// (a task) for a sub-task. A project task gets the working
 // hours entered here and is scheduled in the employee's queue automatically. Only
 // the GM / CEO may set a due date by hand.
 export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) {
@@ -29,11 +31,12 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
     stage: preset.stage || "",
     type: "",
     title: "",
-    assigneeId: user?.id || "",
+    assigneeId: preset.assigneeId || user?.id || "",
     dueAt: "",
     hours: "",
     priority: "normal",
     description: "",
+    review: { manager: true, gm: false, customer: false }, // who reviews project work (GM / CEO choose)
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -47,6 +50,10 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
   // An employee's sub-task is a step inside its task's time: no hours of its own.
   const needsHours = form.kind === "task" && Boolean(project || parent?.project) && (isScheduler || !parent);
   const missingHours = needsHours && !(Number(form.hours) >= 0.5) && !(isScheduler && form.dueAt);
+  // Project work: the GM / CEO pick its reviewers (manager, GM / CEO, the project's customer).
+  const picksReview = isScheduler && form.kind === "task" && Boolean(project) && !parent;
+  const review = { ...form.review, customer: Boolean(project?.customer) && form.review.customer };
+  const missingReview = picksReview && !review.manager && !review.gm && !review.customer;
 
   async function save() {
     setSaving(true);
@@ -62,6 +69,8 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
         body.stage = "";
       }
       if (parent) body.parentTaskId = parent.id;
+      if (picksReview) body.review = review;
+      else delete body.review;
       const { task } = await api("/api/tasks", { method: "POST", body });
       onCreated(task);
     } catch (err) {
@@ -180,6 +189,13 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
         </p>
       )}
 
+      {picksReview && (
+        <div className="space-y-1">
+          <ReviewBoxes value={review} onChange={set("review")} hasCustomer={Boolean(project?.customer)} t={t} />
+          {missingReview && <p className="text-[11px] text-red-300">{t("errors.review_required")}</p>}
+        </div>
+      )}
+
       <div>
         <Label>{`${t("erp.tasks.description")} ${t("dashboard.optional")}`}</Label>
         <textarea
@@ -195,7 +211,7 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
         <Button variant="ghost" onClick={onCancel}>
           {t("common.cancel")}
         </Button>
-        <Button onClick={save} disabled={saving || missingHours}>
+        <Button onClick={save} disabled={saving || missingHours || missingReview}>
           {t("erp.tasks.create")}
         </Button>
       </div>

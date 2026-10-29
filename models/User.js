@@ -73,6 +73,9 @@ const UserSchema = new mongoose.Schema(
     },
     annualLeaveDays: { type: Number, default: 21 },
     kpiExcluded: { type: Boolean, default: false },
+    // Department heads' hybrid KPI: how much of it is management (0–100) versus their own
+    // design work; null = the company default (Settings → managerKpi.managementShare).
+    managementShare: { type: Number, min: 0, max: 100, default: null },
     lastLoginAt: { type: Date },
     lastSeenAt: { type: Date },
   },

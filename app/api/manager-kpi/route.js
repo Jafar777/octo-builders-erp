@@ -11,9 +11,9 @@ import { getSettings } from "@/lib/settings";
 import ManagerRating from "@/models/ManagerRating";
 import User from "@/models/User";
 
-// ?month=YYYY-MM → department managers' KPI: the system part (attendance + tasks),
-// the GM / CEO rating, and the blended score. GM / CEO see everyone; a department
-// manager sees only themselves.
+// ?month=YYYY-MM → department managers' hybrid KPI (lib/kpi/hybrid): management (their
+// team's results + the GM / CEO rating) × their management share + execution (their own
+// attendance and tasks). GM / CEO see everyone; a department manager sees only themselves.
 export async function GET(request) {
   const user = await requireStaff();
   const canRate = canRateManagers(user);
@@ -22,7 +22,7 @@ export async function GET(request) {
   const settings = await getSettings();
   const param = new URL(request.url).searchParams.get("month");
   const month = MONTH_OK(param) ? param : todayIn(settings.hr.timezone).slice(0, 7);
-  const { weight, criteria } = settings.managerKpi;
+  const { weight, criteria, managementShare, ratingWeight, teamWeights } = settings.managerKpi;
 
   const roles = await managerRoleKeys();
   const staff = await hrStaff({ status: "active" });
@@ -40,6 +40,9 @@ export async function GET(request) {
     canRate,
     weight,
     criteria,
+    managementShare,
+    ratingWeight,
+    teamWeights,
     managers: managers.map((m) => {
       const row = data.rows.find((r) => r.staff.id === m.id);
       const s = row?.attendance?.summary;
@@ -49,11 +52,14 @@ export async function GET(request) {
         name: m.name,
         avatarUrl: m.avatarUrl,
         department: m.department,
+        // Their own management share (null = the company default).
+        share: m.managementShare ?? null,
         kpi: row?.kpi
           ? {
               score: row.kpi.score,
               systemScore: row.kpi.systemScore ?? row.kpi.score,
               manualScore: row.kpi.manualScore ?? null,
+              hybrid: row.kpi.hybrid ?? null,
               grade: row.kpi.grade,
               rank: row.kpi.rank,
               of: row.kpi.of,
@@ -75,6 +81,21 @@ export async function GET(request) {
       };
     }),
   });
+}
+
+// GM / CEO: a department head's management share. { userId, share: 0–100 | null (default) }
+export async function PATCH(request) {
+  const user = await requireStaff();
+  if (!user || !canRateManagers(user)) return forbidden();
+  const body = await readJson(request);
+  if (!isObjectId(body.userId)) return fail("invalid_request");
+  const share = body.share === null || body.share === "" ? null : Math.round(Number(body.share));
+  if (share !== null && !(share >= 0 && share <= 100)) return fail("invalid_weight");
+  const target = await User.findById(body.userId, { role: 1 }).lean();
+  if (!target || !(await managerRoleKeys()).includes(target.role)) return fail("not_a_manager");
+  await User.updateOne({ _id: body.userId }, { $set: { managementShare: share } });
+  await audit(user, "kpi.manager_share", { entityType: "user", entityId: body.userId, summary: share === null ? "default" : `${share}%` });
+  return NextResponse.json({ ok: true });
 }
 
 // GM / CEO: { month, userId, scores: { criterionKey: 1–5 }, note }

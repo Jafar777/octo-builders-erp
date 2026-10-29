@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 
 // Everything the task screens need to show names: task types, rating tags,
-// people, departments and projects.
-export function useTaskLookups() {
+// people, departments and projects. `enabled: false` skips loading (customers, who
+// can't read them).
+export function useTaskLookups({ enabled = true } = {}) {
   const { lang } = useLanguage();
   const [settings, setSettings] = useState({ taskTypes: [], ratingTags: [] });
   const [people, setPeople] = useState([]);
@@ -14,14 +15,16 @@ export function useTaskLookups() {
   const [projectsLoaded, setProjectsLoaded] = useState(false);
 
   const loadProjects = useCallback(() => {
+    if (!enabled) return;
     fetch("/api/work-projects", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => setProjects(d.projects || []))
       .catch(() => {})
       .finally(() => setProjectsLoaded(true));
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     fetch("/api/settings", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => d.settings && setSettings(d.settings.tasks))
@@ -34,7 +37,7 @@ export function useTaskLookups() {
       })
       .catch(() => {});
     loadProjects();
-  }, [loadProjects]);
+  }, [loadProjects, enabled]);
 
   return useMemo(() => {
     const typeName = (key) => settings.taskTypes.find((t) => t.key === key)?.name?.[lang] || key;

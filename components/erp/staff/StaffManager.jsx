@@ -62,14 +62,14 @@ export default function StaffManager({ initialStaff, roles, org, canManage, canF
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return staff.filter((p) => {
-      if (filter === "pending" && p.role !== "user") return false;
+      if (filter === "pending" && (p.role !== "user" || p.customer)) return false;
       if (filter === "active" && (p.status !== "active" || p.role === "user")) return false;
       if (filter === "inactive" && p.status !== "inactive") return false;
       return !q || p.name.toLowerCase().includes(q) || p.email.includes(q);
     });
   }, [staff, query, filter]);
 
-  const pendingCount = staff.filter((p) => p.role === "user").length;
+  const pendingCount = staff.filter((p) => p.role === "user" && !p.customer).length;
 
   return (
     <div>
@@ -142,7 +142,7 @@ export default function StaffManager({ initialStaff, roles, org, canManage, canF
                       p.role === "user" ? "bg-brand-orange/15 text-brand-orange" : "bg-white/10 text-white/80"
                     }`}
                   >
-                    {p.role === "user" ? t("erp.staff.pending") : roleName(p.role)}
+                    {p.role === "user" ? t(p.customer ? "erp.staff.customer" : "erp.staff.pending") : roleName(p.role)}
                   </span>
                   {p.status === "inactive" && (
                     <span className="ms-2 rounded-full bg-red-500/15 px-2.5 py-1 text-xs text-red-400">{t("erp.staff.inactive")}</span>

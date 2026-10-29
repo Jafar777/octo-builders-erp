@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
-import { applyFlow, applyStageRouting, cleanProjectFields, cleanStages } from "@/lib/projectPayload";
+import { applyFlow, applyStageRouting, cleanCustomer, cleanProjectFields, cleanStages } from "@/lib/projectPayload";
 import { buildCells, checkStageHandoffs, dueRiskOf, officeTz, projectAccess, projectChannel, serializeProject } from "@/lib/projects";
 import { projectScore } from "@/lib/projectHealth";
 import { loadFinance } from "@/lib/finance";
@@ -100,7 +100,12 @@ export async function GET(request, { params }) {
     const finance = await loadFinance(new Date().getFullYear());
     cost = finance.projects.find((fp) => fp.id === project._id.toString())?.cost ?? null;
   }
-  const kpi = projectScore(tasks, { budget: project.budget || 0, cost });
+  const kpi = projectScore(tasks, {
+    budget: project.budget || 0,
+    cost,
+    baseline: (project.baselines || []).find((b) => b.n === 1) || null,
+    end: project.forecastEnd || (project.status === "finished" ? project.finishedAt : null),
+  });
 
   return NextResponse.json({ project: serializeProject(project.toObject(), { ...board, kpi, delivery: await delivery(project), dueRisk: dueRiskOf(project, await officeTz()) }), access });
 }
@@ -115,6 +120,15 @@ export async function PATCH(request, { params }) {
   const body = await readJson(request);
   const { fields, error } = cleanProjectFields(body);
   if (error) return fail(error);
+  // The customer (a signed-up account with no role) shows as the project's client.
+  // Checked only when it changes (an existing customer may since have been given a role).
+  const before = project.customer ? project.customer.toString() : null;
+  if (body.customer !== undefined && (body.customer || null) !== before) {
+    const customer = await cleanCustomer(body.customer);
+    if (customer.error) return fail(customer.error);
+    fields.customer = customer.customer;
+    fields.client = customer.customer ? customer.name : "";
+  }
 
   // Stages that already have tasks can't be removed.
   const used = await Task.find({ project: project._id }, { stage: 1 }).lean();

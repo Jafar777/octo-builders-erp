@@ -10,7 +10,10 @@ const WorkProjectSchema = new mongoose.Schema(
   {
     code: { type: String, default: "", trim: true },
     name: BilingualText,
-    client: { type: String, default: "" },
+    client: { type: String, default: "" }, // the customer's name as shown (older projects: free text)
+    // The customer's own account (someone who signed up, with no role): they follow the
+    // project's progress and review the tasks marked for them.
+    customer: { type: ObjectId, ref: "User", default: null },
     department: { type: ObjectId, ref: "Department", required: true },
     branch: { type: ObjectId, ref: "Branch", default: null },
     manager: { type: ObjectId, ref: "User", default: null },
@@ -106,10 +109,13 @@ const WorkProjectSchema = new mongoose.Schema(
     // Last risk level seen by the daily job, to notify when it gets worse.
     riskLevel: { type: String, default: "" },
     createdBy: { type: ObjectId, ref: "User" },
+    // The new-project intake form it was created from (models/ProjectIntake).
+    intake: { type: ObjectId, ref: "ProjectIntake", default: null },
   },
   { timestamps: true }
 );
 
 WorkProjectSchema.index({ department: 1, status: 1 });
+WorkProjectSchema.index({ customer: 1 });
 
 export default mongoose.models.WorkProject || mongoose.model("WorkProject", WorkProjectSchema);

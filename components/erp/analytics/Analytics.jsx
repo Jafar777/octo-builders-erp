@@ -46,6 +46,7 @@ const PROJECT_COLS = [
   { key: "project", value: (p, lang) => p.name?.[lang] || "" },
   { key: "score", value: (p) => p.kpi?.score },
   { key: "delivery", value: (p) => p.kpi?.delivery },
+  { key: "schedule", value: (p) => p.kpi?.schedule },
   { key: "quality", value: (p) => p.kpi?.quality },
   { key: "cost", value: (p) => p.kpi?.cost },
   { key: "risk", value: (p) => p.score },
@@ -57,7 +58,7 @@ const PROJECT_COLS = [
   { key: "hours", value: (p) => p.hoursWorked },
   { key: "team", value: (p) => p.participants },
 ];
-const HOW = ["score", "delivery", "quality", "cost", "risk", "progress", "counted"];
+const HOW = ["score", "delivery", "schedule", "quality", "cost", "risk", "progress", "counted"];
 
 function KpiCell({ value }) {
   return <span className={`tabular-nums ${kpiTone(value)}`}>{pct(value)}</span>;
@@ -215,6 +216,9 @@ export default function Analytics() {
                     </td>
                     <td className="px-2 py-2.5">
                       <KpiCell value={p.kpi?.delivery} />
+                    </td>
+                    <td className="px-2 py-2.5">
+                      <KpiCell value={p.kpi?.schedule} />
                     </td>
                     <td className="px-2 py-2.5">
                       <KpiCell value={p.kpi?.quality} />

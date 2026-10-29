@@ -9,7 +9,11 @@ import { Button, ErrorText, Input, Select } from "@/components/erp/ui/fields";
 import { money } from "@/components/erp/hr/hrUi";
 import { SkeletonList } from "@/components/erp/ui/Loading";
 
-const today = () => new Date().toISOString().slice(0, 10);
+// Today on this device's clock (not UTC: after midnight here, UTC can still be yesterday).
+const today = () => {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+};
 
 function MoneyFields({ form, setForm, currencies, prefix = "" }) {
   const { t, lang } = useLanguage();
