@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/currentUser";
 import { forbidden } from "@/lib/apiUtils";
-import { makeCalendar } from "@/lib/gantt";
+import { HOLDING_STATUSES, makeCalendar } from "@/lib/gantt";
 import { freeTime, serializeMilestone } from "@/lib/ganttServer";
 import { markOverrunsSoon } from "@/lib/projectDelay";
 import { pickName, viewerLang } from "@/lib/personName";
@@ -39,6 +39,18 @@ export async function GET(request) {
     .lean();
 
   const assigneeIds = [...new Set(tasks.map((t) => idStr(t.assignee)))];
+  // The same employees' other work that isn't on this chart (tasks without a project,
+  // meetings, tasks of projects in another status): it still takes their time, so the
+  // chart shows it and a bar can't be dropped on it.
+  const busy = await Task.find({
+    assignee: { $in: assigneeIds.filter(Boolean) },
+    status: { $in: HOLDING_STATUSES },
+    plannedStart: { $ne: null },
+    dueAt: { $ne: null },
+    _id: { $nin: tasks.map((t) => t._id) },
+  })
+    .limit(3000)
+    .lean();
   const people = await User.find({ _id: { $in: assigneeIds } }, { name: 1, nameAr: 1, email: 1, avatarUrl: 1, workSchedule: 1 }).lean();
   const lang = await viewerLang();
   const calendar = makeCalendar(settings);
@@ -46,6 +58,7 @@ export async function GET(request) {
 
   return NextResponse.json({
     tasks: await enrichTasks(tasks),
+    busy: await enrichTasks(busy),
     calendar,
     people: people.map((p) => ({
       id: p._id.toString(),

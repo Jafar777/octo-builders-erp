@@ -143,6 +143,9 @@ export default function ProjectsTimeline({ projects, status }) {
   }, [load]);
 
   const tasks = useMemo(() => data?.tasks || [], [data]);
+  // Everything that takes the employees' time: the chart's tasks and their other work
+  // that isn't on it (no project, meetings, projects in another status).
+  const allWork = useMemo(() => [...tasks, ...(data?.busy || [])], [tasks, data]);
   const cal = data?.calendar;
   const canSchedule = Boolean(data?.canSchedule);
   const useCal = opts.workdays && cal;
@@ -317,6 +320,31 @@ export default function ProjectsTimeline({ projects, status }) {
     return out;
   }, [data, rows]);
 
+  // The employees' work that has no bar on the chart (another project, no project, a
+  // meeting, a collapsed group): it still takes their time, so it shows hatched on their
+  // rows — a bar can't be dropped there.
+  const busyBlocks = useMemo(() => {
+    const shown = new Set(rows.filter((r) => r.kind === "task").map((r) => r.task.id));
+    const hidden = allWork.filter((o) => o.assignee && !shown.has(o.id) && takesTime(o));
+    const out = [];
+    if (!hidden.length) return out;
+    for (const row of rows) {
+      const who = row.kind === "task" ? row.task.assignee?.id : row.kind === "person" ? row.group.person.id : null;
+      if (!who) continue;
+      for (const o of hidden) if (o.assignee.id === who) out.push({ key: `${row.y}-${o.id}`, row, task: o, span: heldSpan(o) });
+    }
+    return out;
+  }, [rows, allWork]);
+
+  // "The employee has task #n (title) at that time".
+  const overlapText = useCallback(
+    (n) => {
+      const o = allWork.find((w) => w.number === n);
+      return t("erp.gantt.overlap", { n, title: o ? barTitle(o, lang) : "—" });
+    },
+    [allWork, t, lang]
+  );
+
   const scrollTo = (ms) => {
     if (scrollRef.current) scrollRef.current.scrollLeft = Math.max(0, x(ms) - 160);
   };
@@ -354,11 +382,11 @@ export default function ProjectsTimeline({ projects, status }) {
         return true;
       } catch (err) {
         setTasks(() => before);
-        setError(errorText(t, err));
+        setError(err.message === "schedule_overlap" && err.data?.number ? overlapText(err.data.number) : errorText(t, err));
         return false;
       }
     },
-    [data, opts.autoShift, mergeTasks, setTasks, t, load]
+    [data, opts.autoShift, mergeTasks, setTasks, t, load, overlapText]
   );
 
   const editable = (task) => canSchedule && canMoveTask(task);
@@ -392,7 +420,7 @@ export default function ProjectsTimeline({ projects, status }) {
   // The employee's other task a bar at `span` would sit on top of, or null.
   const clashFor = (task, span) => {
     if (!task.assignee || task.kind === "meeting") return null;
-    const others = data.tasks.filter((o) => o.id !== task.id && o.assignee?.id === task.assignee.id && takesTime(o));
+    const others = allWork.filter((o) => o.id !== task.id && o.assignee?.id === task.assignee.id && takesTime(o));
     return overlapping(span, others);
   };
 
@@ -440,7 +468,7 @@ export default function ProjectsTimeline({ projects, status }) {
       const clash = clashFor(task, span);
       if (clash) {
         setNotice("");
-        setError(t("erp.gantt.overlap", { n: clash.number }));
+        setError(overlapText(clash.number));
         return;
       }
       save(task, { plannedStart: new Date(span.start).toISOString(), dueAt: new Date(span.end).toISOString() });
@@ -776,6 +804,27 @@ export default function ProjectsTimeline({ projects, status }) {
                       </span>
                     )}
                   </button>
+                );
+              })}
+
+              {/* The employee's other work that has no bar here: their time is taken. */}
+              {busyBlocks.map(({ key, row, task: o, span }) => {
+                const left = x(span.start);
+                const w = Math.max(4, x(span.end) - left);
+                const where = o.project ? o.project.code || o.project.name?.[lang] : "";
+                return (
+                  <div
+                    key={`b${key}`}
+                    title={`${t("erp.gantt.busyBlock")} · #${o.number} · ${barTitle(o, lang)}${where ? ` · ${where}` : ""} · ${nowFmt.format(span.start)} → ${nowFmt.format(span.end)}`}
+                    className="absolute z-[3] flex items-center overflow-hidden rounded-md border border-dashed border-slate-300/50 bg-[repeating-linear-gradient(135deg,rgba(148,163,184,0.22)_0_6px,transparent_6px_12px)] text-[10px] font-semibold text-slate-200"
+                    style={{ left, width: w, top: row.y + 5, height: row.h - 10 }}
+                  >
+                    {w > 60 && (
+                      <span className="truncate whitespace-nowrap px-1.5" dir="auto">
+                        #{o.number} · {t("erp.gantt.busyBlock")}
+                      </span>
+                    )}
+                  </div>
                 );
               })}
 
