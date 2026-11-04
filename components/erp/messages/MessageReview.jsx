@@ -10,6 +10,7 @@ import { ErrorText, Select } from "@/components/erp/ui/fields";
 import ChatPane from "@/components/erp/messages/ChatPane";
 import { useConversationLabel, useDirectory } from "@/components/erp/messages/useDirectory";
 import { SkeletonList } from "@/components/erp/ui/Loading";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
 // Read-only access for management to conversations inside their scope: the CEO
 // everyone's, a department manager their departments' (`departments`: the people list is
@@ -55,7 +56,7 @@ export default function MessageReview({ meId, departments = null, switcher = nul
       <aside className={`flex w-full shrink-0 flex-col border-e border-white/10 md:w-96 ${active ? "hidden md:flex" : "flex"}`}>
         {switcher}
         <div className="space-y-3 border-b border-white/10 p-3">
-          <p className="text-xs text-white/45">{t(departments ? "erp.messages.reviewScopeDept" : "erp.messages.reviewScopeAll")}</p>
+          <p className="text-xs text-white/60">{t(departments ? "erp.messages.reviewScopeDept" : "erp.messages.reviewScopeAll")}</p>
           <Select
             value={person}
             onChange={(v) => {
@@ -86,7 +87,7 @@ export default function MessageReview({ meId, departments = null, switcher = nul
                 )}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{label.name}</span>
-                  <span className="block truncate text-xs text-white/40">
+                  <span className="block truncate text-xs text-white/60">
                     <bdi>{c.lastMessage?.text}</bdi> · {formatRelative(c.lastMessage?.at, lang)}
                   </span>
                 </span>
@@ -94,7 +95,7 @@ export default function MessageReview({ meId, departments = null, switcher = nul
             );
           })}
           {!loaded && <SkeletonList rows={6} className="p-3" />}
-          {loaded && conversations.length === 0 && <p className="p-6 text-center text-sm text-white/40">{t("erp.messages.empty")}</p>}
+          {loaded && conversations.length === 0 && <EmptyState compact text={t("erp.messages.empty")} />}
         </div>
       </aside>
 
@@ -110,7 +111,7 @@ export default function MessageReview({ meId, departments = null, switcher = nul
             onBack={() => setActiveId(null)}
           />
         ) : (
-          <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-white/40">
+          <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-white/60">
             {t("erp.messages.reviewPick")}
           </div>
         )}

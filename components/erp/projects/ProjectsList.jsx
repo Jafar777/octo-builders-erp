@@ -16,6 +16,7 @@ import ProjectsTimeline from "@/components/erp/projects/ProjectsTimeline";
 import ProjectsSummary from "@/components/erp/projects/ProjectsSummary";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { SkeletonList } from "@/components/erp/ui/Loading";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
 const STATUSES = ["active", "on_hold", "finished", "archived"];
 
@@ -106,7 +107,12 @@ export default function ProjectsList() {
         )}
       </div>
 
-      {view === "timeline" && lookups.projectsLoaded && <ProjectsTimeline projects={visible} status={status} />}
+      {view === "timeline" && lookups.projectsLoaded && (
+        // keep-dark: the Gantt looks the same in the light theme.
+        <div className="keep-dark">
+          <ProjectsTimeline projects={visible} status={status} />
+        </div>
+      )}
 
       <div className={`grid gap-4 md:grid-cols-2 xl:grid-cols-3 ${view === "cards" ? "" : "hidden"}`}>
         {visible.map((p) => {
@@ -121,7 +127,7 @@ export default function ProjectsList() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{p.name?.[lang]}</p>
-                  <p className="mt-0.5 flex items-center gap-2 text-xs text-white/45">
+                  <p className="mt-0.5 flex items-center gap-2 text-xs text-white/60">
                     {dep && <span className="h-2 w-2 rounded-full" style={{ background: dep.color }} />}
                     {[p.code, dep?.name?.[lang], p.client].filter(Boolean).join(" · ")}
                   </p>
@@ -160,7 +166,7 @@ export default function ProjectsList() {
         })}
       </div>
       {!lookups.projectsLoaded && <SkeletonList rows={5} />}
-      {lookups.projectsLoaded && visible.length === 0 && <p className="py-12 text-center text-white/40">{t("erp.projects.none")}</p>}
+      {lookups.projectsLoaded && visible.length === 0 && <EmptyState compact text={t("erp.projects.none")} />}
 
       <ProjectsSummary />
 

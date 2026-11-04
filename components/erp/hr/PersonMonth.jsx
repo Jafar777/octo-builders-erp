@@ -63,7 +63,7 @@ function DayEditor({ day, userId, onSaved, onClose }) {
           {t("common.add")}
         </Button>
       </div>
-      <p className="text-xs text-white/40">{t("erp.hr.punchHint")}</p>
+      <p className="text-xs text-white/60">{t("erp.hr.punchHint")}</p>
       <ErrorText>{error}</ErrorText>
       <div className="flex justify-end">
         <Button variant="ghost" onClick={onClose}>
@@ -112,7 +112,7 @@ function ReceivedPay({ payroll, received, canRecord, userId, month, onSaved }) {
           </span>
         </div>
       )}
-      {received?.note && <p className="text-xs text-white/45" dir="auto">“{received.note}”</p>}
+      {received?.note && <p className="text-xs text-white/60" dir="auto">“{received.note}”</p>}
       {canRecord && (
         <div className="space-y-2 pt-1">
           <div className="flex items-end gap-2">
@@ -168,7 +168,7 @@ export function Payslip({ payroll, closed, received = null, canRecord = false, u
             <Lock size={12} /> {t("erp.hr.closed")}
           </span>
         ) : (
-          <span className="text-xs text-white/40">{t("erp.hr.toDate")}</span>
+          <span className="text-xs text-white/60">{t("erp.hr.toDate")}</span>
         )}
       </div>
       {!payroll.hasSalary ? (
@@ -181,7 +181,7 @@ export function Payslip({ payroll, closed, received = null, canRecord = false, u
               <div key={key} className="flex items-center justify-between gap-3">
                 <span className="text-white/70">
                   {t(`erp.hr.pay.${key}`)}
-                  {hint && <span className="ms-2 text-xs text-white/40" dir="ltr">({hint})</span>}
+                  {hint && <span className="ms-2 text-xs text-white/60" dir="ltr">({hint})</span>}
                 </span>
                 <span className={`tabular-nums ${value < 0 ? "text-red-300" : ""}`}>{money(value || 0, c, lang)}</span>
               </div>
@@ -191,7 +191,7 @@ export function Payslip({ payroll, closed, received = null, canRecord = false, u
             <span className="font-semibold">{t("erp.hr.pay.entitled")}</span>
             <span className="text-xl font-bold tabular-nums text-brand-orange">{money(payroll.net, c, lang)}</span>
           </div>
-          <p className="mt-2 text-xs text-white/40">
+          <p className="mt-2 text-xs text-white/60">
             {t("erp.hr.hourlyRate")}: <span dir="ltr">{money(payroll.hourlyRate, c, lang)}</span>
           </p>
           {(received || canRecord) && <ReceivedPay key={`${userId}-${month}-${received?.amount ?? ""}`} payroll={payroll} received={received} canRecord={canRecord} userId={userId} month={month} onSaved={onSaved} />}
@@ -290,9 +290,9 @@ export default function PersonMonth({ userId, month, onData }) {
                   className={`border-t border-white/5 ${DAY_STYLE[d.status] || ""} ${data.canManage && !data.closed ? "cursor-pointer hover:bg-white/[0.05]" : ""}`}
                 >
                   <td className="whitespace-nowrap px-3 py-2 text-white/80">
-                    <span className="inline-block w-10 text-white/45">{dayName(d.date)}</span>
+                    <span className="inline-block w-10 text-white/60">{dayName(d.date)}</span>
                     <span dir="ltr">{d.date.slice(5)}</span>
-                    {d.ramadan && <span className="ms-1 text-[10px] text-amber-300">☾</span>}
+                    {d.ramadan && <span className="ms-1 text-[11px] text-amber-300">☾</span>}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 tabular-nums text-white/80">{d.checkIn ? formatClock(d.checkIn, lang) : "—"}</td>
                   <td className={`whitespace-nowrap px-3 py-2 tabular-nums ${d.missingCheckOut ? "text-amber-300" : "text-white/80"}`}>
@@ -304,7 +304,7 @@ export default function PersonMonth({ userId, month, onData }) {
                   <td className="px-3 py-2 tabular-nums text-white/60" dir="ltr">{d.activity !== null ? `${Math.round(d.activity * 100)}%` : ""}</td>
                   <td className="whitespace-nowrap px-3 py-2">
                     {t(`erp.hr.day.${d.status}`)}
-                    {d.overridden && <span className="ms-1 text-[10px] text-white/40">✎</span>}
+                    {d.overridden && <span className="ms-1 text-[11px] text-white/60">✎</span>}
                   </td>
                   <td className="px-3 py-2 text-xs">
                     {d.warnings.map((w) => (
@@ -328,7 +328,7 @@ export default function PersonMonth({ userId, month, onData }) {
               <p className="text-sm text-white/60">{t("erp.nav.kpi")}</p>
               <p className="mt-1 text-3xl font-bold">
                 {data.kpi.score}
-                <span className="text-base text-white/40"> / 100</span>
+                <span className="text-base text-white/60"> / 100</span>
               </p>
               <p className="text-sm text-white/60">
                 {data.kpi.grade?.[lang]} · {t("erp.kpi.rank")} {data.kpi.rank}/{data.kpi.of}

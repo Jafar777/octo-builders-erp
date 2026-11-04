@@ -6,9 +6,12 @@ import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
 import Modal from "@/components/erp/ui/Modal";
 import { Button, ErrorText, Input } from "@/components/erp/ui/fields";
+import { useConfirm } from "@/components/erp/ui/Feedback";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
 export default function Clients({ lookups, canManage }) {
   const { t } = useLanguage();
+  const confirm = useConfirm();
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState("");
 
@@ -24,7 +27,7 @@ export default function Clients({ lookups, canManage }) {
     }
   }
   async function remove(c) {
-    if (!window.confirm(t("common.confirmDelete"))) return;
+    if (!(await confirm({ text: t("common.confirmDelete"), kind: "delete" }))) return;
     try {
       await api(`/api/finance/clients/${c.id}`, { method: "DELETE" });
       lookups.reloadClients();
@@ -45,7 +48,7 @@ export default function Clients({ lookups, canManage }) {
         <div key={c.id} className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
           <div className="min-w-0 flex-1">
             <p className="font-medium">{c.name}</p>
-            <p className="text-xs text-white/45" dir="ltr">{[c.phone, c.email].filter(Boolean).join(" · ")}</p>
+            <p className="text-xs text-white/60" dir="ltr">{[c.phone, c.email].filter(Boolean).join(" · ")}</p>
           </div>
           {canManage && (
             <>
@@ -55,7 +58,7 @@ export default function Clients({ lookups, canManage }) {
           )}
         </div>
       ))}
-      {lookups.clients.length === 0 && <p className="py-8 text-center text-white/40">{t("dashboard.noItems")}</p>}
+      {lookups.clients.length === 0 && <EmptyState compact text={t("dashboard.noItems")} />}
       <Modal open={Boolean(editing)} onClose={() => setEditing(null)} title={t("erp.finance.client")}>
         {editing && (
           <div className="space-y-4">

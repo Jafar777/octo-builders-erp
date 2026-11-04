@@ -41,6 +41,7 @@ export async function PATCH(request, { params }) {
   // out — and the no-access role never gets anything. Every other role, the GM too, is
   // whatever the CEO makes it.
   if (isTopRole(key)) Object.assign(data, { permissions: role.permissions, scope: "all", limited: false, pages: [], crossDepartment: true });
+  // ...but the CEO may still require the authenticator app for the CEO accounts.
   if (key === DEFAULT_ROLE) Object.assign(data, { permissions: [], limited: false, pages: [] });
 
   const why = escalation(actor, role.permissions, data.permissions, data.scope !== role.scope ? data.scope : null);
@@ -52,6 +53,7 @@ export async function PATCH(request, { params }) {
     limited: Boolean(role.limited),
     pages: role.pages || [],
     crossDepartment: Boolean(role.crossDepartment),
+    requireMfa: Boolean(role.requireMfa),
     name: role.name,
   };
   const wasLimited = Boolean(role.limited);
@@ -68,6 +70,7 @@ export async function PATCH(request, { params }) {
       scope: before.scope !== data.scope ? { from: before.scope, to: data.scope } : undefined,
       limited: before.limited !== data.limited ? { from: before.limited, to: data.limited } : undefined,
       crossDepartment: before.crossDepartment !== data.crossDepartment ? { from: before.crossDepartment, to: data.crossDepartment } : undefined,
+      requireMfa: before.requireMfa !== data.requireMfa ? { from: before.requireMfa, to: data.requireMfa } : undefined,
     },
   });
   await refreshHolders(key);

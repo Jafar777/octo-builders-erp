@@ -2,7 +2,7 @@
 
 // KPI score (0–100) as a ring. `score` null → empty grey ring with "—".
 export function kpiTone(score) {
-  if (score === null || score === undefined) return "text-white/25";
+  if (score === null || score === undefined) return "text-white/60";
   if (score >= 85) return "text-emerald-400";
   if (score >= 70) return "text-sky-400";
   if (score >= 50) return "text-amber-400";

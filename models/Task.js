@@ -70,6 +70,15 @@ const TaskSchema = new mongoose.Schema(
       new mongoose.Schema({ url: String, name: String, mime: String, size: Number }, { _id: false }),
     ],
     description: { type: String, default: "" },
+    // The steps of the work, ticked off as it goes (progress on the Gantt follows them).
+    checklist: [
+      new mongoose.Schema({
+        text: { type: String, required: true },
+        done: { type: Boolean, default: false },
+        doneBy: { type: ObjectId, ref: "User", default: null },
+        doneAt: { type: Date, default: null },
+      }),
+    ],
     employeeNotes: { type: String, default: "" },
 
     // Time tracking: active time only counts while "in_progress".

@@ -17,10 +17,17 @@ import Transfers from "@/components/erp/finance/Transfers";
 import Clients from "@/components/erp/finance/Clients";
 import PricingCalculator from "@/components/erp/finance/PricingCalculator";
 import FinanceSettings from "@/components/erp/finance/FinanceSettings";
+import Invoices from "@/components/erp/finance/Invoices";
+import Books from "@/components/erp/finance/Books";
+import Budgets from "@/components/erp/finance/Budgets";
+import CashForecast from "@/components/erp/finance/CashForecast";
+import BankMatching from "@/components/erp/finance/BankMatching";
 import { useFinanceLookups } from "@/components/erp/finance/useFinanceLookups";
 import { SkeletonCards, SkeletonChart } from "@/components/erp/ui/Loading";
 
-const TABS = ["overview", "projects", "expenses", "transfers", "clients", "pricing", "settings"];
+const TABS = ["overview", "projects", "invoices", "books", "budgets", "forecast", "expenses", "transfers", "bank", "clients", "pricing", "settings"];
+// Tabs that need more than finance.view: invoices are also open to invoices.manage alone.
+const NEEDS_MANAGE = ["settings", "bank"];
 
 function Expenses({ lookups, year, canManage, onChanged }) {
   const { t } = useLanguage();
@@ -85,7 +92,7 @@ export default function FinanceCenter() {
   }, [load]);
 
   const years = Array.from({ length: 5 }, (_, i) => String(new Date().getFullYear() - i));
-  const visible = TABS.filter((k) => k !== "settings" || canManage);
+  const visible = TABS.filter((k) => !NEEDS_MANAGE.includes(k) || canManage);
 
   return (
     <div>
@@ -127,6 +134,11 @@ export default function FinanceCenter() {
           )}
           {tab === "projects" && <ProjectAccounts lookups={lookups} summary={summary} projectId={projectId} onProject={setProjectId} canManage={canManage} onChanged={load} />}
           {tab === "expenses" && <Expenses lookups={lookups} year={year} canManage={canManage} onChanged={load} />}
+          {tab === "invoices" && <Invoices lookups={lookups} />}
+          {tab === "books" && <Books lookups={lookups} canManage={canManage} />}
+          {tab === "budgets" && <Budgets lookups={lookups} year={year} canManage={canManage} />}
+          {tab === "forecast" && <CashForecast />}
+          {tab === "bank" && canManage && <BankMatching lookups={lookups} />}
           {tab === "transfers" && <Transfers lookups={lookups} canManage={canManage} onChanged={load} />}
           {tab === "clients" && <Clients lookups={lookups} canManage={canManage} />}
           {tab === "pricing" && <PricingCalculator embedded />}

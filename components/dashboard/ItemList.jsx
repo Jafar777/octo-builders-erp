@@ -82,7 +82,7 @@ export default function ItemList({ items, onChange, newItem, addLabel, renderIte
         ))}
       </div>
 
-      {items.length === 0 && <p className="text-sm text-white/40">{t("dashboard.noItems")}</p>}
+      {items.length === 0 && <p className="text-sm text-white/60">{t("dashboard.noItems")}</p>}
 
       <button
         type="button"

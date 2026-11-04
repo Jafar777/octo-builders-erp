@@ -8,9 +8,11 @@ import Avatar from "@/components/erp/ui/Avatar";
 import Modal from "@/components/erp/ui/Modal";
 import { Button, ErrorText, Input, Toggle } from "@/components/erp/ui/fields";
 import { PeoplePicker } from "@/components/erp/messages/NewChatModal";
+import { useConfirm } from "@/components/erp/ui/Feedback";
 
 export default function ConversationInfo({ open, onClose, conversation, meId, directory, online, title, onChanged, onLeft }) {
   const { t } = useLanguage();
+  const confirm = useConfirm();
   const [name, setName] = useState(conversation.name);
   const [adding, setAdding] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
@@ -31,7 +33,7 @@ export default function ConversationInfo({ open, onClose, conversation, meId, di
   }
 
   async function leave() {
-    if (!window.confirm(t("erp.messages.confirmLeave"))) return;
+    if (!(await confirm({ text: t("erp.messages.confirmLeave"), danger: true }))) return;
     if (await patch({ removeMemberId: meId })) {
       onClose();
       onLeft?.();
@@ -129,7 +131,7 @@ export default function ConversationInfo({ open, onClose, conversation, meId, di
           </Button>
         )}
 
-        <p className="text-xs text-white/35">{t("erp.messages.monitoredNote")}</p>
+        <p className="text-xs text-white/55">{t("erp.messages.monitoredNote")}</p>
         <ErrorText>{error}</ErrorText>
       </div>
     </Modal>

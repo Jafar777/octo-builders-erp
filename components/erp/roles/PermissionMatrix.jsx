@@ -141,7 +141,7 @@ export default function PermissionMatrix({ roles, viewer, onSaved }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-white/45">{t("erp.access.matrixHint")}</p>
+        <p className="text-xs text-white/60">{t("erp.access.matrixHint")}</p>
         <div className="flex gap-2">
           {dirty.length > 0 && (
             <Button variant="ghost" onClick={() => setDraft({})}>
@@ -159,7 +159,7 @@ export default function PermissionMatrix({ roles, viewer, onSaved }) {
         <table className="w-full min-w-max border-collapse text-xs">
           <thead className="sticky top-0 z-[2] bg-brand-navy">
             <tr className="border-b border-white/10">
-              <th className={`${head} min-w-64 text-white/45`}>
+              <th className={`${head} min-w-64 text-white/60`}>
                 {t("erp.access.permsTitle")}
               </th>
               {roles.map((r) => (
@@ -170,10 +170,10 @@ export default function PermissionMatrix({ roles, viewer, onSaved }) {
                   <span className="flex items-center justify-center gap-1">
                     {r.name?.[lang] || r.key}
                     {lockedRole(r) && (
-                      <Lock size={11} className="text-white/35" />
+                      <Lock size={11} className="text-white/55" />
                     )}
                   </span>
-                  <span className="block text-[10px] font-normal text-white/35">
+                  <span className="block text-[11px] font-normal text-white/55">
                     {t("erp.access.peopleCount", { n: r.userCount })}
                   </span>
                 </th>
@@ -254,7 +254,7 @@ export default function PermissionMatrix({ roles, viewer, onSaved }) {
             <tr className="border-y border-white/10 bg-white/[0.04]">
               <td
                 colSpan={roles.length + 1}
-                className="sticky start-0 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-white/40"
+                className="sticky start-0 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white/60"
               >
                 {t("erp.access.matrixPages")}
               </td>
@@ -308,7 +308,7 @@ function PermGroupRows({
       <tr className="border-y border-white/10 bg-white/[0.04]">
         <td
           colSpan={roles.length + 1}
-          className="sticky start-0 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-white/40"
+          className="sticky start-0 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white/60"
         >
           {t(`erp.perm_group.${group}`)}
         </td>

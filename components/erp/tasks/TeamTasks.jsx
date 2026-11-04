@@ -10,7 +10,7 @@ import { api } from "@/lib/clientApi";
 import { formatDateTime } from "@/lib/formatTime";
 import Avatar from "@/components/erp/ui/Avatar";
 import { PageHeader, Select } from "@/components/erp/ui/fields";
-import TaskRow, { StatusBadge, taskHeading } from "@/components/erp/tasks/TaskRow";
+import TaskRow, { StatusBadge, TaskName, taskHeading } from "@/components/erp/tasks/TaskRow";
 import TaskDrawer from "@/components/erp/tasks/TaskDrawer";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { formatDuration, liveActiveMs, useNow } from "@/components/erp/tasks/taskUi";
@@ -32,12 +32,11 @@ function MiniTask({ task, now, onOpen }) {
       onClick={() => onOpen(task.id)}
       className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm hover:bg-white/5"
     >
-      <span className="w-12 shrink-0 text-xs text-white/40" dir="ltr">
+      <span className="w-12 shrink-0 text-xs text-white/60" dir="ltr">
         #{task.number}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate">{taskHeading(task, lang)}</span>
-        {task.project && <span className="block truncate text-xs text-white/40">{task.project.name?.[lang]}</span>}
+        <TaskName task={task} compact />
       </span>
       {running && (
         <span className="flex shrink-0 items-center gap-1 text-xs text-sky-300" dir="ltr">
@@ -65,7 +64,7 @@ function PersonCard({ person, tasks, meId, online, departmentName, now, onOpen }
             <TraineeBadge id={person.id} className="ms-2" />
             {person.id === meId && <span className="ms-2 text-xs font-normal text-brand-orange">({t("erp.team.you")})</span>}
           </p>
-          <p className="truncate text-xs text-white/45">
+          <p className="truncate text-xs text-white/60">
             {[person.department ? departmentName(person.department) : "", tasks.length ? t("erp.team.openTasks", { n: tasks.length }) : ""]
               .filter(Boolean)
               .join(" · ")}
@@ -88,22 +87,13 @@ function PersonCard({ person, tasks, meId, online, departmentName, now, onOpen }
               <Timer size={12} /> {formatDuration(liveActiveMs(current, now))}
             </span>
           </span>
-          <span className="mt-1 block truncate text-sm font-medium">
-            <span className="me-1.5 text-white/45" dir="ltr">
-              #{current.number}
-            </span>
-            {taskHeading(current, lang)}
+          <span className="mt-1 block">
+            <TaskName task={current} compact number />
           </span>
-          {(current.project || current.dueAt) && (
-            <span className={`mt-0.5 flex items-center gap-1 truncate text-xs ${current.late ? "text-red-300" : "text-white/45"}`}>
-              {current.project?.name?.[lang]}
-              {current.dueAt && (
-                <>
-                  {current.project && " · "}
-                  {current.late ? <AlertTriangle size={11} /> : <Clock size={11} />}
-                  {formatDateTime(current.dueAt, lang)}
-                </>
-              )}
+          {current.dueAt && (
+            <span className={`mt-0.5 flex items-center gap-1 truncate text-xs ${current.late ? "text-red-300" : "text-white/60"}`}>
+              {current.late ? <AlertTriangle size={11} /> : <Clock size={11} />}
+              {formatDateTime(current.dueAt, lang)}
             </span>
           )}
         </button>
@@ -116,7 +106,7 @@ function PersonCard({ person, tasks, meId, online, departmentName, now, onOpen }
           ))}
         </div>
       )}
-      {tasks.length === 0 && <p className="mt-3 text-sm text-white/35">{t("erp.team.noActive")}</p>}
+      {tasks.length === 0 && <p className="mt-3 text-sm text-white/55">{t("erp.team.noActive")}</p>}
     </div>
   );
 }
@@ -235,7 +225,7 @@ export default function TeamTasks({ meId }) {
 
       <div className="mb-6 flex flex-wrap items-end gap-3">
         <label className="relative min-w-60 flex-1">
-          <Search size={15} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-white/40" />
+          <Search size={15} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-white/60" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -298,11 +288,11 @@ export default function TeamTasks({ meId }) {
                   <FolderKanban size={15} />
                   {project ? project.name?.[lang] : t("erp.team.noProject")}
                   {project?.code && (
-                    <span className="text-xs font-normal text-white/40" dir="ltr">
+                    <span className="text-xs font-normal text-white/60" dir="ltr">
                       {project.code}
                     </span>
                   )}
-                  <span className="text-xs font-normal text-white/40">({list.length})</span>
+                  <span className="text-xs font-normal text-white/60">({list.length})</span>
                 </h2>
                 <div className="space-y-2">
                   {list.map((task) => (
@@ -314,7 +304,7 @@ export default function TeamTasks({ meId }) {
           </div>
         )}
         {(mode === "person" ? view.cards : view.projectGroups).length === 0 && (
-          <p className="py-10 text-center text-white/40">{t("erp.team.nothing")}</p>
+          <p className="py-10 text-center text-white/60">{t("erp.team.nothing")}</p>
         )}
       </div>
 

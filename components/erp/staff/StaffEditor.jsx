@@ -126,11 +126,11 @@ export default function StaffEditor({ person, roles, org, meId, onSaved, onClose
                 );
               })}
           </div>
-          <p className="mt-1.5 text-[11px] text-white/40">{t("erp.staff.managedDepartmentsHint")}</p>
+          <p className="mt-1.5 text-[11px] text-white/60">{t("erp.staff.managedDepartmentsHint")}</p>
         </div>
       )}
       {canSetTrainee && <Toggle checked={form.trainee} onChange={set("trainee")} label={t("erp.staff.trainee")} />}
-      {isMe && <p className="text-xs text-white/40">{t("erp.staff.selfNote")}</p>}
+      {isMe && <p className="text-xs text-white/60">{t("erp.staff.selfNote")}</p>}
 
       <ErrorText>{error}</ErrorText>
       <div className="flex justify-end gap-2">

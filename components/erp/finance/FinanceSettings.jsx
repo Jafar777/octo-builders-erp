@@ -86,7 +86,7 @@ export default function FinanceSettings({ settings, onSaved }) {
             onChange={setAllocation}
             options={["hours", "equal"].map((k) => ({ value: k, label: t(`erp.finance.allocation_${k}`) }))}
           />
-          <p className="mt-1 text-xs text-white/45">{t(`erp.finance.allocationHint_${allocation}`)}</p>
+          <p className="mt-1 text-xs text-white/60">{t(`erp.finance.allocationHint_${allocation}`)}</p>
         </div>
         <SaveBar status={cat.status} error={cat.error} onSave={() => cat.save({ expenseCategories: categories, allocation })} />
       </Card>

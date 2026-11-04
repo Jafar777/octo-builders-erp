@@ -5,6 +5,7 @@ import { notify } from "@/lib/notify";
 import { cascadeFrom, clearOverlaps, getWorkCalendar, personCalendar } from "@/lib/ganttServer";
 import { canRouteStages, checkStageHandoffs, isStageLocked } from "@/lib/projects";
 import WorkProject from "@/models/WorkProject";
+import PurchaseRequest from "@/models/PurchaseRequest";
 import { scaledDue } from "@/lib/projectScale";
 import { replanPaused, setHoursLeft, trackDelays } from "@/lib/projectDelay";
 import { addWorkHours, cancelNeedsApproval, holdsTime, isRedo, nextWorkMoment } from "@/lib/gantt";
@@ -95,6 +96,9 @@ export async function POST(request, { params }) {
       const project = await WorkProject.findById(task.project).lean();
       if (project && (await isStageLocked(project, task.stage))) return fail("stage_waiting", 409);
     }
+    // Waiting for something to be bought (Purchasing): it can't start until it arrives.
+    const purchase = await PurchaseRequest.findOne({ task: task._id, status: { $in: ["pending", "approved", "ordered"] } }, { number: 1 }).lean();
+    if (purchase) return fail("waiting_purchase", 409, { number: purchase.number });
   }
 
   // An employee works on one task at a time: pause the running one first.

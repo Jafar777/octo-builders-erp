@@ -10,13 +10,14 @@ import { formatDateTime, locale } from "@/lib/formatTime";
 import Modal from "@/components/erp/ui/Modal";
 import Avatar from "@/components/erp/ui/Avatar";
 import { Button, ErrorText, Label, PageHeader, Select } from "@/components/erp/ui/fields";
-import TaskRow, { taskHeading } from "@/components/erp/tasks/TaskRow";
+import TaskRow, { TaskName, taskHeading } from "@/components/erp/tasks/TaskRow";
 import TaskDrawer from "@/components/erp/tasks/TaskDrawer";
 import Stars from "@/components/erp/tasks/Stars";
 import LevelBadge from "@/components/erp/tasks/LevelBadge";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { revisionLabel } from "@/components/erp/tasks/taskUi";
 import { SkeletonList } from "@/components/erp/ui/Loading";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
 // The Reviews page. Reviewers: work waiting for their level, the reviews they gave, how
 // the department managers reviewed (GM / CEO) and the reviews each employee's work got.
@@ -116,7 +117,7 @@ function Queue({ meId, customer, openId, onOpen, onTabs }) {
             </div>
           )
         )}
-        {visible.length === 0 && <p className="py-10 text-center text-white/40">{t("erp.tasks.nothingToReview")}</p>}
+        {visible.length === 0 && <p className="py-10 text-center text-white/60">{t("erp.tasks.nothingToReview")}</p>}
       </div>
       {customer ? (
         <CustomerReview task={open} onClose={() => onOpen(null)} onDone={load} />
@@ -132,11 +133,9 @@ function CustomerTaskRow({ task, onOpen }) {
   return (
     <button type="button" onClick={onOpen} className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-start hover:bg-white/[0.06]">
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-medium" dir="auto">
-          {taskHeading(task, lang)} {task.revision > 0 && <span className="text-xs text-white/40" dir="ltr">{revisionLabel(task.revision)}</span>}
-        </span>
-        <span className="block text-xs text-white/45" dir="auto">
-          {task.project?.name?.[lang]} · {formatDateTime(task.submittedAt, lang)}
+        <TaskName task={task} extra={task.revision > 0 && <span className="ms-1 text-xs text-white/60" dir="ltr">{revisionLabel(task.revision)}</span>} />
+        <span className="block text-xs text-white/60" dir="auto">
+          {formatDateTime(task.submittedAt, lang)}
         </span>
       </span>
       <span className="rounded-full bg-amber-500/15 px-3 py-1 text-xs text-amber-200">{t("erp.reviews.reviewNow")}</span>
@@ -170,7 +169,7 @@ function CustomerReview({ task, onClose, onDone }) {
   }
 
   return (
-    <Modal open={Boolean(task)} onClose={onClose} title={task ? `${taskHeading(task, lang)}` : ""} wide>
+    <Modal open={Boolean(task)} onClose={onClose} title={task ? task.project?.name?.[lang] || taskHeading(task, lang) : ""} wide>
       {task && (
         <div className="space-y-5">
           <div className="grid gap-3 text-sm sm:grid-cols-3">
@@ -242,7 +241,7 @@ function CustomerReview({ task, onClose, onDone }) {
 function Info({ label, children }) {
   return (
     <div>
-      <p className="text-xs uppercase tracking-wider text-white/40">{label}</p>
+      <p className="text-xs uppercase tracking-wider text-white/60">{label}</p>
       <div className="mt-1">{children || "—"}</div>
     </div>
   );
@@ -326,7 +325,7 @@ function History({ tab, meId, customer, openId, onOpen, onTabs }) {
                       <Avatar name={p.name} src={p.avatarUrl} size={24} />
                       <span>
                         {p.name}
-                        {p.department && <span className="block text-xs text-white/40">{p.department[lang]}</span>}
+                        {p.department && <span className="block text-xs text-white/60">{p.department[lang]}</span>}
                       </span>
                     </span>
                   </td>
@@ -354,11 +353,11 @@ function History({ tab, meId, customer, openId, onOpen, onTabs }) {
               } ${customer ? "cursor-default" : "hover:bg-white/[0.05]"}`}
             >
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="text-xs text-white/40" dir="ltr">
+                <span className="text-xs text-white/60" dir="ltr">
                   #{task?.number}
                 </span>
-                <span className="min-w-0 flex-1 truncate font-medium" dir="auto">
-                  {task ? taskHeading(task, lang) : "—"} {task?.revision > 0 && <span className="text-xs text-white/40">{revisionLabel(task.revision)}</span>}
+                <span className="min-w-0 flex-1">
+                  <TaskName task={task} extra={task?.revision > 0 && <span className="ms-1 text-xs text-white/60">{revisionLabel(task.revision)}</span>} />
                 </span>
                 <LevelBadge level={review.level} onBehalf={review.onBehalf} />
                 <span className={`flex items-center gap-1 text-xs font-semibold ${review.decision === "approve" ? "text-emerald-300" : "text-red-300"}`}>
@@ -367,8 +366,8 @@ function History({ tab, meId, customer, openId, onOpen, onTabs }) {
                 </span>
                 {review.stars > 0 && <Stars value={review.stars} size={13} />}
               </div>
-              <p className="mt-1 text-xs text-white/45" dir="auto">
-                {[task?.project?.name?.[lang], !customer && task?.assignee?.name, tab !== "mine" && review.by?.name && t("erp.reviews.by", { name: review.by.name }), formatDateTime(review.at, lang)]
+              <p className="mt-1 text-xs text-white/60" dir="auto">
+                {[!customer && task?.assignee?.name, tab !== "mine" && review.by?.name && t("erp.reviews.by", { name: review.by.name }), formatDateTime(review.at, lang)]
                   .filter(Boolean)
                   .join(" · ")}
               </p>
@@ -382,10 +381,10 @@ function History({ tab, meId, customer, openId, onOpen, onTabs }) {
                 </div>
               )}
               {review.notes && <p className="mt-2 whitespace-pre-wrap text-white/75">{review.notes}</p>}
-              {review.rejectCause && <p className="mt-1 text-xs text-white/45">{t(`erp.tasks.cause.${review.rejectCause}`)}</p>}
+              {review.rejectCause && <p className="mt-1 text-xs text-white/60">{t(`erp.tasks.cause.${review.rejectCause}`)}</p>}
             </button>
           ))}
-          {data.entries.length === 0 && <p className="py-10 text-center text-white/40">{t("erp.reviews.none")}</p>}
+          {data.entries.length === 0 && <EmptyState compact text={t("erp.reviews.none")} />}
         </div>
       )}
       {!customer && <TaskDrawer taskId={openId} lookups={lookups} onClose={() => onOpen(null)} onChanged={load} onOpenTask={onOpen} />}

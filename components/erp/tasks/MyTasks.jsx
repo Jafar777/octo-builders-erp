@@ -17,6 +17,7 @@ import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { useNow } from "@/components/erp/tasks/taskUi";
 import { SkeletonList } from "@/components/erp/ui/Loading";
 import TaskLog from "@/components/erp/tasks/TaskLog";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
 const TABS = ["active", "submitted", "finished"];
 // The employee's own monthly task log (?tab=log), next to the lists above.
@@ -111,13 +112,13 @@ export default function MyTasks({ meId }) {
             <>
               <span className="flex items-center gap-2" dir="ltr">
                 <span className="text-2xl font-bold">{rating.average.toFixed(1)}</span>
-                <span className="text-sm text-white/40">/ 5</span>
+                <span className="text-sm text-white/60">/ 5</span>
               </span>
               <Stars value={rating.average} size={20} />
-              <span className="text-xs text-white/45">{t("erp.tasks.ratedTasks", { n: rating.count })}</span>
+              <span className="text-xs text-white/60">{t("erp.tasks.ratedTasks", { n: rating.count })}</span>
             </>
           ) : (
-            <span className="text-sm text-white/40">{t("erp.tasks.noRating")}</span>
+            <span className="text-sm text-white/60">{t("erp.tasks.noRating")}</span>
           )}
         </div>
       )}
@@ -154,17 +155,17 @@ export default function MyTasks({ meId }) {
         {sections.map(({ key, list }) =>
           list.length === 0 && tab === "active" ? null : (
             <section key={key}>
-              {tab === "active" && <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/45">{t(`erp.tasks.section.${key}`)}</h2>}
+              {tab === "active" && <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/60">{t(`erp.tasks.section.${key}`)}</h2>}
               <div className="space-y-2">
                 {list.map((task) => (
                   <TaskRow key={task.id} task={task} lookups={lookups} now={now} onOpen={open} projectFirst />
                 ))}
-                {list.length === 0 && <p className="py-10 text-center text-white/40">{t("erp.tasks.none")}</p>}
+                {list.length === 0 && <EmptyState compact text={t("erp.tasks.none")} />}
               </div>
             </section>
           )
         )}
-        {tab === "active" && groups.active.length === 0 && <p className="py-10 text-center text-white/40">{t("erp.tasks.none")}</p>}
+        {tab === "active" && groups.active.length === 0 && <EmptyState compact text={t("erp.tasks.none")} />}
       </div>
 
       <Modal open={creating} onClose={() => setCreating(false)} title={t("erp.tasks.new")} wide>

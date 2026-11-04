@@ -84,7 +84,7 @@ function ManageBonus({ data, month, onSaved }) {
                   aria-label={t("erp.bonus.place", { n: i + 1 })}
                   className="w-full min-w-0 bg-transparent px-2.5 py-2 text-sm tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
-                <span className="border-s border-white/10 px-2 text-sm text-white/45">%</span>
+                <span className="border-s border-white/10 px-2 text-sm text-white/60">%</span>
               </div>
               <span className="min-w-0 flex-1 truncate text-end text-sm font-medium tabular-nums text-white/80">
                 {money(Math.round(pool * (Number(v) || 0)) / 100, form.bonusCurrency, lang)}
@@ -107,7 +107,7 @@ function ManageBonus({ data, month, onSaved }) {
               <Plus size={15} /> {t("erp.bonus.addPlace")}
             </Button>
           )}
-          <span className={`text-xs ${total > 100 ? "text-red-300" : "text-white/45"}`}>{t("erp.bonus.splitTotal", { n: total })}</span>
+          <span className={`text-xs ${total > 100 ? "text-red-300" : "text-white/60"}`}>{t("erp.bonus.splitTotal", { n: total })}</span>
         </div>
       </div>
 
@@ -169,7 +169,7 @@ export default function BonusPage({ initialMonth }) {
                 <Trophy size={26} className={`mx-auto ${MEDAL[p.place - 1] || "text-white/60"}`} />
                 <p className="mt-2 text-sm text-white/60">{t("erp.bonus.place", { n: p.place })}</p>
                 <p className="text-2xl font-bold tabular-nums">{data.pool ? money(p.amount, data.currency, lang) : "—"}</p>
-                <p className="text-xs text-white/40">{t("erp.bonus.ofPool", { n: p.percent })}</p>
+                <p className="text-xs text-white/60">{t("erp.bonus.ofPool", { n: p.percent })}</p>
                 {p.scoreToBeat !== null && (
                   <p className="mt-2 text-xs text-white/55">
                     {t("erp.bonus.scoreAtPlace", { score: p.scoreToBeat })}
@@ -183,7 +183,7 @@ export default function BonusPage({ initialMonth }) {
           <BonusAlert bonus={data} />
 
           {data.canManage && !data.closed && <ManageBonus key={`${month}-${data.pool}-${data.split.join()}`} data={data} month={month} onSaved={load} />}
-          {data.canManage && data.closed && <p className="text-sm text-white/45">{t("erp.bonus.closedEdit")}</p>}
+          {data.canManage && data.closed && <p className="text-sm text-white/60">{t("erp.bonus.closedEdit")}</p>}
 
           {data.ranking.length > 0 && (
             <Card className="overflow-x-auto p-0">

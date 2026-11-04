@@ -80,7 +80,7 @@ export default function PricingCalculator({ embedded = false }) {
                 onChange={setHourlyOverride}
                 dir="ltr"
               />
-              <p className="mt-1 text-xs text-white/40">
+              <p className="mt-1 text-xs text-white/60">
                 {data.canSeeCosts && data.hourlyCost.mode === "auto" && data.hourlyCost.auto !== null
                   ? t("erp.pricing.autoHint", { value: data.hourlyCost.auto, hours: data.hourlyCost.capacity })
                   : t("erp.pricing.manualHint", { value: data.hourlyCost.used })}

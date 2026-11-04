@@ -94,7 +94,7 @@ export default function RolesManager({ initialRoles }) {
         {stats.map((s) => (
           <div key={s.label} className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
             <p className="text-2xl font-semibold tabular-nums">{s.value}</p>
-            <p className="text-xs text-white/45">{s.label}</p>
+            <p className="text-xs text-white/60">{s.label}</p>
           </div>
         ))}
       </div>
@@ -119,7 +119,7 @@ export default function RolesManager({ initialRoles }) {
           <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
             <div className="space-y-2">
               <div className="relative">
-                <Search size={14} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-white/30" />
+                <Search size={14} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-white/50" />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
@@ -145,13 +145,13 @@ export default function RolesManager({ initialRoles }) {
                     >
                       <span className="flex items-center gap-1.5 text-sm font-medium">
                         {r.name?.[lang] || r.key}
-                        {(r.top || r.key === "user") && <Lock size={12} className="text-white/35" />}
+                        {(r.top || r.key === "user") && <Lock size={12} className="text-white/55" />}
                       </span>
                       <span className="mt-1 flex flex-wrap items-center gap-1">
                         <Chip tone="sky">{t(`erp.roles.scope_${r.scope}`)}</Chip>
                         {r.limited && <Chip tone="red">{t("erp.access.restrictedChip")}</Chip>}
                         {r.crossDepartment && !r.top && <Chip tone="green">{t("erp.access.work.anyChip")}</Chip>}
-                        <span className="text-[10px] text-white/35">
+                        <span className="text-[11px] text-white/55">
                           {r.permissions.length} · {t("erp.access.peopleCount", { n: r.userCount })}
                         </span>
                       </span>

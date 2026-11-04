@@ -1,5 +1,8 @@
 "use client";
 
+import SecurityCard from "@/components/erp/security/SecurityCard";
+import MyAssets from "@/components/erp/purchasing/MyAssets";
+
 import { useCallback, useEffect, useState } from "react";
 import { Check, Loader2, Mail } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
@@ -107,6 +110,8 @@ export default function ProfilePage() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           <PersonalCard key={user.id} user={user} />
+          {isStaff && <SecurityCard />}
+          {isStaff && !user.limited && <MyAssets />}
           {file?.canEditFile && (
             <>
               <MySkillsCard key={`s${file.profile.id}`} userId={user.id} data={file} />

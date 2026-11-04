@@ -6,6 +6,8 @@ import { useLanguage } from "@/context/LanguageContext";
 import { formatDate } from "@/lib/formatTime";
 import { api, errorText } from "@/lib/clientApi";
 import { Button, ErrorText, Input, Label, Select } from "@/components/erp/ui/fields";
+import { useAsk, useToast } from "@/components/erp/ui/Feedback";
+import { Checkbox, EmptyState, TableToolbar, useTableTools } from "@/components/erp/ui/DataTools";
 
 const STATUS = {
   pending: "bg-brand-orange/15 text-brand-orange",
@@ -41,7 +43,7 @@ export function LeaveForm({ onCreated, onCancel }) {
         <Label>{t("erp.hr.reason")}</Label>
         <textarea rows={3} value={form.reason} onChange={(e) => set("reason")(e.target.value)} className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm outline-none focus:border-white/30" />
       </div>
-      <p className="text-xs text-white/40">{t("erp.hr.leaveApproverNote")}</p>
+      <p className="text-xs text-white/60">{t("erp.hr.leaveApproverNote")}</p>
       <ErrorText>{error}</ErrorText>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onCancel}>{t("common.cancel")}</Button>
@@ -79,8 +81,8 @@ function LeaveSteps({ leave }) {
     done: { dot: "bg-emerald-400 text-brand-navy", Icon: Check, text: "text-emerald-300" },
     rejected: { dot: "bg-red-400 text-brand-navy", Icon: X, text: "text-red-300" },
     current: { dot: "bg-brand-orange text-brand-navy", Icon: Clock, text: "text-brand-orange" },
-    waiting: { dot: "bg-white/10 text-white/40", Icon: Clock, text: "text-white/40" },
-    skipped: { dot: "bg-white/5 text-white/25", Icon: Minus, text: "text-white/30" },
+    waiting: { dot: "bg-white/10 text-white/60", Icon: Clock, text: "text-white/60" },
+    skipped: { dot: "bg-white/5 text-white/60", Icon: Minus, text: "text-white/50" },
   };
 
   return (
@@ -95,7 +97,7 @@ function LeaveSteps({ leave }) {
             </span>
             <span className={st.text}>
               {t(`erp.leaveFlow.step.${s.key}`)}
-              <span className="text-white/45">
+              <span className="text-white/60">
                 {" · "}
                 {s.who ? `${s.who}${s.at ? ` (${formatDate(s.at, lang)})` : ""}` : t(`erp.leaveFlow.state.${s.state}`)}
               </span>
@@ -111,11 +113,29 @@ function LeaveSteps({ leave }) {
 // otherwise (own requests) cancel while pending.
 export default function LeaveList({ leaves, approver = false, onChanged, empty }) {
   const { t } = useLanguage();
+  const ask = useAsk();
+  const toast = useToast();
   const [error, setError] = useState("");
+  // Managers: tick several requests and approve them in one go.
+  const decidable = leaves.filter((l) => l.canDecide);
+  const tools = useTableTools(decidable);
+  const bulk = approver && decidable.length > 1;
+  async function approveMany(rows) {
+    let done = 0;
+    for (const l of rows) {
+      try {
+        await api(`/api/leave/${l.id}`, { method: "PATCH", body: { decision: "approve", note: "" }, quiet: true });
+        done += 1;
+      } catch {}
+    }
+    toast({ text: t("erp.ux.bulkDone", { n: done, total: rows.length }), tone: done === rows.length ? "success" : "error" });
+    onChanged();
+  }
 
   async function decide(id, decision) {
     setError("");
-    const note = decision === "reject" ? window.prompt(t("erp.hr.rejectReason")) ?? "" : "";
+    const note = decision === "reject" ? await ask({ text: t("erp.hr.rejectReason"), danger: true }) : "";
+    if (note === null) return;
     try {
       await api(`/api/leave/${id}`, { method: "PATCH", body: { decision, note } });
       onChanged();
@@ -127,8 +147,18 @@ export default function LeaveList({ leaves, approver = false, onChanged, empty }
   return (
     <div className="space-y-2">
       <ErrorText>{error}</ErrorText>
+      {bulk && (
+        <TableToolbar tools={tools} actions={[{ label: t("erp.ux.approveSelected"), onClick: approveMany }]}>
+          {!tools.someOn && (
+            <button type="button" onClick={tools.toggleAll} className="text-sm text-white/70 hover:text-white">
+              {t("erp.ux.selectPending", { n: decidable.length })}
+            </button>
+          )}
+        </TableToolbar>
+      )}
       {leaves.map((l) => (
         <div key={l.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
+          {bulk && (l.canDecide ? <Checkbox checked={tools.selected.has(l.id)} onChange={() => tools.toggle(l.id)} label={l.userName} /> : <span className="w-5" />)}
           {approver && <span className="font-medium">{l.userName}</span>}
           <span>{t(`erp.hr.leave.${l.type}`)}</span>
           <span className="text-white/60" dir="ltr">
@@ -152,11 +182,11 @@ export default function LeaveList({ leaves, approver = false, onChanged, empty }
           )}
           {l.status !== "cancelled" && <LeaveSteps leave={l} />}
           {(l.manager?.note || l.decisionNote) && (
-            <p className="basis-full text-xs text-white/45">{[l.manager?.note, l.decisionNote !== l.manager?.note ? l.decisionNote : ""].filter(Boolean).join(" · ")}</p>
+            <p className="basis-full text-xs text-white/60">{[l.manager?.note, l.decisionNote !== l.manager?.note ? l.decisionNote : ""].filter(Boolean).join(" · ")}</p>
           )}
         </div>
       ))}
-      {leaves.length === 0 && <p className="py-6 text-center text-sm text-white/40">{empty || t("erp.hr.noLeave")}</p>}
+      {leaves.length === 0 && <EmptyState compact text={empty || t("erp.hr.noLeave")} />}
     </div>
   );
 }

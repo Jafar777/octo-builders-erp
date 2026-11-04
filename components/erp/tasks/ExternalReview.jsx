@@ -101,7 +101,7 @@ export function ExternalHoursField({ task, onChanged }) {
           </Button>
         )}
       </div>
-      <p className="mt-1.5 text-[11px] leading-relaxed text-white/45">{t("erp.external.formHint")}</p>
+      <p className="mt-1.5 text-[11px] leading-relaxed text-white/60">{t("erp.external.formHint")}</p>
       <ErrorText>{error}</ErrorText>
     </div>
   );

@@ -32,12 +32,12 @@ const FINISHED = ["approved", "done"];
 const ACTIVE = ["in_progress", "on_hold", "help"]; // scheduled ("todo") tasks aren't in the log
 
 function DateCell({ value, lang, danger }) {
-  if (!value) return <span className="text-white/25">—</span>;
+  if (!value) return <span className="text-white/60">—</span>;
   return <span className={danger ? "text-red-300" : ""}>{formatDateTime(value, lang)}</span>;
 }
 
 function Person({ person }) {
-  if (!person) return <span className="text-white/25">—</span>;
+  if (!person) return <span className="text-white/60">—</span>;
   return (
     <span className="flex items-center gap-2">
       <Avatar name={person.name} src={person.avatarUrl} size={22} />
@@ -55,7 +55,7 @@ function TimeCell({ task, now }) {
   return (
     <span className="block min-w-28" dir="ltr">
       <span className={over ? "text-red-300" : task.status === "in_progress" ? "text-sky-300" : ""}>{formatDuration(spent)}</span>
-      {max > 0 && <span className="text-white/35"> / {formatDuration(max)}</span>}
+      {max > 0 && <span className="text-white/55"> / {formatDuration(max)}</span>}
       {max > 0 && (
         <span className="mt-1 block h-1 overflow-hidden rounded-full bg-white/10">
           <span className={`block h-full rounded-full ${over ? "bg-red-400" : "bg-sky-400"}`} style={{ width: `${Math.min(100, (spent / max) * 100)}%` }} />
@@ -68,7 +68,7 @@ function TimeCell({ task, now }) {
 function Stat({ label, value, tone = "text-white" }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-      <p className="text-xs text-white/45">{label}</p>
+      <p className="text-xs text-white/60">{label}</p>
       <p className={`mt-1 text-xl font-bold ${tone}`} dir="ltr">
         {value}
       </p>
@@ -142,13 +142,13 @@ export default function TaskLog({ mine = false }) {
         width: 36,
         cell: (x) => (
           <span className="block min-w-56 max-w-80">
-            {/* My own log: the project's name first, bigger than the task's. */}
-            {mine && x.project?.name?.[lang] && (
+            {/* The project's name first, bigger than the task's. */}
+            {x.project?.name?.[lang] && (
               <span className="mb-0.5 block truncate text-base font-bold text-white" title={x.project.name[lang]}>
                 {x.project.name[lang]}
               </span>
             )}
-            <span className={`block truncate ${mine && x.project ? "text-sm text-white/80" : "font-medium text-white"}`} title={taskHeading(x, lang)}>
+            <span className={`block truncate ${x.project ? "text-sm text-white/80" : "font-medium text-white"}`} title={taskHeading(x, lang)}>
               {taskHeading(x, lang)}
             </span>
             <span className="mt-1 flex flex-wrap gap-1">
@@ -164,7 +164,8 @@ export default function TaskLog({ mine = false }) {
         ),
       },
       { key: "status", sort: (x) => t(`erp.tasks.status.${x.status}`), excel: (x) => t(`erp.tasks.status.${x.status}`), width: 16, cell: (x) => <StatusBadge status={x.status} /> },
-      { key: "project", excelOnly: mine, sort: (x) => x.project?.name?.[lang] || "", excel: (x) => x.project?.name?.[lang] || "", width: 26, cell: (x) => x.project?.name?.[lang] },
+      // The task column already shows the project on top; the project column stays in the Excel file.
+      { key: "project", excelOnly: true, sort: (x) => x.project?.name?.[lang] || "", excel: (x) => x.project?.name?.[lang] || "", width: 26, cell: (x) => x.project?.name?.[lang] },
       { key: "department", sort: (x) => (x.department ? lookups.departmentName(x.department) : ""), excel: (x) => (x.department ? lookups.departmentName(x.department) : ""), width: 20, cell: (x) => x.department && lookups.departmentName(x.department) },
       { key: "type", sort: (x) => lookups.typeName(x.type), excel: (x) => lookups.typeName(x.type), width: 18, cell: (x) => lookups.typeName(x.type) },
       !mine && { key: "assignee", sort: (x) => x.assignee?.name || "", excel: (x) => x.assignee?.name || "", width: 22, cell: (x) => <Person person={x.assignee} /> },
@@ -184,7 +185,7 @@ export default function TaskLog({ mine = false }) {
               <AlertTriangle size={12} /> {t("erp.taskLog.yes")}
             </span>
           ) : (
-            <span className="text-white/35">{t("erp.taskLog.no")}</span>
+            <span className="text-white/55">{t("erp.taskLog.no")}</span>
           ),
       },
       { key: "timeSpent", sort: (x) => liveActiveMs(x, now), excel: (x) => Math.round((liveActiveMs(x, now) / 3600000) * 100) / 100, width: 14, cell: (x) => <TimeCell task={x} now={now} /> },
@@ -381,7 +382,7 @@ export default function TaskLog({ mine = false }) {
             {t("erp.taskLog.thisMonth")}
           </button>
         )}
-        {loading && data && <Loader2 size={16} className="animate-spin text-white/40" />}
+        {loading && data && <Loader2 size={16} className="animate-spin text-white/60" />}
         {mine && <div className="ms-auto">{exportButton}</div>}
       </div>
 
@@ -435,18 +436,18 @@ export default function TaskLog({ mine = false }) {
                       <td
                         key={c.key}
                         className={`whitespace-nowrap px-3 py-2.5 align-middle ${
-                          i === 0 ? `${stickyFirst} bg-brand-navy text-xs text-white/40 group-hover:bg-[#192c3a]` : i === 1 ? `${stickySecond} bg-brand-navy group-hover:bg-[#192c3a]` : ""
+                          i === 0 ? `${stickyFirst} bg-brand-navy text-xs text-white/60 group-hover:bg-[#192c3a]` : i === 1 ? `${stickySecond} bg-brand-navy group-hover:bg-[#192c3a]` : ""
                         }`}
                         dir={i === 0 ? "ltr" : undefined}
                       >
-                        {i === 0 ? `#${x.number}` : c.cell(x) || <span className="text-white/25">—</span>}
+                        {i === 0 ? `#${x.number}` : c.cell(x) || <span className="text-white/60">—</span>}
                       </td>
                     ))}
                   </tr>
                 ))}
               </tbody>
             </table>
-            {rows.length === 0 && <p className="py-16 text-center text-white/40">{t("erp.taskLog.none", { month: monthLabel })}</p>}
+            {rows.length === 0 && <p className="py-16 text-center text-white/60">{t("erp.taskLog.none", { month: monthLabel })}</p>}
           </div>
         </div>
       )}

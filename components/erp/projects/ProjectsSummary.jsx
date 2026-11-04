@@ -9,7 +9,7 @@ import { formatDate, locale } from "@/lib/formatTime";
 import Avatar from "@/components/erp/ui/Avatar";
 import { StatTile } from "@/components/erp/hr/hrUi";
 import { SkeletonCards } from "@/components/erp/ui/Loading";
-import { taskHeading } from "@/components/erp/tasks/TaskRow";
+import { TaskName } from "@/components/erp/tasks/TaskRow";
 import { useNow } from "@/components/erp/tasks/taskUi";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 
@@ -38,7 +38,7 @@ function Panel({ title, icon: Icon, children }) {
 function Group({ title, children }) {
   return (
     <div>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-white/45">{title}</h3>
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-white/60">{title}</h3>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">{children}</div>
     </div>
   );
@@ -78,7 +78,7 @@ export default function ProjectsSummary() {
     <div className="mt-10 space-y-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-white/10 pt-6">
         <h2 className="text-lg font-bold">{t("erp.summary.title", { month: monthName })}</h2>
-        <p className="text-xs text-white/40">{t("erp.summary.scope")}</p>
+        <p className="text-xs text-white/60">{t("erp.summary.scope")}</p>
       </div>
 
       <Group title={t("erp.summary.thisMonth")}>
@@ -129,7 +129,7 @@ export default function ProjectsSummary() {
                   <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10">
                     <div className="h-full rounded-full bg-brand-orange" style={{ width: `${w.progress}%` }} />
                   </div>
-                  <p className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-white/45">
+                  <p className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-white/60">
                     <span dir="ltr">{w.progress}%</span>
                     <span className={w.late ? "text-red-300" : ""}>
                       <CalendarClock size={11} className="me-0.5 inline" /> {formatDate(w.dueDate, lang)}
@@ -139,7 +139,7 @@ export default function ProjectsSummary() {
                 </Link>
               );
             })}
-            {data.watch.length === 0 && <p className="text-sm text-white/40">{t("erp.projects.none")}</p>}
+            {data.watch.length === 0 && <p className="text-sm text-white/60">{t("erp.projects.none")}</p>}
           </div>
         </Panel>
 
@@ -149,13 +149,8 @@ export default function ProjectsSummary() {
               <Link key={task.id} href={`/dashboard/tasks?task=${task.id}`} className="-m-2 flex items-start gap-3 rounded-xl p-2 hover:bg-white/5">
                 <Avatar name={task.assignee?.name} src={task.assignee?.avatarUrl} size={28} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm">
-                    <span className="text-white/40" dir="ltr">
-                      #{task.number}
-                    </span>{" "}
-                    {taskHeading(task, lang)}
-                  </span>
-                  <span className="block truncate text-[11px] text-white/45">{[task.project?.name?.[lang], task.assignee?.name].filter(Boolean).join(" · ")}</span>
+                  <TaskName task={task} compact number />
+                  {task.assignee?.name && <span className="block truncate text-[11px] text-white/60">{task.assignee.name}</span>}
                 </span>
                 <span className="shrink-0 rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] text-red-300">{t("erp.summary.daysLate", { n: daysLate(task.dueAt) })}</span>
               </Link>
@@ -172,7 +167,7 @@ export default function ProjectsSummary() {
           <div className="space-y-2.5">
             {data.top.map((person, i) => (
               <div key={person.id} className="flex items-center gap-3">
-                <span className="w-4 text-center text-xs text-white/40">{i + 1}</span>
+                <span className="w-4 text-center text-xs text-white/60">{i + 1}</span>
                 <Avatar name={person.name} src={person.avatarUrl} size={28} />
                 <span className="flex min-w-0 flex-1 items-center gap-1.5 text-sm">
                   <span className="truncate">{person.name}</span>
@@ -187,9 +182,9 @@ export default function ProjectsSummary() {
                 )}
               </div>
             ))}
-            {data.top.length === 0 && <p className="text-sm text-white/40">{t("erp.summary.noCompleted")}</p>}
+            {data.top.length === 0 && <p className="text-sm text-white/60">{t("erp.summary.noCompleted")}</p>}
           </div>
-          {data.top.length > 0 && <p className="mt-3 text-[11px] text-white/35">{t("erp.summary.topHint")}</p>}
+          {data.top.length > 0 && <p className="mt-3 text-[11px] text-white/55">{t("erp.summary.topHint")}</p>}
         </Panel>
       </div>
     </div>

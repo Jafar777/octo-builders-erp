@@ -67,7 +67,7 @@ export default function EntryForm({ lookups, kinds, entry, preset = {}, onSaved,
           ))}
         </div>
       )}
-      <p className="text-xs text-white/45">{t(`erp.finance.kindHint.${form.kind}`)}</p>
+      <p className="text-xs text-white/60">{t(`erp.finance.kindHint.${form.kind}`)}</p>
 
       <div className="grid gap-4 sm:grid-cols-2">
         {needsProject && (

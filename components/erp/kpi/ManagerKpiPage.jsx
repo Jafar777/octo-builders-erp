@@ -14,7 +14,7 @@ import Stars from "@/components/erp/tasks/Stars";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { TEAM_METRICS } from "@/lib/kpi/hybrid";
 
-const tone = (v) => (v === null || v === undefined ? "text-white/40" : v >= 80 ? "text-emerald-300" : v >= 60 ? "text-amber-200" : "text-red-300");
+const tone = (v) => (v === null || v === undefined ? "text-white/60" : v >= 80 ? "text-emerald-300" : v >= 60 ? "text-amber-200" : "text-red-300");
 
 function Bar({ label, value }) {
   return (
@@ -72,7 +72,7 @@ function RatingForm({ manager, criteria, month, onSaved }) {
         <Button onClick={save} loading={busy} disabled={!complete}>
           {t(manager.rating ? "erp.managerKpi.update" : "erp.managerKpi.save")}
         </Button>
-        {!complete && <span className="text-xs text-white/45">{t("erp.managerKpi.rateAll")}</span>}
+        {!complete && <span className="text-xs text-white/60">{t("erp.managerKpi.rateAll")}</span>}
       </div>
     </div>
   );
@@ -130,11 +130,11 @@ function ManagerCard({ manager, data, month, departmentName, onSaved }) {
           <Avatar name={manager.name} src={manager.avatarUrl} size={44} />
           <div>
             <p className="font-semibold">{manager.name}</p>
-            <p className="text-xs text-white/45">{departmentName(manager.department)}</p>
+            <p className="text-xs text-white/60">{departmentName(manager.department)}</p>
           </div>
         </div>
         <div className="text-end">
-          <p className="text-xs text-white/45">{t("erp.managerKpi.final")}</p>
+          <p className="text-xs text-white/60">{t("erp.managerKpi.final")}</p>
           <p className={`text-3xl font-bold tabular-nums ${tone(k?.score)}`}>{k ? k.score : "—"}</p>
           {k && (
             <p className="text-xs text-white/50">
@@ -155,11 +155,11 @@ function ManagerCard({ manager, data, month, departmentName, onSaved }) {
                 <span className="flex items-center gap-1.5 text-violet-200">
                   <Users size={14} /> {h.management ?? "—"}
                 </span>
-                <span className="text-white/40">× {h.managementWeight}% +</span>
+                <span className="text-white/60">× {h.managementWeight}% +</span>
                 <span className="flex items-center gap-1.5 text-sky-200">
                   <Briefcase size={14} /> {h.execution ?? "—"}
                 </span>
-                <span className="text-white/40">× {h.executionWeight}% =</span>
+                <span className="text-white/60">× {h.executionWeight}% =</span>
                 <span className={`font-semibold ${tone(k.score)}`}>{k.score}</span>
               </div>
               <p className="text-xs text-white/55">
@@ -174,11 +174,11 @@ function ManagerCard({ manager, data, month, departmentName, onSaved }) {
               <span className="flex items-center gap-1.5 text-sky-200">
                 <Cpu size={14} /> {k.systemScore}
               </span>
-              <span className="text-white/40">× {100 - w}% +</span>
+              <span className="text-white/60">× {100 - w}% +</span>
               <span className="flex items-center gap-1.5 text-amber-200">
                 <UserCheck size={14} /> {k.manualScore ?? "?"}
               </span>
-              <span className="text-white/40">× {w}% =</span>
+              <span className="text-white/60">× {w}% =</span>
               <span className={`font-semibold ${tone(k.score)}`}>{k.score}</span>
             </div>
           )}
@@ -188,7 +188,7 @@ function ManagerCard({ manager, data, month, departmentName, onSaved }) {
             <div className="space-y-3">
               <p className="flex items-center gap-2 text-sm font-medium text-violet-200">
                 <Users size={15} /> {t("erp.managerKpi.managementPart")} · <span className="tabular-nums">{h.management ?? "—"}</span>
-                <span className="text-xs font-normal text-white/45">
+                <span className="text-xs font-normal text-white/60">
                   {t("erp.managerKpi.teamLine", { n: h.teamSize, team: h.teamScore ?? "—", rw: 100 - h.ratingWeight, w: h.ratingWeight })}
                 </span>
               </p>
@@ -210,21 +210,21 @@ function ManagerCard({ manager, data, month, departmentName, onSaved }) {
               {a && (
                 <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/10 p-3 text-xs sm:grid-cols-4">
                   <span>
-                    <span className="block text-white/45">{t("erp.managerKpi.worked")}</span>
+                    <span className="block text-white/60">{t("erp.managerKpi.worked")}</span>
                     <span className="tabular-nums" dir="ltr">
                       {Math.round(a.workedHours)} / {Math.round(a.requiredHours)}h
                     </span>
                   </span>
                   <span>
-                    <span className="block text-white/45">{t("erp.managerKpi.present")}</span>
+                    <span className="block text-white/60">{t("erp.managerKpi.present")}</span>
                     {a.presentDays}
                   </span>
                   <span>
-                    <span className="block text-white/45">{t("erp.managerKpi.absent")}</span>
+                    <span className="block text-white/60">{t("erp.managerKpi.absent")}</span>
                     <span className={a.absentDays ? "text-red-300" : ""}>{a.absentDays}</span>
                   </span>
                   <span>
-                    <span className="block text-white/45">{t("erp.managerKpi.late")}</span>
+                    <span className="block text-white/60">{t("erp.managerKpi.late")}</span>
                     <span className={a.lateCount ? "text-amber-200" : ""}>{a.lateCount}</span>
                   </span>
                 </div>
@@ -258,7 +258,7 @@ function ManagerCard({ manager, data, month, departmentName, onSaved }) {
                 <p className="rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-100">{t("erp.managerKpi.waitingRating")}</p>
               )}
               {manager.rating?.ratedBy && (
-                <p className="text-[11px] text-white/40">
+                <p className="text-[11px] text-white/60">
                   {t("erp.managerKpi.ratedBy", { name: manager.rating.ratedBy })} · {formatDateTime(manager.rating.updatedAt, lang)}
                 </p>
               )}
@@ -342,7 +342,7 @@ function ManagerKpiSettings({ weight, criteria, managementShare, ratingWeight, t
             />
           ))}
         </div>
-        <p className="mt-1 text-xs text-white/40">{t("erp.managerKpi.teamWeightsHint")}</p>
+        <p className="mt-1 text-xs text-white/60">{t("erp.managerKpi.teamWeightsHint")}</p>
       </div>
       <div>
         <Label>{t("erp.managerKpi.criteria")}</Label>
@@ -366,7 +366,7 @@ function ManagerKpiSettings({ weight, criteria, managementShare, ratingWeight, t
           </Button>
         </div>
       </div>
-      <p className="text-xs text-white/40">{t("erp.managerKpi.settingsHint")}</p>
+      <p className="text-xs text-white/60">{t("erp.managerKpi.settingsHint")}</p>
       <ErrorText>{error}</ErrorText>
       <Button onClick={save} loading={busy}>
         {t("common.save")}
@@ -431,7 +431,7 @@ export default function ManagerKpiPage({ initialMonth }) {
               <CalendarClock size={15} /> {t("erp.managerKpi.formulaAttendance")}
             </span>
             {data.closed && (
-              <span className="flex items-center gap-2 text-white/45">
+              <span className="flex items-center gap-2 text-white/60">
                 <ClipboardCheck size={15} /> {t("erp.hr.closed")}
               </span>
             )}

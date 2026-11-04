@@ -42,7 +42,7 @@ export default function MediaUploader({ accept = "image/*", onUploaded, previewU
               <img src={previewUrl} alt="" className="h-full w-full object-cover" />
             )
           ) : (
-            <Upload size={20} className="text-white/30" />
+            <Upload size={20} className="text-white/50" />
           )}
         </div>
 

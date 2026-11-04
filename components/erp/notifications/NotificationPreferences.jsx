@@ -47,7 +47,7 @@ export default function NotificationPreferences() {
     <Card className="animate-fade-up space-y-5">
       <div>
         <p className="font-semibold">{t("erp.notifPrefs.receive")}</p>
-        <p className="mt-1 text-xs text-white/45">{t("erp.notifPrefs.receiveHint")}</p>
+        <p className="mt-1 text-xs text-white/60">{t("erp.notifPrefs.receiveHint")}</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           {groups.map((g) => (
             <Toggle key={g} checked={!prefs.muted.includes(g)} onChange={(on) => toggleGroup(g, on)} label={t(`erp.notifPrefs.group.${g}`)} />

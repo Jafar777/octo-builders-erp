@@ -92,9 +92,28 @@ const UserSchema = new mongoose.Schema(
     // A trainee: gets the Training Program page (lib/training.js) and a "Trainee" badge
     // on the GM / CEO's screens. Set by the GM / CEO.
     trainee: { type: Boolean, default: false },
+    // Authenticator-app sign-in (lib/totp.js): the secret is stored encrypted. `pending`
+    // holds a new secret until its first code is confirmed. `lastCounter` refuses a code
+    // used twice.
+    mfa: {
+      enabled: { type: Boolean, default: false },
+      secret: { type: String, default: "" },
+      pending: { type: String, default: "" },
+      lastCounter: { type: Number, default: -1 },
+      enabledAt: { type: Date, default: null },
+    },
     // Department heads' hybrid KPI: how much of it is management (0–100) versus their own
     // design work; null = the company default (Settings → managerKpi.managementShare).
     managementShare: { type: Number, min: 0, max: 100, default: null },
+    // Their own dashboard set-up (app/api/auth/me PATCH { ui }): light or dark screens,
+    // the sidebar pages they pinned, the sidebar groups they folded, and when they
+    // finished (or skipped) the first-day guide.
+    ui: {
+      theme: { type: String, enum: ["dark", "light"], default: "dark" },
+      favorites: { type: [String], default: [] },
+      collapsed: { type: [String], default: [] },
+      welcomedAt: { type: Date, default: null },
+    },
     lastLoginAt: { type: Date },
     lastSeenAt: { type: Date },
   },

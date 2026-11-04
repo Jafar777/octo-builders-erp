@@ -99,7 +99,7 @@ export default function ProjectAccounts({ lookups, summary, projectId, onProject
                 </p>
               </>
             ) : (
-              <p className="mt-1 text-sm text-white/45">{t("erp.finance.noBudget")}</p>
+              <p className="mt-1 text-sm text-white/60">{t("erp.finance.noBudget")}</p>
             )}
           </div>
           {canManage && (

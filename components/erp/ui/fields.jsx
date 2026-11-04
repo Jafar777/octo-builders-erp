@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 // Small form controls shared by the ERP screens (same look as the website editors).
 
 const inputClass =
-  "w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/25 focus:border-white/30";
+  "w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/45 focus:border-white/30";
 
 export function Label({ children }) {
   return <label className="mb-2 block text-sm font-medium text-white/70">{children}</label>;

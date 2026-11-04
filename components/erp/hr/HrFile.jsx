@@ -8,6 +8,7 @@ import { api, errorText } from "@/lib/clientApi";
 import { formatDate } from "@/lib/formatTime";
 import { uploadFileToImageKit } from "@/lib/uploadFile";
 import { Button, Card, ErrorText, Input } from "@/components/erp/ui/fields";
+import { useConfirm } from "@/components/erp/ui/Feedback";
 
 const MAX_MB = 25;
 
@@ -51,6 +52,7 @@ export function EmergencyContactCard({ userId, data }) {
 // Documents (contract, ID copy, certificates) of one employee; `onChanged` reloads `data`.
 export function DocumentsCard({ userId, data, onChanged }) {
   const { t, lang } = useLanguage();
+  const confirm = useConfirm();
   const { user } = useAuth();
   const [uploading, setUploading] = useState(0);
   const [error, setError] = useState("");
@@ -83,7 +85,7 @@ export function DocumentsCard({ userId, data, onChanged }) {
   }
 
   async function remove(doc) {
-    if (!window.confirm(t("common.confirmDelete"))) return;
+    if (!(await confirm({ text: t("common.confirmDelete"), kind: "delete" }))) return;
     try {
       await api(`/api/hr/employees/${userId}/documents/${doc.id}`, { method: "DELETE" });
       onChanged?.();
@@ -109,7 +111,7 @@ export function DocumentsCard({ userId, data, onChanged }) {
             <a href={d.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate hover:text-brand-orange">
               {d.name}
             </a>
-            <span className="shrink-0 text-xs text-white/40">{formatDate(d.uploadedAt, lang)}</span>
+            <span className="shrink-0 text-xs text-white/60">{formatDate(d.uploadedAt, lang)}</span>
             {(isHr || d.uploadedBy === user?.id) && (
               <button type="button" onClick={() => remove(d)} className="text-red-400" aria-label={t("common.delete")}>
                 <Trash2 size={14} />
@@ -117,9 +119,9 @@ export function DocumentsCard({ userId, data, onChanged }) {
             )}
           </div>
         ))}
-        {data.documents.length === 0 && <p className="text-sm text-white/40">{t("erp.hrFile.noDocuments")}</p>}
+        {data.documents.length === 0 && <p className="text-sm text-white/60">{t("erp.hrFile.noDocuments")}</p>}
       </div>
-      <p className="text-xs text-white/35">{t("erp.hrFile.privacy")}</p>
+      <p className="text-xs text-white/55">{t("erp.hrFile.privacy")}</p>
       <ErrorText>{error}</ErrorText>
     </Card>
   );

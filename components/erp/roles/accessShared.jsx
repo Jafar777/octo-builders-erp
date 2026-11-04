@@ -25,14 +25,14 @@ export function NavPreview({ user, hint }) {
   const groups = ["main", "management"].map((g) => ({ g, items: PAGES.filter((p) => p.group === g && keys.includes(p.key)) }));
   return (
     <div>
-      {hint && <p className="mb-3 text-xs text-white/40">{hint}</p>}
+      {hint && <p className="mb-3 text-xs text-white/60">{hint}</p>}
       <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-        {keys.length === 0 && <p className="text-xs text-white/35">{t("erp.access.previewNone")}</p>}
+        {keys.length === 0 && <p className="text-xs text-white/55">{t("erp.access.previewNone")}</p>}
         {groups.map(
           ({ g, items }) =>
             items.length > 0 && (
               <div key={g} className="mb-2 last:mb-0">
-                {g !== "main" && <p className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-white/30">{t(`erp.nav.group_${g}`)}</p>}
+                {g !== "main" && <p className="px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-white/50">{t(`erp.nav.group_${g}`)}</p>}
                 <ul className="space-y-0.5">
                   {items.map((p) => (
                     <li key={p.key} className="rounded-lg px-2 py-1.5 text-xs text-white/75 odd:bg-white/[0.03]">
@@ -69,7 +69,7 @@ export function Chip({ children, tone = "plain", title }) {
     sky: "bg-sky-500/15 text-sky-300",
   };
   return (
-    <span title={title} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${tones[tone]}`}>
+    <span title={title} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${tones[tone]}`}>
       {children}
     </span>
   );
@@ -133,7 +133,7 @@ export function PagePicker({ pages, onChange, restrictedTo, disabled }) {
           return (
             <label
               key={p.key}
-              className={`flex items-center gap-2 rounded-lg border border-white/5 px-2.5 py-2 text-xs ${always || disabled ? "text-white/45" : "cursor-pointer text-white/80 hover:bg-white/5"}`}
+              className={`flex items-center gap-2 rounded-lg border border-white/5 px-2.5 py-2 text-xs ${always || disabled ? "text-white/60" : "cursor-pointer text-white/80 hover:bg-white/5"}`}
             >
               <input
                 type="checkbox"
@@ -143,12 +143,12 @@ export function PagePicker({ pages, onChange, restrictedTo, disabled }) {
                 onChange={() => toggle(p.key)}
               />
               <span className="flex-1">{t(`erp.nav.${p.key}`)}</span>
-              {always && <span className="text-[10px] text-white/30">{t("erp.access.always")}</span>}
+              {always && <span className="text-[11px] text-white/50">{t("erp.access.always")}</span>}
             </label>
           );
         })}
       </div>
-      <p className="text-xs text-white/35">{t(restrictedTo ? "erp.access.pagesRestrictedHint" : "erp.access.pagesHint")}</p>
+      <p className="text-xs text-white/55">{t(restrictedTo ? "erp.access.pagesRestrictedHint" : "erp.access.pagesHint")}</p>
     </div>
   );
 }

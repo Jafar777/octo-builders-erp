@@ -12,6 +12,7 @@ import { Button, Card, ErrorText, Label, PageHeader, Select, Toggle } from "@/co
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { SkeletonCards } from "@/components/erp/ui/Loading";
 import StageRouting, { canRouteStages } from "@/components/erp/projects/StageRouting";
+import { useConfirm } from "@/components/erp/ui/Feedback";
 
 function TemplateEditor({ template, lookups, onSaved, onClose }) {
   const { t, lang } = useLanguage();
@@ -51,7 +52,7 @@ function TemplateEditor({ template, lookups, onSaved, onClose }) {
       />
       <div className="space-y-2">
         <Label>{t("erp.projects.stages")}</Label>
-        {canRoute && <p className="text-xs text-white/40">{t("erp.projects.routingHint")}</p>}
+        {canRoute && <p className="text-xs text-white/60">{t("erp.projects.routingHint")}</p>}
         {form.stages.map((stage, i) => (
           <div key={i} className="grid items-end gap-2 rounded-xl border border-white/10 p-3 sm:grid-cols-[1fr_170px_auto]">
             <BilingualField label={`${t("erp.projects.stage")} ${i + 1}`} value={stage.name} onChange={(name) => setStage(i, { name })} />
@@ -94,6 +95,7 @@ function TemplateEditor({ template, lookups, onSaved, onClose }) {
 
 export default function TemplatesManager() {
   const { t, lang } = useLanguage();
+  const confirm = useConfirm();
   const lookups = useTaskLookups();
   const [templates, setTemplates] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -106,7 +108,7 @@ export default function TemplatesManager() {
   }, [t]);
 
   async function remove(tpl) {
-    if (!window.confirm(t("common.confirmDelete"))) return;
+    if (!(await confirm({ text: t("common.confirmDelete"), kind: "delete" }))) return;
     await api(`/api/project-templates/${tpl.id}`, { method: "DELETE" }).catch(() => {});
     setTemplates((l) => (l || []).filter((x) => x.id !== tpl.id));
   }
@@ -133,7 +135,7 @@ export default function TemplatesManager() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-semibold">{tpl.name?.[lang]}</p>
-                <p className="text-xs text-white/45">
+                <p className="text-xs text-white/60">
                   {lookups.departmentName(tpl.department)} · {tpl.stages.length} {t("erp.projects.stagesCount")}
                   {!tpl.active && ` · ${t("erp.org.inactive")}`}
                 </p>
@@ -150,7 +152,7 @@ export default function TemplatesManager() {
             <div className="mt-4 flex flex-wrap items-center gap-1.5 text-xs">
               {tpl.stages.map((s, i) => (
                 <span key={s.key} className="flex items-center gap-1.5">
-                  {i > 0 && <span className="text-white/25">←</span>}
+                  {i > 0 && <span className="text-white/60">←</span>}
                   <span className="rounded-full bg-white/10 px-2.5 py-1 text-white/75">
                     {s.name?.[lang]}
                     {s.department && s.department !== tpl.department && <span className="text-brand-orange"> · {lookups.departmentName(s.department)}</span>}

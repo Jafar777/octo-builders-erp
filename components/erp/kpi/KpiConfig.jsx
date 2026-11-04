@@ -65,7 +65,7 @@ export default function KpiConfig() {
           {t("erp.kpi.totalWeight", { total })}
           {total !== 100 && ` — ${t("erp.kpi.normalized")}`}
         </p>
-        <p className="w-full text-xs text-white/40">{t("erp.kpi.bandHint")}</p>
+        <p className="w-full text-xs text-white/60">{t("erp.kpi.bandHint")}</p>
       </Card>
 
       <div className="space-y-6">
@@ -98,7 +98,7 @@ export default function KpiConfig() {
                   </button>
                 </div>
                 <table className="w-full max-w-lg text-sm">
-                  <thead className="text-xs text-white/45">
+                  <thead className="text-xs text-white/60">
                     <tr>
                       <th className="px-1 pb-1 text-start font-medium">{t("erp.kpi.bandFrom")}</th>
                       <th className="px-1 pb-1 text-start font-medium">{t("erp.kpi.bandTo")}</th>
@@ -150,7 +150,7 @@ export default function KpiConfig() {
         <Button onClick={save}>{t("erp.kpi.saveVersion")}</Button>
         <ErrorText>{error}</ErrorText>
         {status && <p className="text-sm text-emerald-300">{status}</p>}
-        <p className="text-xs text-white/40">{meta.versions.length ? `${t("erp.kpi.versions")}: ${meta.versions.join(", ")}` : t("erp.kpi.usingDefaults")}</p>
+        <p className="text-xs text-white/60">{meta.versions.length ? `${t("erp.kpi.versions")}: ${meta.versions.join(", ")}` : t("erp.kpi.usingDefaults")}</p>
       </div>
     </div>
   );

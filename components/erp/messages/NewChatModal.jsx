@@ -7,6 +7,7 @@ import { api, errorText } from "@/lib/clientApi";
 import Avatar from "@/components/erp/ui/Avatar";
 import Modal from "@/components/erp/ui/Modal";
 import { Button, ErrorText, Input } from "@/components/erp/ui/fields";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
 export function PeoplePicker({ people, selected, onToggle, multi }) {
   const { t } = useLanguage();
@@ -17,7 +18,7 @@ export function PeoplePicker({ people, selected, onToggle, multi }) {
   return (
     <div>
       <div className="relative mb-3">
-        <Search size={15} className="absolute start-3 top-1/2 -translate-y-1/2 text-white/40" />
+        <Search size={15} className="absolute start-3 top-1/2 -translate-y-1/2 text-white/60" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -38,7 +39,7 @@ export function PeoplePicker({ people, selected, onToggle, multi }) {
               <Avatar name={p.name} src={p.avatarUrl} size={36} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm">{p.name}</span>
-                <span className="block truncate text-xs text-white/40" dir="ltr">
+                <span className="block truncate text-xs text-white/60" dir="ltr">
                   {p.email}
                 </span>
               </span>
@@ -46,7 +47,7 @@ export function PeoplePicker({ people, selected, onToggle, multi }) {
             </button>
           );
         })}
-        {list.length === 0 && <p className="py-6 text-center text-sm text-white/40">{t("dashboard.noItems")}</p>}
+        {list.length === 0 && <EmptyState compact text={t("dashboard.noItems")} />}
       </div>
     </div>
   );

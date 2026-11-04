@@ -55,6 +55,7 @@ export default function AccessHistory({ roles, departments = [] }) {
         {diffChips(d.workDepartments?.added, `${H("workAdded")}:`, dep, "green")}
         {diffChips(d.workDepartments?.removed, `${H("workRemoved")}:`, dep, "red")}
         {d.crossDepartment && <Chip tone="green">{`${t("erp.access.work.title")}: ${any(d.crossDepartment.from)} → ${any(d.crossDepartment.to)}`}</Chip>}
+        {d.requireMfa && <Chip tone="sky">{d.requireMfa.to ? H("requireMfaOn") : `− ${H("requireMfaOn")}`}</Chip>}
         {d.limited && <Chip tone="orange">{H(d.limited.to ? "restrictedOn" : "restrictedOff")}</Chip>}
       </>
     );
@@ -62,7 +63,7 @@ export default function AccessHistory({ roles, departments = [] }) {
 
   if (!loading && !logs.length) {
     return (
-      <div className="flex min-h-48 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/10 text-sm text-white/40">
+      <div className="flex min-h-48 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/10 text-sm text-white/60">
         <History size={22} />
         {t("erp.access.history.empty")}
       </div>
@@ -85,7 +86,7 @@ export default function AccessHistory({ roles, departments = [] }) {
                   <span className="font-semibold">{l.actor}</span> <span className="text-white/55">{t(`erp.access.history.${l.action.replace(".", "_")}`)}</span>{" "}
                   <span className="font-semibold">{target}</span>
                 </p>
-                <time className="text-[11px] text-white/35">{new Date(l.createdAt).toLocaleString(lang === "ar" ? "ar" : "en-GB", { dateStyle: "medium", timeStyle: "short" })}</time>
+                <time className="text-[11px] text-white/55">{new Date(l.createdAt).toLocaleString(lang === "ar" ? "ar" : "en-GB", { dateStyle: "medium", timeStyle: "short" })}</time>
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">{details(l)}</div>
             </li>

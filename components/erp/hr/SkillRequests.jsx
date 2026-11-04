@@ -58,7 +58,7 @@ export function PendingSkills({ userId, requests, canApprove, onDone }) {
   if (!pending.length) return null;
   return (
     <div className="space-y-2">
-      <p className="text-xs text-white/45">{t("erp.skills.pendingTitle")}</p>
+      <p className="text-xs text-white/60">{t("erp.skills.pendingTitle")}</p>
       <div className="flex flex-wrap gap-2">
         {pending.map((r) =>
           canApprove ? (
@@ -118,7 +118,7 @@ export function MySkillsCard({ userId, data }) {
     <Card className="space-y-4 lg:col-span-2">
       <div>
         <p className="font-semibold">{t("erp.staffFile.skills")}</p>
-        <p className="mt-0.5 text-xs text-white/45">{t("erp.skills.myHint")}</p>
+        <p className="mt-0.5 text-xs text-white/60">{t("erp.skills.myHint")}</p>
       </div>
       <div className="flex flex-wrap gap-2">
         {skills.map((s) => (
@@ -140,7 +140,7 @@ export function MySkillsCard({ userId, data }) {
             </button>
           </span>
         ))}
-        {empty && <p className="text-sm text-white/40">{t("erp.staffFile.noSkills")}</p>}
+        {empty && <p className="text-sm text-white/60">{t("erp.staffFile.noSkills")}</p>}
       </div>
       <div className="flex items-end gap-2">
         <div className="flex-1">

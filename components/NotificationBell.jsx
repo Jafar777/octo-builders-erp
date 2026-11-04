@@ -203,7 +203,7 @@ export default function NotificationBell() {
                     {!n.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-orange" />}
                     <span className="min-w-0 break-words">
                       {n.message?.[lang] || n.message?.en || ""}
-                      <span className="mt-1 block text-xs text-white/40">{formatRelative(n.createdAt, lang)}</span>
+                      <span className="mt-1 block text-xs text-white/60">{formatRelative(n.createdAt, lang)}</span>
                     </span>
                   </span>
                 </button>
@@ -255,7 +255,7 @@ export default function NotificationBell() {
       >
         <Bell size={20} />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -end-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-orange px-1 text-[10px] font-bold text-white">
+          <span className="absolute -top-0.5 -end-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-orange px-1 text-[11px] font-bold text-white">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}

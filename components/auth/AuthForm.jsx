@@ -16,6 +16,9 @@ export default function AuthForm() {
 
   const [tab, setTab] = useState(searchParams.get("tab") === "signup" ? "signup" : "login");
   const [step, setStep] = useState("form");
+  // Set once the email code passed for an account with an authenticator app: the same
+  // code box then takes the app's code (/api/auth/verify-mfa).
+  const [ticket, setTicket] = useState("");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -62,14 +65,29 @@ export default function AuthForm() {
     setErrorKey("");
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/verify-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code, purpose: tab }),
-      });
+      const res = ticket
+        ? await fetch("/api/auth/verify-mfa", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ticket, code }),
+          })
+        : await fetch("/api/auth/verify-otp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, code, purpose: tab }),
+          });
       const data = await res.json();
       if (!res.ok) {
+        if (data.error === "mfa_expired") {
+          setTicket("");
+          setStep("form");
+        }
         setErrorKey(data.error || "server_error");
+        return;
+      }
+      if (data.mfa) {
+        setTicket(data.ticket);
+        setCode("");
         return;
       }
       await refresh();
@@ -179,7 +197,7 @@ export default function AuthForm() {
             </motion.div>
           ) : (
             <motion.div
-              key="otp"
+              key={ticket ? "app" : "otp"}
               initial={{ opacity: 0, x: 24 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -24 }}
@@ -187,17 +205,24 @@ export default function AuthForm() {
             >
               <button
                 type="button"
-                onClick={() => setStep("form")}
+                onClick={() => {
+                  setTicket("");
+                  setStep("form");
+                }}
                 className="mb-4 flex items-center gap-1 text-sm text-white/50 hover:text-white"
               >
                 <ArrowLeft size={14} />
                 {t("auth.changeEmail")}
               </button>
 
-              <h1 className="text-2xl font-bold text-white">{t("auth.verify")}</h1>
-              <p className="mt-2 break-all text-sm text-white/50" dir="ltr">
-                {email}
-              </p>
+              <h1 className="text-2xl font-bold text-white">{t(ticket ? "auth.appCodeTitle" : "auth.verify")}</h1>
+              {ticket ? (
+                <p className="mt-2 text-sm text-white/50">{t("auth.appCodeHint")}</p>
+              ) : (
+                <p className="mt-2 break-all text-sm text-white/50" dir="ltr">
+                  {email}
+                </p>
+              )}
 
               <form onSubmit={handleVerifyCode} className="mt-6 space-y-4">
                 <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3">

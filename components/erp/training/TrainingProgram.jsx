@@ -11,6 +11,7 @@ import Stars from "@/components/erp/tasks/Stars";
 import { Button, Card, ErrorText, Input, Label, PageHeader, Select } from "@/components/erp/ui/fields";
 import { MonthPicker } from "@/components/erp/hr/hrUi";
 import { SkeletonCards } from "@/components/erp/ui/Loading";
+import { useConfirm } from "@/components/erp/ui/Feedback";
 
 const MEDAL = ["text-amber-300", "text-slate-200", "text-orange-300"];
 
@@ -126,13 +127,13 @@ function TopTrainees({ top, month, onMonth }) {
                   <Stars value={r.average} size={12} />
                   <span dir="ltr">{r.average}</span>
                 </p>
-                <p className="mt-0.5 text-xs text-white/45">{t("erp.training.rankLine", { stars: r.stars, n: r.finished })}</p>
+                <p className="mt-0.5 text-xs text-white/60">{t("erp.training.rankLine", { stars: r.stars, n: r.finished })}</p>
               </div>
             </div>
           ))}
         </div>
       )}
-      <p className="mt-3 text-[11px] text-white/35">{t("erp.training.rankHint")}</p>
+      <p className="mt-3 text-[11px] text-white/55">{t("erp.training.rankHint")}</p>
     </Card>
   );
 }
@@ -144,13 +145,14 @@ function Section({ title, count, empty, children }) {
         {title}
         <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-white/60">{count}</span>
       </h2>
-      {count ? <div className="grid gap-3 lg:grid-cols-2">{children}</div> : <p className="text-sm text-white/40">{empty}</p>}
+      {count ? <div className="grid gap-3 lg:grid-cols-2">{children}</div> : <p className="text-sm text-white/60">{empty}</p>}
     </section>
   );
 }
 
 function TaskCard({ task, admin, onChanged, onError }) {
   const { t, lang } = useLanguage();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState("");
   const finished = task.status === "finished";
   const canDelete = admin || (!task.assignedByAdmin && !task.rating);
@@ -168,7 +170,7 @@ function TaskCard({ task, admin, onChanged, onError }) {
     }
   }
   const patch = (key, body) => run(key, () => api(`/api/training/${task.id}`, { method: "PATCH", body }));
-  const remove = () => window.confirm(t("erp.training.deleteConfirm")) && run("delete", () => api(`/api/training/${task.id}`, { method: "DELETE" }));
+  const remove = async () => (await confirm({ text: t("erp.training.deleteConfirm"), kind: "delete" })) && run("delete", () => api(`/api/training/${task.id}`, { method: "DELETE" }));
 
   return (
     <Card className="flex flex-col gap-3 !p-4">
@@ -180,7 +182,7 @@ function TaskCard({ task, admin, onChanged, onError }) {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/45">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/60">
         {admin && task.trainee && (
           <span className="flex items-center gap-1.5 text-white/70">
             <Avatar name={task.trainee.name} src={task.trainee.avatarUrl} size={20} />
@@ -200,7 +202,7 @@ function TaskCard({ task, admin, onChanged, onError }) {
             ) : task.rating ? (
               <Stars value={task.rating} size={16} />
             ) : (
-              <span className="text-xs text-white/45">{t("erp.training.waitingRating")}</span>
+              <span className="text-xs text-white/60">{t("erp.training.waitingRating")}</span>
             ))}
         </div>
         <div className="flex flex-wrap gap-2">
@@ -276,7 +278,7 @@ function NewTask({ open, admin, trainees, onClose, onSaved }) {
             onChange={(e) => set("description")(e.target.value)}
             rows={4}
             maxLength={4000}
-            className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/25 focus:border-white/30"
+            className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/45 focus:border-white/30"
           />
         </div>
         <ErrorText>{error}</ErrorText>

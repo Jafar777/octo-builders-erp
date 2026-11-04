@@ -15,6 +15,8 @@ const RoleSchema = new mongoose.Schema(
     pages: { type: [String], default: [] },
     // Its holders can be given tasks of any department, not only their own.
     crossDepartment: { type: Boolean, default: false },
+    // Its holders must sign in with an authenticator app as well as the email code.
+    requireMfa: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

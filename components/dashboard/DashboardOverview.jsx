@@ -26,9 +26,10 @@ import { namesComplete } from "@/components/erp/staff/NameFields";
 import { ErrorText, Input } from "@/components/erp/ui/fields";
 import CheckInCard from "@/components/erp/hr/CheckInCard";
 import { hm, money, StatTile } from "@/components/erp/hr/hrUi";
-import { StatusBadge, taskHeading } from "@/components/erp/tasks/TaskRow";
+import { StatusBadge, TaskName } from "@/components/erp/tasks/TaskRow";
 import { Skeleton, SkeletonCards, SkeletonList } from "@/components/erp/ui/Loading";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
 // Risk levels: status colours always come with an icon and a label.
 const LEVEL = {
@@ -80,8 +81,8 @@ function HomeSkeleton() {
 const STAGE_TONE = {
   approved: "border-emerald-400/40 bg-emerald-500/15 text-emerald-200",
   done: "border-emerald-400/40 bg-emerald-500/15 text-emerald-200",
-  skip: "border-white/10 text-white/40 line-through",
-  cancelled: "border-white/10 text-white/40 line-through",
+  skip: "border-white/10 text-white/60 line-through",
+  cancelled: "border-white/10 text-white/60 line-through",
   pending: "border-amber-400/40 bg-amber-500/10 text-amber-200",
   in_progress: "border-sky-400/40 bg-sky-500/10 text-sky-200",
   on_hold: "border-sky-400/40 bg-sky-500/10 text-sky-200",
@@ -116,7 +117,7 @@ function CustomerHome() {
             <div key={p.id} className="rounded-xl border border-white/[0.06] p-4">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="min-w-0 flex-1 font-semibold" dir="auto">
-                  {p.name?.[lang]} {p.code && <span className="text-xs font-normal text-white/40">· {p.code}</span>}
+                  {p.name?.[lang]} {p.code && <span className="text-xs font-normal text-white/60">· {p.code}</span>}
                 </span>
                 <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs">{t(`erp.projects.status.${p.status}`)}</span>
               </div>
@@ -144,7 +145,7 @@ function CustomerHome() {
               </div>
             </div>
           ))}
-          {!projects.length && <p className="py-6 text-center text-sm text-white/40">{t("erp.projects.none")}</p>}
+          {!projects.length && <EmptyState compact text={t("erp.projects.none")} />}
         </div>
       </Section>
     </div>
@@ -249,19 +250,19 @@ export default function DashboardOverview({ user }) {
               <div className="space-y-2">
                 {d.myTasks?.list.map((task) => (
                   <Link key={task.id} href={`/dashboard/tasks?task=${task.id}`} className="flex items-center gap-3 rounded-xl border border-white/[0.06] px-3 py-2.5 text-sm hover:bg-white/[0.05]">
-                    <span className="w-12 shrink-0 text-xs text-white/40" dir="ltr">
+                    <span className="w-12 shrink-0 text-xs text-white/60" dir="ltr">
                       #{task.number}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate">{taskHeading(task, lang)}</span>
+                      <TaskName task={task} compact />
                       {task.dueAt && (
-                        <span className={`block text-xs ${task.late ? "text-red-300" : "text-white/45"}`}>{formatDateTime(task.dueAt, lang)}</span>
+                        <span className={`block text-xs ${task.late ? "text-red-300" : "text-white/60"}`}>{formatDateTime(task.dueAt, lang)}</span>
                       )}
                     </span>
                     <StatusBadge status={task.status} />
                   </Link>
                 ))}
-                {!d.myTasks?.list.length && <p className="py-6 text-center text-sm text-white/40">{t("erp.home.noTasks")}</p>}
+                {!d.myTasks?.list.length && <EmptyState compact text={t("erp.home.noTasks")} />}
               </div>
             </Section>
 
@@ -269,14 +270,14 @@ export default function DashboardOverview({ user }) {
               <div className="space-y-2">
                 {d.notifications?.map((n) => (
                   <Link key={n.id} href={n.link || "/dashboard/notifications"} className="flex items-start gap-3 rounded-xl px-2 py-2 text-sm hover:bg-white/[0.05]">
-                    <Bell size={15} className={`mt-0.5 shrink-0 ${n.priority === "high" ? "text-brand-orange" : "text-white/40"}`} />
+                    <Bell size={15} className={`mt-0.5 shrink-0 ${n.priority === "high" ? "text-brand-orange" : "text-white/60"}`} />
                     <span className="min-w-0 flex-1">
                       <span className="line-clamp-2 text-white/85">{n.message?.[lang]}</span>
-                      <span className="text-xs text-white/40">{formatRelative(n.createdAt, lang)}</span>
+                      <span className="text-xs text-white/60">{formatRelative(n.createdAt, lang)}</span>
                     </span>
                   </Link>
                 ))}
-                {!d.notifications?.length && <p className="py-6 text-center text-sm text-white/40">{t("erp.home.allCaughtUp")}</p>}
+                {!d.notifications?.length && <p className="py-6 text-center text-sm text-white/60">{t("erp.home.allCaughtUp")}</p>}
               </div>
             </Section>
 
@@ -286,15 +287,15 @@ export default function DashboardOverview({ user }) {
                   {d.reviews.list.map((task) => (
                     <Link key={task.id} href={`/dashboard/reviews?task=${task.id}`} className="flex items-center gap-3 rounded-xl border border-white/[0.06] px-3 py-2.5 text-sm hover:bg-white/[0.05]">
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate">{taskHeading(task, lang)}</span>
-                        <span className="block text-xs text-white/45">
+                        <TaskName task={task} compact />
+                        <span className="block text-xs text-white/60">
                           {task.assignee?.name} {task.assignee && <TraineeBadge id={task.assignee.id} />} · {formatRelative(task.submittedAt, lang)}
                         </span>
                       </span>
                       {task.late && <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] text-red-300">{t("erp.tasks.late")}</span>}
                     </Link>
                   ))}
-                  {!d.reviews.list.length && <p className="py-6 text-center text-sm text-white/40">{t("erp.home.nothingToReview")}</p>}
+                  {!d.reviews.list.length && <p className="py-6 text-center text-sm text-white/60">{t("erp.home.nothingToReview")}</p>}
                 </div>
               </Section>
             )}
@@ -325,7 +326,7 @@ export default function DashboardOverview({ user }) {
                       </Link>
                     );
                   })}
-                  {!d.projects.top.length && <p className="py-6 text-center text-sm text-white/40">{t("erp.projects.none")}</p>}
+                  {!d.projects.top.length && <EmptyState compact text={t("erp.projects.none")} />}
                 </div>
               </Section>
             )}

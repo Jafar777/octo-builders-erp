@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { requireStaff } from "@/lib/currentUser";
+import { hasPermission, requireStaff } from "@/lib/currentUser";
+import { projectEvm } from "@/lib/evm";
+import { hourlyRates } from "@/lib/costRates";
 import { forbidden } from "@/lib/apiUtils";
 import { canEditGantt, canSeeGantt, HOLDING_STATUSES, isGanttDeptManager, makeCalendar } from "@/lib/gantt";
 import { freeTime, serializeMilestone } from "@/lib/ganttServer";
@@ -64,6 +66,14 @@ export async function GET(request) {
   const lang = await viewerLang();
   const calendar = makeCalendar(settings);
   const canSchedule = canEditGantt(user);
+  // Milestone billing is set by whoever issues invoices.
+  const canBill = canSchedule && hasPermission(user, "invoices.manage");
+  // Earned value per project (hours; and money for finance viewers on the full chart).
+  const withMoney = hasPermission(user, "finance.view") && !departmentOnly;
+  const rates = withMoney ? await hourlyRates(assigneeIds.filter(Boolean), settings) : null;
+  const tasksOf = {};
+  for (const tk of tasks) (tasksOf[String(tk.project)] ||= []).push(tk);
+  const nowMs = Date.now();
 
   return NextResponse.json({
     tasks: await enrichTasks(tasks),
@@ -84,9 +94,11 @@ export async function GET(request) {
       forecastStart: p.forecastStart || null,
       forecastEnd: p.forecastEnd || null,
       rank: Number.isFinite(p.rank) ? p.rank : null,
+      evm: projectEvm(tasksOf[p._id.toString()] || [], nowMs, rates),
     })),
     // Changing the schedule is for company-wide managers (GM / CEO).
     canSchedule,
+    canBill,
     // Only the viewer's department's tasks were sent: projects without any are hidden.
     departmentOnly,
     // …who also see who has free time to give work to.

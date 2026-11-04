@@ -8,6 +8,7 @@ import { createSessionToken, setSessionCookie } from "@/lib/auth";
 import { ensureErpSeeded } from "@/lib/erpSeed";
 import { notify, usersWithPermission } from "@/lib/notify";
 import { audit } from "@/lib/audit";
+import { createMfaTicket, recordLogin } from "@/lib/security";
 
 export async function POST(request) {
   try {
@@ -28,17 +29,20 @@ export async function POST(request) {
 
     if (otp.expiresAt < new Date()) {
       await OtpCode.deleteMany({ email, purpose });
+      if (purpose === "login") await recordLogin({ email, success: false, reason: "expired" });
       return NextResponse.json({ error: "code_expired" }, { status: 400 });
     }
 
     if (otp.attempts >= OTP_MAX_ATTEMPTS) {
       await OtpCode.deleteMany({ email, purpose });
+      if (purpose === "login") await recordLogin({ email, success: false, reason: "too_many_attempts" });
       return NextResponse.json({ error: "too_many_attempts" }, { status: 429 });
     }
 
     if (otp.code !== hashOtpCode(String(code).trim())) {
       otp.attempts += 1;
       await otp.save();
+      if (purpose === "login") await recordLogin({ email, success: false, reason: "invalid_code" });
       return NextResponse.json({ error: "invalid_code" }, { status: 400 });
     }
 
@@ -75,10 +79,17 @@ export async function POST(request) {
       return NextResponse.json({ error: "account_not_found" }, { status: 404 });
     }
 
+    await OtpCode.deleteMany({ email, purpose });
+
+    // Authenticator app turned on: the email code alone isn't enough. The second step
+    // (/api/auth/verify-mfa) finishes the sign-in.
+    if (user.mfa?.enabled) {
+      return NextResponse.json({ mfa: true, ticket: await createMfaTicket(user._id) });
+    }
+
     user.lastLoginAt = new Date();
     await user.save();
-
-    await OtpCode.deleteMany({ email, purpose });
+    await recordLogin({ user: user._id, email, method: "email" });
 
     const token = await createSessionToken({
       sub: user._id.toString(),

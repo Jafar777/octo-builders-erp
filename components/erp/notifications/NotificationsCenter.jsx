@@ -11,6 +11,7 @@ import { formatDateTime } from "@/lib/formatTime";
 import { Button, PageHeader } from "@/components/erp/ui/fields";
 import { SkeletonList } from "@/components/erp/ui/Loading";
 import NotificationPreferences from "@/components/erp/notifications/NotificationPreferences";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
 export default function NotificationsCenter() {
   const { t, lang } = useLanguage();
@@ -95,14 +96,14 @@ export default function NotificationsCenter() {
               n.read ? "border-white/5 bg-white/[0.02]" : "border-brand-orange/30 bg-brand-orange/[0.06]"
             }`}
           >
-            <Bell size={18} className={`mt-0.5 shrink-0 ${n.read ? "text-white/30" : "text-brand-orange"}`} />
+            <Bell size={18} className={`mt-0.5 shrink-0 ${n.read ? "text-white/50" : "text-brand-orange"}`} />
             <span className="min-w-0 flex-1">
               <span className="block text-sm text-white/90">{n.message?.[lang] || n.message?.en}</span>
-              <span className="mt-1 block text-xs text-white/40">{formatDateTime(n.createdAt, lang)}</span>
+              <span className="mt-1 block text-xs text-white/60">{formatDateTime(n.createdAt, lang)}</span>
             </span>
           </button>
         ))}
-        {!loading && items.length === 0 && <p className="py-10 text-center text-white/40">{t("notifications.empty")}</p>}
+        {!loading && items.length === 0 && <EmptyState compact text={t("notifications.empty")} />}
       </div>
 
       <div className="mt-5 flex justify-center">

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Ban, Building2, ChevronDown, GripVertical, ChevronsDownUp, ChevronsUpDown, Crosshair, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Plus, Sparkles, UserCheck } from "lucide-react";
+import { AlertTriangle, Ban, Building2, ChevronDown, Diamond, GripVertical, ChevronsDownUp, ChevronsUpDown, Crosshair, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Plus, Sparkles, UserCheck } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
 import { locale } from "@/lib/formatTime";
@@ -42,6 +42,8 @@ import { revisionLabel, toLocalInput, useNow } from "@/components/erp/tasks/task
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 import { ExternalHoursField, ExternalReviewBox } from "@/components/erp/tasks/ExternalReview";
+import ProjectMilestones from "@/components/erp/projects/ProjectMilestones";
+import { evmTone } from "@/lib/evm";
 
 // The task-name column: narrower on phones so the chart keeps most of the screen.
 const LABEL_W = 270;
@@ -116,6 +118,8 @@ export default function ProjectsTimeline({ projects, status }) {
   const [collapsed, setCollapsed] = useState({});
   const [drag, setDrag] = useState(null);
   const [editing, setEditing] = useState(null);
+  // The project whose milestones (and billing) are open.
+  const [milestonesFor, setMilestonesFor] = useState(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [assignFor, setAssignFor] = useState(null); // an employee with free time
   const [error, setError] = useState("");
@@ -180,6 +184,8 @@ export default function ProjectsTimeline({ projects, status }) {
   // Saved expected deliveries per project (Baseline 1 at creation, 2, 3… from here).
   const baselinesOf = useMemo(() => Object.fromEntries((data?.projects || []).map((p) => [p.id, p.baselines || []])), [data]);
   const forecastOf = useMemo(() => Object.fromEntries((data?.projects || []).map((p) => [p.id, p.forecastEnd])), [data]);
+  const evmOf = useMemo(() => Object.fromEntries((data?.projects || []).map((p) => [p.id, p.evm || null])), [data]);
+  const milestonesOf = useMemo(() => Object.fromEntries((data?.projects || []).map((p) => [p.id, p.milestones || []])), [data]);
   // The CEO's priority order (dragged on the chart): 0 = top. Unranked projects follow.
   const rankOf = useMemo(() => Object.fromEntries((data?.projects || []).map((p) => [p.id, p.rank ?? Infinity])), [data]);
 
@@ -825,6 +831,9 @@ export default function ProjectsTimeline({ projects, status }) {
                     baselines={row.kind === "project" ? baselinesOf[row.group.id] : null}
                     forecastEnd={row.kind === "project" ? forecastOf[row.group.id] : null}
                     onSaveBaseline={canSchedule && row.kind === "project" ? () => saveBaseline(row.group.project) : null}
+                    milestones={row.kind === "project" ? milestonesOf[row.group.id] : null}
+                    evm={row.kind === "project" ? evmOf[row.group.id] : null}
+                    onMilestones={canSchedule && row.kind === "project" ? () => setMilestonesFor(row.group.project) : null}
                     rank={row.kind === "project" ? rankHandlers(row.group.id) : null}
                   />
                 )
@@ -948,6 +957,22 @@ export default function ProjectsTimeline({ projects, status }) {
                           {name} · {pct}%
                         </span>
                       </Link>
+                      {/* Milestones: reached green, past their date red, otherwise yellow. */}
+                      {(milestonesOf[project.id] || []).map((m) => {
+                        const at = new Date(m.date).getTime();
+                        const tone = m.doneAt ? "bg-emerald-400" : at < now ? "bg-red-400" : "bg-yellow-300";
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => canSchedule && setMilestonesFor(project)}
+                            className={`absolute z-[9] h-3 w-3 -translate-x-1/2 rotate-45 border border-black/30 ${tone}`}
+                            style={{ left: x(at), top: row.y + GROUP_H / 2 - 6 }}
+                            title={`◆ ${m.name} · ${nowFmt.format(new Date(at))}${m.billPercent > 0 || m.billAmount > 0 ? ` · ${t("erp.milestones.billed")}` : ""}`}
+                            aria-label={m.name}
+                          />
+                        );
+                      })}
                       {/* The client's due date, for comparison with the expected delivery. */}
                       {due && (
                         <span
@@ -1085,6 +1110,17 @@ export default function ProjectsTimeline({ projects, status }) {
         )}
       </Modal>
 
+      <Modal open={Boolean(milestonesFor)} onClose={() => setMilestonesFor(null)} title={`${t("erp.milestones.title")} · ${milestonesFor?.name?.[lang] || ""}`} wide>
+        {milestonesFor && (
+          <ProjectMilestones
+            key={milestonesFor.id}
+            projectId={milestonesFor.id}
+            milestones={milestonesOf[milestonesFor.id] || []}
+            canBill={Boolean(data?.canBill)}
+            onChanged={(list) => setData((d) => ({ ...d, projects: d.projects.map((p) => (p.id === milestonesFor.id ? { ...p, milestones: list } : p)) }))}
+          />
+        )}
+      </Modal>
       <Modal open={Boolean(editing)} onClose={() => setEditing(null)} title={t("erp.gantt.editTask")}>
         {editing && (
           <ScheduleForm
@@ -1112,7 +1148,7 @@ function barTitle(task, lang) {
 }
 
 // `rank` (CEO, projects): drag handlers to move the project up or down the priority order.
-function GroupLabel({ group, lang, t, collapsed, onToggle, load, today, cal, baselines, forecastEnd, onSaveBaseline, rank = null }) {
+function GroupLabel({ group, lang, t, collapsed, onToggle, load, today, cal, baselines, forecastEnd, onSaveBaseline, rank = null, milestones = null, onMilestones = null, evm = null }) {
   const isProject = group.kind === "project";
   const title = isProject ? group.project.name?.[lang] : group.person.name;
   // People: hours planned this week (next 7 office days) against capacity.
@@ -1157,6 +1193,17 @@ function GroupLabel({ group, lang, t, collapsed, onToggle, load, today, cal, bas
           </span>
         )}
       </button>
+      {evm && (evm.spi !== null || evm.cpi !== null) && <EvmBadge evm={evm} t={t} lang={lang} />}
+      {onMilestones && (
+        <button
+          type="button"
+          onClick={onMilestones}
+          title={t("erp.milestones.title")}
+          className="flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-1 text-[10px] font-semibold text-white/35 hover:bg-white/10 hover:text-white"
+        >
+          <Diamond size={11} /> {milestones?.length || 0}
+        </button>
+      )}
       {onSaveBaseline && (
         <button
           type="button"
@@ -1169,6 +1216,26 @@ function GroupLabel({ group, lang, t, collapsed, onToggle, load, today, cal, bas
         </button>
       )}
     </div>
+  );
+}
+
+// Earned value on a project row: schedule index (work done ÷ work planned by now) and
+// hours index (work done ÷ hours spent). Green ≥ 0.95, amber ≥ 0.85, red below.
+const EVM_TONE = { ok: "text-emerald-300", watch: "text-amber-300", bad: "text-red-300", none: "text-white/35" };
+function EvmBadge({ evm, t, lang }) {
+  const fmt = (v) => (v === null ? "—" : v.toFixed(2));
+  const money = evm.money
+    ? `
+${t("erp.evm.cost", { planned: Math.round(evm.money.planned).toLocaleString(lang), actual: Math.round(evm.money.actual).toLocaleString(lang), forecast: Math.round(evm.money.forecast).toLocaleString(lang) })}`
+    : "";
+  const title = `${t("erp.evm.title")}
+${t("erp.evm.hours", { bac: evm.bac, ev: evm.ev, pv: evm.pv, ac: evm.ac, eac: evm.eac })}${money}`;
+  return (
+    <span className="flex shrink-0 items-center gap-1 rounded-md px-1 py-0.5 text-[10px] font-semibold tabular-nums" title={title}>
+      <span className={EVM_TONE[evmTone(evm.spi)]}>{t("erp.evm.spi")} {fmt(evm.spi)}</span>
+      <span className="text-white/20">·</span>
+      <span className={EVM_TONE[evmTone(evm.cpi)]}>{t("erp.evm.cpi")} {fmt(evm.cpi)}</span>
+    </span>
   );
 }
 

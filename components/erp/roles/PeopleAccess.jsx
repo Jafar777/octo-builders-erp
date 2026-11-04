@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { LoginHistory } from "@/components/erp/security/SecurityCard";
 import { Ban, Check, Eraser, Save, Search, ShieldAlert, Undo2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
@@ -8,6 +9,7 @@ import { effectiveAccess, PAGES, PERMISSIONS, SCOPES } from "@/lib/permissions";
 import Avatar from "@/components/erp/ui/Avatar";
 import { Button, ErrorText, Select } from "@/components/erp/ui/fields";
 import { Chip, hintKey, isSensitive, NavPreview, PERM_GROUPS, sameSet, Section, simulatedUser } from "./accessShared";
+import { useConfirm } from "@/components/erp/ui/Feedback";
 
 const EMPTY = { grant: [], deny: [], scope: null, hiddenPages: [], workDepartments: [], crossDepartment: null, note: "" };
 export const hasExceptions = (a) =>
@@ -38,7 +40,7 @@ export default function PeopleAccess({ people, roles, departments, viewer, onPer
     <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
       <div className="space-y-3">
         <div className="relative">
-          <Search size={14} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-white/30" />
+          <Search size={14} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-white/50" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -65,7 +67,7 @@ export default function PeopleAccess({ people, roles, departments, viewer, onPer
                 <Avatar name={p.name} src={p.avatarUrl} size={32} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm">{p.name}</span>
-                  <span className="block truncate text-[11px] text-white/40">{roleOf[p.role]?.name?.[lang] || p.role}</span>
+                  <span className="block truncate text-[11px] text-white/60">{roleOf[p.role]?.name?.[lang] || p.role}</span>
                 </span>
                 <span className="flex flex-col items-end gap-1">
                   {hasExceptions(p.access) && <Chip tone="orange">{t("erp.access.person.hasExceptions")}</Chip>}
@@ -80,9 +82,51 @@ export default function PeopleAccess({ people, roles, departments, viewer, onPer
       {person ? (
         <PersonPanel key={person.id} person={person} role={roleOf[person.role]} roles={roles} departments={departments} viewer={viewer} onChanged={onPersonChanged} />
       ) : (
-        <div className="flex min-h-64 items-center justify-center rounded-2xl border border-dashed border-white/10 p-6 text-sm text-white/40">{t("erp.access.person.pick")}</div>
+        <div className="flex min-h-64 items-center justify-center rounded-2xl border border-dashed border-white/10 p-6 text-sm text-white/60">{t("erp.access.person.pick")}</div>
       )}
     </div>
+  );
+}
+
+// Their sign-in security: authenticator app on or off (the CEO can remove it when a
+// phone is lost) and their recent sign-ins.
+function PersonSecurity({ personId, canReset }) {
+  const { t } = useLanguage();
+  const confirm = useConfirm();
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const load = useCallback(() => {
+    api(`/api/staff/${personId}/security`).then(setData).catch(() => {});
+  }, [personId]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  async function reset() {
+    if (!(await confirm({ text: t("erp.security.resetConfirm"), danger: true }))) return;
+    try {
+      await api(`/api/staff/${personId}/security`, { method: "DELETE" });
+      load();
+    } catch (err) {
+      setError(errorText(t, err));
+    }
+  }
+  return (
+    <Section title={t("erp.security.title")}>
+      {data && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Chip tone={data.mfaEnabled ? "green" : "plain"}>{t(data.mfaEnabled ? "erp.security.on" : "erp.security.off")}</Chip>
+            {data.mfaEnabled && canReset && (
+              <button type="button" onClick={reset} className="text-xs text-red-300 hover:underline">
+                {t("erp.security.reset")}
+              </button>
+            )}
+          </div>
+          <ErrorText>{error}</ErrorText>
+          <LoginHistory logins={data.logins} />
+        </div>
+      )}
+    </Section>
   );
 }
 
@@ -148,7 +192,7 @@ function PersonPanel({ person, role, roles, departments, viewer, onChanged }) {
         disabled={locked}
         onClick={() => setState(k, s)}
         title={label}
-        className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] transition ${on ? tone : "text-white/45 hover:text-white"} disabled:cursor-not-allowed`}
+        className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] transition ${on ? tone : "text-white/60 hover:text-white"} disabled:cursor-not-allowed`}
       >
         {Icon && <Icon size={12} />}
         {label}
@@ -163,7 +207,7 @@ function PersonPanel({ person, role, roles, departments, viewer, onChanged }) {
           <Avatar name={person.name} src={person.avatarUrl} size={44} />
           <div className="min-w-0">
             <p className="truncate font-semibold">{person.name}</p>
-            <p className="truncate text-xs text-white/40" dir="ltr">
+            <p className="truncate text-xs text-white/60" dir="ltr">
               {person.email}
             </p>
             <div className="mt-1 flex flex-wrap gap-1.5">
@@ -226,7 +270,7 @@ function PersonPanel({ person, role, roles, departments, viewer, onChanged }) {
                 options={SCOPES.map((s) => ({ value: s, label: t(`erp.roles.scope_${s}`) }))}
               />
             </div>
-            <p className="mt-2 text-xs text-white/40">{t("erp.access.person.roleHint")}</p>
+            <p className="mt-2 text-xs text-white/60">{t("erp.access.person.roleHint")}</p>
           </Section>
 
           {!top && (
@@ -239,29 +283,29 @@ function PersonPanel({ person, role, roles, departments, viewer, onChanged }) {
                 </label>
               }
             >
-              <p className="mb-3 text-xs text-white/40">{t("erp.access.person.exceptionsHint")}</p>
+              <p className="mb-3 text-xs text-white/60">{t("erp.access.person.exceptionsHint")}</p>
               <div className="space-y-3">
                 {PERM_GROUPS.map((group) => {
                   const perms = PERMISSIONS.filter((p) => p.group === group && (!onlyChanged || stateOf(p.key) !== "inherit"));
                   if (!perms.length) return null;
                   return (
                     <div key={group} className="rounded-xl border border-white/10">
-                      <p className="border-b border-white/5 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-white/40">{t(`erp.perm_group.${group}`)}</p>
+                      <p className="border-b border-white/5 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-white/60">{t(`erp.perm_group.${group}`)}</p>
                       <ul className="divide-y divide-white/5">
                         {perms.map((p) => {
                           const has = eff.permissions.includes(p.key);
                           return (
                             <li key={p.key} className="flex flex-wrap items-center gap-3 px-3 py-2">
-                              <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${has ? "bg-emerald-500/20 text-emerald-300" : "bg-white/5 text-white/25"}`}>
+                              <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${has ? "bg-emerald-500/20 text-emerald-300" : "bg-white/5 text-white/60"}`}>
                                 {has ? <Check size={12} strokeWidth={3} /> : <Ban size={11} />}
                               </span>
                               <span className="min-w-0 flex-1">
                                 <span className="flex flex-wrap items-center gap-1.5 text-sm text-white/85">
                                   {t(`erp.perm.${p.key}`)}
                                   {isSensitive(p.key) && <Chip tone="red">{t("erp.access.sensitive")}</Chip>}
-                                  <span className="text-[10px] text-white/35">{fromRole.has(p.key) ? t("erp.access.person.fromRole") : t("erp.access.person.notInRole")}</span>
+                                  <span className="text-[11px] text-white/55">{fromRole.has(p.key) ? t("erp.access.person.fromRole") : t("erp.access.person.notInRole")}</span>
                                 </span>
-                                <span className="block text-[11px] leading-snug text-white/40">{t(hintKey(p.key))}</span>
+                                <span className="block text-[11px] leading-snug text-white/60">{t(hintKey(p.key))}</span>
                               </span>
                               <span className="flex rounded-lg border border-white/10 p-0.5">
                                 {segBtn(p.key, "inherit", null, t("erp.access.person.inherit"), "bg-white/10 text-white")}
@@ -297,14 +341,14 @@ function PersonPanel({ person, role, roles, departments, viewer, onChanged }) {
                 <p className="mt-3 text-xs text-emerald-300/80">{t("erp.access.work.anyOn")}</p>
               ) : (
                 <>
-                  <p className="mb-2 mt-3 text-xs text-white/45">{t("erp.access.work.pick")}</p>
+                  <p className="mb-2 mt-3 text-xs text-white/60">{t("erp.access.work.pick")}</p>
                   <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
                     {departments.map((d) => {
                       const own = person.departments.includes(d.id);
                       return (
                         <label
                           key={d.id}
-                          className={`flex items-center gap-2 rounded-lg border border-white/5 px-2.5 py-2 text-xs ${own || locked ? "text-white/45" : "cursor-pointer text-white/80 hover:bg-white/5"}`}
+                          className={`flex items-center gap-2 rounded-lg border border-white/5 px-2.5 py-2 text-xs ${own || locked ? "text-white/60" : "cursor-pointer text-white/80 hover:bg-white/5"}`}
                         >
                           <input
                             type="checkbox"
@@ -320,14 +364,14 @@ function PersonPanel({ person, role, roles, departments, viewer, onChanged }) {
                           />
                           <span className="h-2 w-2 rounded-full" style={{ background: d.color || "#94a3b8" }} />
                           <span className="flex-1">{d.name?.[lang]}</span>
-                          {own && <span className="text-[10px] text-white/30">{t("erp.access.work.own")}</span>}
+                          {own && <span className="text-[11px] text-white/50">{t("erp.access.work.own")}</span>}
                         </label>
                       );
                     })}
                   </div>
                 </>
               )}
-              <p className="mt-3 text-xs leading-relaxed text-white/40">{t("erp.access.work.personHint")}</p>
+              <p className="mt-3 text-xs leading-relaxed text-white/60">{t("erp.access.work.personHint")}</p>
             </Section>
           )}
 
@@ -335,7 +379,7 @@ function PersonPanel({ person, role, roles, departments, viewer, onChanged }) {
             <Section title={t("erp.access.person.hiddenPages")}>
               <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
                 {PAGES.filter((p) => !["overview", "profile", "notifications"].includes(p.key)).map((p) => (
-                  <label key={p.key} className={`flex items-center gap-2 rounded-lg border border-white/5 px-2.5 py-2 text-xs ${locked ? "text-white/45" : "cursor-pointer text-white/80 hover:bg-white/5"}`}>
+                  <label key={p.key} className={`flex items-center gap-2 rounded-lg border border-white/5 px-2.5 py-2 text-xs ${locked ? "text-white/60" : "cursor-pointer text-white/80 hover:bg-white/5"}`}>
                     <input
                       type="checkbox"
                       className="h-3.5 w-3.5 accent-red-500"
@@ -372,6 +416,7 @@ function PersonPanel({ person, role, roles, departments, viewer, onChanged }) {
           <Section title={t("erp.access.previewTitle")}>
             <NavPreview user={preview} hint={t("erp.access.previewPerson")} />
           </Section>
+          <PersonSecurity personId={person.id} canReset={!self && Boolean(viewer?.permissions?.includes("roles.manage")) && ["ceo", "coder"].includes(viewer?.role)} />
         </div>
       </div>
     </div>

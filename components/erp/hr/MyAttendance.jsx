@@ -45,7 +45,7 @@ export default function MyAttendance({ initialMonth }) {
       <PersonMonth key={month} month={month} />
 
       <section className="mt-10">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/45">{t("erp.hr.myLeave")}</h2>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/60">{t("erp.hr.myLeave")}</h2>
         <LeaveList leaves={leaves} onChanged={loadLeaves} />
       </section>
 

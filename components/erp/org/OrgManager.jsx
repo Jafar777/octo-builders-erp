@@ -9,6 +9,8 @@ import BilingualField from "@/components/dashboard/BilingualField";
 import Modal from "@/components/erp/ui/Modal";
 import { Button, ErrorText, Input, PageHeader, Toggle } from "@/components/erp/ui/fields";
 import OrgChart from "@/components/erp/org/OrgChart";
+import { useConfirm } from "@/components/erp/ui/Feedback";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
 const TYPES = ["departments", "branches", "jobTitles"];
 
@@ -82,6 +84,7 @@ function ItemEditor({ type, item, onSaved, onClose }) {
 
 export default function OrgManager({ initialOrg, canManage }) {
   const { t, lang } = useLanguage();
+  const confirm = useConfirm();
   const [org, setOrg] = useState(initialOrg);
   // Employees without org.manage only get the hierarchy.
   const [tab, setTab] = useState(canManage ? "departments" : "hierarchy");
@@ -90,7 +93,7 @@ export default function OrgManager({ initialOrg, canManage }) {
   const [error, setError] = useState("");
 
   async function remove(item) {
-    if (!window.confirm(t("common.confirmDelete"))) return;
+    if (!(await confirm({ text: t("common.confirmDelete"), kind: "delete" }))) return;
     setError("");
     try {
       await api(`/api/org/${tab}/${item.id}`, { method: "DELETE" });
@@ -156,9 +159,9 @@ export default function OrgManager({ initialOrg, canManage }) {
             <div className="min-w-0 flex-1">
               <p className="font-medium">
                 {item.name?.[lang]}
-                {item.code && <span className="ms-2 text-xs text-white/40">{item.code}</span>}
+                {item.code && <span className="ms-2 text-xs text-white/60">{item.code}</span>}
               </p>
-              <p className="text-xs text-white/40">
+              <p className="text-xs text-white/60">
                 {item.name?.[lang === "ar" ? "en" : "ar"]}
                 {tab === "branches" && ` · ${item.currency} · ${item.timezone}`}
               </p>
@@ -184,7 +187,7 @@ export default function OrgManager({ initialOrg, canManage }) {
             </button>
           </div>
         ))}
-        {org[tab].length === 0 && <p className="py-8 text-center text-white/40">{t("dashboard.noItems")}</p>}
+        {org[tab].length === 0 && <EmptyState compact text={t("dashboard.noItems")} />}
       </div>
       </>
       )}

@@ -11,7 +11,7 @@ export default function BilingualField({ label, value, onChange, textarea = fals
       <label className="mb-2 block text-sm font-medium text-white/70">{label}</label>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <span className="mb-1 block text-xs text-white/40">{t("common.arabic")}</span>
+          <span className="mb-1 block text-xs text-white/60">{t("common.arabic")}</span>
           <Field
             dir="rtl"
             rows={textarea ? 4 : undefined}
@@ -21,7 +21,7 @@ export default function BilingualField({ label, value, onChange, textarea = fals
           />
         </div>
         <div>
-          <span className="mb-1 block text-xs text-white/40">{t("common.english")}</span>
+          <span className="mb-1 block text-xs text-white/60">{t("common.english")}</span>
           <Field
             dir="ltr"
             rows={textarea ? 4 : undefined}

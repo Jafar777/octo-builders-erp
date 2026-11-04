@@ -21,7 +21,7 @@ const DEFAULT_REVIEW = { manager: true, gm: false, customer: false };
 export function ReviewBoxes({ value, onChange, hasCustomer, t }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
-      <span className="text-white/45">{t("erp.reviews.reviewedBy")}</span>
+      <span className="text-white/60">{t("erp.reviews.reviewedBy")}</span>
       <span className="rounded-full border border-emerald-400/30 px-2 py-0.5 text-emerald-200/90">✓ {t("erp.reviews.box.manager")}</span>
       {hasCustomer && (
         <label className="flex cursor-pointer items-center gap-1.5">
@@ -256,11 +256,11 @@ export default function ProjectForm({ lookups, intake = null, mode = "accept", i
           {/* The customer's review for all tasks at once (projects with a customer). */}
           {hasCustomer && (
             <div className="mb-3 rounded-lg bg-white/[0.04] px-3 py-2">
-              <p className="mb-1 text-[11px] text-white/45">{t("erp.reviews.allTasks")}</p>
+              <p className="mb-1 text-[11px] text-white/60">{t("erp.reviews.allTasks")}</p>
               <ReviewBoxes value={allReview} onChange={setAllReviews} hasCustomer={hasCustomer} t={t} />
             </div>
           )}
-          <p className="mb-3 text-[11px] text-white/45">{t("erp.reviews.managerAlways")}</p>
+          <p className="mb-3 text-[11px] text-white/60">{t("erp.reviews.managerAlways")}</p>
           <StageFlowEditor
             stages={stages}
             onChange={setStages}
@@ -299,10 +299,10 @@ export default function ProjectForm({ lookups, intake = null, mode = "accept", i
           />
         </div>
       )}
-      <p className="text-xs text-white/40">{t("erp.projects.mainDepartmentHint")}</p>
-      <p className="text-xs text-white/40">{t("erp.projects.datesByGantt")}</p>
+      <p className="text-xs text-white/60">{t("erp.projects.mainDepartmentHint")}</p>
+      <p className="text-xs text-white/60">{t("erp.projects.datesByGantt")}</p>
       {mode === "propose" && <p className="text-xs text-amber-200/80">{t("erp.projects.proposeNote")}</p>}
-      <p className="text-xs text-white/40">{t("erp.plan.scheduleNote")}</p>
+      <p className="text-xs text-white/60">{t("erp.plan.scheduleNote")}</p>
       <ErrorText>{error}</ErrorText>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onCancel}>
@@ -352,7 +352,7 @@ export function CustomerSelect({ customers, value, onChange, t, legacy = "", cur
         placeholder={t("erp.projects.noCustomer")}
         options={options}
       />
-      <p className="mt-1 text-[11px] text-white/40">{legacy && !value ? t("erp.projects.legacyClient", { name: legacy }) : t("erp.projects.customerHint")}</p>
+      <p className="mt-1 text-[11px] text-white/60">{legacy && !value ? t("erp.projects.legacyClient", { name: legacy }) : t("erp.projects.customerHint")}</p>
     </div>
   );
 }

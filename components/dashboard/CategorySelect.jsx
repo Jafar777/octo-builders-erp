@@ -29,7 +29,7 @@ export default function CategorySelect({ categories, value, onChange, label }) {
             {c.name?.[lang] || c.name?.ar || c.name?.en || "—"}
           </button>
         ))}
-        {categories.length === 0 && <span className="text-sm text-white/40">{t("dashboard.uncategorized")}</span>}
+        {categories.length === 0 && <span className="text-sm text-white/60">{t("dashboard.uncategorized")}</span>}
       </div>
     </div>
   );

@@ -9,9 +9,11 @@ import CategoriesField from "@/components/dashboard/CategoriesField";
 import { ItemControls, moveItem, withKeys } from "@/components/dashboard/ItemList";
 import { useContentSave } from "@/components/dashboard/useContentSave";
 import { hasPartialBilingual, isBilingualComplete } from "@/lib/validateBilingual";
+import { useConfirm } from "@/components/erp/ui/Feedback";
 
 function ItemCard({ endpoint, item, isValid, renderFields, onSaved, onDeleted, controls }) {
   const { t } = useLanguage();
+  const confirm = useConfirm();
   const [data, setData] = useState(item);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
@@ -51,7 +53,7 @@ function ItemCard({ endpoint, item, isValid, renderFields, onSaved, onDeleted, c
       onDeleted();
       return;
     }
-    if (!window.confirm(t("common.confirmDelete"))) return;
+    if (!(await confirm({ text: t("common.confirmDelete"), kind: "delete" }))) return;
     setDeleting(true);
     await fetch(`${endpoint}/${item.id}`, { method: "DELETE" });
     onDeleted();
@@ -146,7 +148,7 @@ export default function CollectionEditor({
           })}
         </div>
 
-        {items.length === 0 && <p className="text-sm text-white/40">{t("dashboard.noItems")}</p>}
+        {items.length === 0 && <p className="text-sm text-white/60">{t("dashboard.noItems")}</p>}
 
         <button
           type="button"

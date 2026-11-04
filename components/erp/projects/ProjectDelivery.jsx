@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, Flag, Play } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { formatDateTime } from "@/lib/formatTime";
 import { Card } from "@/components/erp/ui/fields";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
 const HOUR = 3600000;
 
@@ -116,7 +117,7 @@ export default function ProjectDelivery({ project, onOpenTask }) {
           <p className="font-semibold text-yellow-200">
             {t("erp.delivery.endShort")}: {formatDateTime(first.end, lang)}
           </p>
-          <p className="text-[11px] text-white/40">{t("erp.delivery.savedAt", { at: formatDateTime(first.at, lang) })}</p>
+          <p className="text-[11px] text-white/60">{t("erp.delivery.savedAt", { at: formatDateTime(first.at, lang) })}</p>
         </Card>
         <Card className="space-y-1">
           <p className="text-xs text-white/50">{t("erp.delivery.now")}</p>
@@ -145,14 +146,14 @@ export default function ProjectDelivery({ project, onOpenTask }) {
               <li key={b.n} className="flex justify-between gap-2">
                 <span className={b.n === 1 ? "text-yellow-200" : "text-orange-300"}>{t("erp.gantt.baseline", { n: b.n })}</span>
                 <span className="text-end text-white/70">
-                  {b.start && <span className="block text-white/45">{formatDateTime(b.start, lang)} →</span>}
+                  {b.start && <span className="block text-white/60">{formatDateTime(b.start, lang)} →</span>}
                   {formatDateTime(b.end, lang)}
                 </span>
               </li>
             ))}
           </ul>
           {d.vsLastMs !== null && d.vsLastMs !== undefined && workDelta(t, d.vsLastMs) && (
-            <p className="text-[11px] text-white/45">{t("erp.delivery.vsLast", { d: workDelta(t, d.vsLastMs) })}</p>
+            <p className="text-[11px] text-white/60">{t("erp.delivery.vsLast", { d: workDelta(t, d.vsLastMs) })}</p>
           )}
         </Card>
       </div>
@@ -167,7 +168,7 @@ export default function ProjectDelivery({ project, onOpenTask }) {
 
       <Card className="p-0">
         <p className="border-b border-white/10 px-4 py-3 text-sm font-semibold">{t("erp.delivery.why")}</p>
-        {!delays.length && <p className="px-4 py-6 text-center text-sm text-white/40">{t("erp.delivery.noChanges")}</p>}
+        {!delays.length && <EmptyState compact text={t("erp.delivery.noChanges")} />}
         <ul className="divide-y divide-white/5">
           {delays.map((x) => {
             const later = x.workMs > 0 || (x.workMs === 0 && new Date(x.to) > new Date(x.from));
@@ -178,7 +179,7 @@ export default function ProjectDelivery({ project, onOpenTask }) {
                 </span>
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <p>
-                    <span className={`me-2 inline-flex items-center gap-1 rounded px-1.5 py-px text-[10px] font-semibold uppercase ${x.field === "start" ? "bg-sky-400/15 text-sky-200" : "bg-white/10 text-white/60"}`}>
+                    <span className={`me-2 inline-flex items-center gap-1 rounded px-1.5 py-px text-[11px] font-semibold uppercase ${x.field === "start" ? "bg-sky-400/15 text-sky-200" : "bg-white/10 text-white/60"}`}>
                       {x.field === "start" && <Play size={9} />}
                       {t(x.field === "start" ? "erp.delivery.startShort" : "erp.delivery.endShort")}
                     </span>
@@ -191,11 +192,11 @@ export default function ProjectDelivery({ project, onOpenTask }) {
                   </p>
                   {x.taskProject && <p className="text-xs text-white/50">{t("erp.delivery.otherProject", { p: x.taskProject })}</p>}
                   {x.note && <p className="text-xs text-white/50" dir="auto">“{x.note}”</p>}
-                  <p className="text-[11px] text-white/40">
+                  <p className="text-[11px] text-white/60">
                     {formatDateTime(x.from, lang)} → {formatDateTime(x.to, lang)}
                   </p>
                 </div>
-                <span className="shrink-0 text-end text-[11px] text-white/40">
+                <span className="shrink-0 text-end text-[11px] text-white/60">
                   {formatDateTime(x.at, lang)}
                   {x.by && <span className="block">{x.by}</span>}
                 </span>

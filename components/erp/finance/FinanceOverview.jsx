@@ -31,7 +31,7 @@ export default function FinanceOverview({ data, lookups, onOpenProject }) {
         <StatTile label={t("erp.finance.transferCosts")} value={m(T.transferCosts)} />
       </div>
       {data.estimatedMonths.length > 0 && (
-        <p className="text-xs text-white/45">
+        <p className="text-xs text-white/60">
           {t("erp.finance.estimatedNote", {
             months: data.estimatedMonths.map((x) => monthLabel(x, lang)).join("، "),
           })}
@@ -107,7 +107,7 @@ export default function FinanceOverview({ data, lookups, onOpenProject }) {
                   <tr key={x.month} className="border-t border-white/5">
                     <td className="px-2 py-2">
                       {monthLabel(x.month, lang)}
-                      {data.estimatedMonths.includes(x.month) && <span className="ms-1 text-[10px] text-amber-300">≈</span>}
+                      {data.estimatedMonths.includes(x.month) && <span className="ms-1 text-[11px] text-amber-300">≈</span>}
                     </td>
                     <td className="px-2 py-2 tabular-nums text-emerald-300">{m(x.income)}</td>
                     <td
@@ -137,7 +137,7 @@ export default function FinanceOverview({ data, lookups, onOpenProject }) {
 
       <Card>
         <p className="mb-1 text-sm font-medium text-white/70">{t("erp.finance.profitability")}</p>
-        <p className="mb-3 text-xs text-white/40">{t(`erp.finance.allocationHint_${data.allocation || "hours"}`)} {t("erp.finance.lifetimeHint")}</p>
+        <p className="mb-3 text-xs text-white/60">{t(`erp.finance.allocationHint_${data.allocation || "hours"}`)} {t("erp.finance.lifetimeHint")}</p>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-sm">
             <thead className="text-xs text-white/50">
@@ -157,7 +157,7 @@ export default function FinanceOverview({ data, lookups, onOpenProject }) {
                   <tr key={p.id} onClick={() => onOpenProject(p.id)} className="cursor-pointer border-t border-white/5 hover:bg-white/[0.04]">
                     <td className="px-2 py-2 font-medium">
                       {p.name?.[lang]}
-                      {p.code && <span className="ms-1 text-xs text-white/40">{p.code}</span>}
+                      {p.code && <span className="ms-1 text-xs text-white/60">{p.code}</span>}
                       {p.overBudget && (
                         <span className="ms-2 inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] text-red-300">
                           <AlertTriangle size={11} /> {t("erp.finance.overBudgetShort")}

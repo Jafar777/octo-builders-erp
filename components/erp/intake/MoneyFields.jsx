@@ -50,7 +50,7 @@ export function partnerCurrency(code, currencies) {
 }
 
 const inputClass =
-  "w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pe-12 ps-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-white/30";
+  "w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pe-12 ps-3 text-sm text-white outline-none placeholder:text-white/45 focus:border-white/30";
 
 // A number input with the currency's symbol inside it.
 function SymbolInput({ value, onChange, symbol, onFocus, onBlur, ariaLabel }) {
@@ -84,7 +84,7 @@ export function MoneyPair({ label, value, onChange, currency, partner, rates, la
         <SymbolInput value={value} onChange={onChange} symbol={currencySymbol(currency, lang)} ariaLabel={currency} />
         {partner && (
           <>
-            <ArrowLeftRight size={16} className="mx-auto hidden text-white/35 sm:block" />
+            <ArrowLeftRight size={16} className="mx-auto hidden text-white/55 sm:block" />
             <SymbolInput
               value={altText ?? derived}
               symbol={currencySymbol(partner, lang)}

@@ -80,10 +80,10 @@ function ConversationList({ conversations, meId, onPick }) {
         <span className="min-w-0 flex-1">
           <span className="flex items-center justify-between gap-2">
             <span className="truncate text-sm font-medium text-white">{label.name}</span>
-            {c.lastMessage && <span className="shrink-0 text-[10px] text-white/40">{formatRelative(c.lastMessage.at, lang)}</span>}
+            {c.lastMessage && <span className="shrink-0 text-[11px] text-white/60">{formatRelative(c.lastMessage.at, lang)}</span>}
           </span>
           <span className="flex items-center justify-between gap-2">
-            <span className={`truncate text-xs ${c.unread > 0 ? "text-white/80" : "text-white/45"}`}>
+            <span className={`truncate text-xs ${c.unread > 0 ? "text-white/80" : "text-white/60"}`}>
               {c.lastMessage ? (
                 <>
                   {sender}
@@ -94,7 +94,7 @@ function ConversationList({ conversations, meId, onPick }) {
               )}
             </span>
             {c.unread > 0 && (
-              <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand-orange px-1.5 text-[10px] font-bold text-white">
+              <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand-orange px-1.5 text-[11px] font-bold text-white">
                 {c.unread > 99 ? "99+" : c.unread}
               </span>
             )}
@@ -182,7 +182,7 @@ export default function MessagesButton({ linkOnly = false }) {
     <>
       <MessagesSquare size={20} />
       {unread > 0 && (
-        <span className="absolute -top-0.5 -end-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-orange px-1 text-[10px] font-bold text-white">
+        <span className="absolute -top-0.5 -end-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-orange px-1 text-[11px] font-bold text-white">
           {unread > 99 ? "99+" : unread}
         </span>
       )}

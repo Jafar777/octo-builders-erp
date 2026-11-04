@@ -39,7 +39,7 @@ export function GroupedBarChart({ categories, series, height = 220, unit = "", m
       )}
       <div className="relative flex" style={{ height }} dir="ltr">
         {/* y axis */}
-        <div className="relative w-9 shrink-0 text-[10px] text-white/40">
+        <div className="relative w-9 shrink-0 text-[11px] text-white/60">
           {ticks.map((tk) => (
             <span key={tk} className="absolute end-1.5 tabular-nums" style={{ bottom: `${(tk / max) * 100}%`, transform: "translateY(50%)" }}>
               {tk}

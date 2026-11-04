@@ -43,13 +43,15 @@ import {
 } from "@/components/erp/tasks/taskUi";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 import { ExternalReviewBox } from "@/components/erp/tasks/ExternalReview";
+import TaskChecklist from "@/components/erp/tasks/TaskChecklist";
+import { useConfirm } from "@/components/erp/ui/Feedback";
 
 const TAG_KINDS = ["neutral", "excellent", "contribution", "error"];
 
 function Detail({ label, children }) {
   return (
     <div>
-      <p className="text-xs uppercase tracking-wider text-white/40">{label}</p>
+      <p className="text-xs uppercase tracking-wider text-white/60">{label}</p>
       <div className="mt-1 text-sm text-white">{children || "—"}</div>
     </div>
   );
@@ -194,7 +196,7 @@ function ReviewForm({ task, lookups, access, onDone }) {
           {pickHours ? (
             <div>
               <Input type="number" min="0.5" max="200" step="0.5" label={t("erp.tasks.revisionHours")} value={redoHours} onChange={setRedoHours} dir="ltr" />
-              <p className="mt-1 text-[11px] text-white/45">{t("erp.tasks.revisionHoursHint", { h: originalHours || "—" })}</p>
+              <p className="mt-1 text-[11px] text-white/60">{t("erp.tasks.revisionHoursHint", { h: originalHours || "—" })}</p>
             </div>
           ) : (
             <p className="self-end text-xs text-sky-200">{t("erp.scale.revisionInfo", { h: task.maxHours || task.estimatedHours })}</p>
@@ -224,10 +226,10 @@ function ReviewChain({ task }) {
   const approved = new Set(task.status === "approved" ? levels : task.reviews.filter((r) => r.decision === "approve").map((r) => r.level));
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
-      <span className="text-white/45">{t("erp.reviews.chain")}</span>
+      <span className="text-white/60">{t("erp.reviews.chain")}</span>
       {levels.map((l, i) => (
         <span key={l} className="flex items-center gap-2">
-          {i > 0 && <span className="text-white/25">→</span>}
+          {i > 0 && <span className="text-white/60">→</span>}
           <span
             className={`rounded-full border px-2.5 py-0.5 ${
               approved.has(l) ? "border-emerald-400/40 text-emerald-200" : waiting === l ? "border-amber-400/60 bg-amber-500/10 text-amber-200" : "border-white/10 text-white/50"
@@ -244,6 +246,7 @@ function ReviewChain({ task }) {
 
 export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpenTask }) {
   const { t, lang } = useLanguage();
+  const confirm = useConfirm();
   const { user } = useAuth();
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -396,10 +399,10 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
                 className={task.maxHours > 0 && liveActiveMs(task, now) > task.maxHours * 3600000 ? "text-red-300" : s === "in_progress" ? "text-sky-300" : ""}
               >
                 {formatDuration(liveActiveMs(task, now))}
-                {task.maxHours > 0 && <span className="text-white/40"> / {formatDuration(task.maxHours * 3600000)}</span>}
+                {task.maxHours > 0 && <span className="text-white/60"> / {formatDuration(task.maxHours * 3600000)}</span>}
               </span>
               {task.holdMs > 0 && (
-                <span className="ms-2 text-xs text-white/40" dir="ltr">
+                <span className="ms-2 text-xs text-white/60" dir="ltr">
                   ({t("erp.tasks.onHoldTime")} {formatDuration(task.holdMs)})
                 </span>
               )}
@@ -416,6 +419,8 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
           </div>
 
           {task.description && <p className="whitespace-pre-wrap rounded-xl bg-white/5 p-3 text-sm text-white/80">{task.description}</p>}
+
+          <TaskChecklist key={task.id} taskId={task.id} items={task.checklist} canEdit={(p.isAssignee || p.canManage || p.canStartFor) && task.status !== "cancelled"} />
 
           {/* Waiting for other tasks */}
           {task.blocked && (
@@ -463,7 +468,7 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
               </div>
               {deps === null ? (
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {task.dependsOn.length === 0 && <span className="text-sm text-white/40">—</span>}
+                  {task.dependsOn.length === 0 && <span className="text-sm text-white/60">—</span>}
                   {task.dependsOn.map((d) => (
                     <button key={d.id} type="button" onClick={() => onOpenTask?.(d.id)} className="flex items-center gap-1.5 rounded-full border border-white/10 py-0.5 pe-1 ps-2.5 text-xs hover:bg-white/5">
                       <span dir="ltr">#{d.number}</span>
@@ -493,7 +498,7 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
                     {p.canPlan && (
                       <button
                         type="button"
-                        onClick={() => window.confirm(t("erp.tasks.confirmStopRepeat")) && patch({ recurrence: null })}
+                        onClick={async () => (await confirm({ text: t("erp.tasks.confirmStopRepeat"), danger: true })) && patch({ recurrence: null })}
                         className="text-xs text-red-300 hover:underline"
                       >
                         {t("erp.tasks.stopRepeat")}
@@ -514,7 +519,7 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
                   <p className="text-sm font-medium text-white/70">
                     {t("erp.tasks.subtasks")}
                     {subtasks.length > 0 && (
-                      <span className="ms-2 text-xs text-white/45" dir="ltr">
+                      <span className="ms-2 text-xs text-white/60" dir="ltr">
                         {subtasks.filter((x) => ["approved", "done"].includes(x.status)).length}/{subtasks.filter((x) => x.status !== "cancelled").length}
                       </span>
                     )}
@@ -533,7 +538,7 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
                       onClick={() => onOpenTask?.(x.id)}
                       className="flex w-full items-center gap-3 rounded-xl border border-white/10 px-3 py-2 text-start text-sm hover:bg-white/5"
                     >
-                      <span className="text-xs text-white/40" dir="ltr">
+                      <span className="text-xs text-white/60" dir="ltr">
                         #{x.number}
                       </span>
                       <span className="min-w-0 flex-1 truncate">{x.title || taskHeading(x, lang)}</span>
@@ -541,7 +546,7 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
                       <StatusBadge status={x.status} />
                     </button>
                   ))}
-                  {subtasks.length === 0 && !addingSub && <p className="text-sm text-white/40">—</p>}
+                  {subtasks.length === 0 && !addingSub && <p className="text-sm text-white/60">—</p>}
                 </div>
                 {addingSub && (
                   <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
@@ -733,7 +738,7 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
               <Button variant="ghost" onClick={() => patch({ assigneeId: manage.assigneeId })} disabled={!manage.assigneeId || manage.assigneeId === task.assignee?.id}>
                 {t("common.save")}
               </Button>
-              <p className="text-[11px] text-white/45 sm:col-span-2">{t("erp.tasks.reassignHint")}</p>
+              <p className="text-[11px] text-white/60 sm:col-span-2">{t("erp.tasks.reassignHint")}</p>
             </div>
           )}
 
@@ -772,7 +777,7 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
                       <span className="text-white/55">{t(`erp.tasks.event.${a.type}`)}</span>
                     </p>
                     {a.text && <p className="whitespace-pre-wrap text-white/70">{a.text}</p>}
-                    <p className="text-xs text-white/35">{formatDateTime(a.createdAt, lang)}</p>
+                    <p className="text-xs text-white/55">{formatDateTime(a.createdAt, lang)}</p>
                   </div>
                 </div>
               ))}

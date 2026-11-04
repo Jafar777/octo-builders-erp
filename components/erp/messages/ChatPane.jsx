@@ -33,6 +33,8 @@ import { CHAT_UPLOAD_FOLDER, uploadFileToImageKit } from "@/lib/uploadFile";
 import Avatar from "@/components/erp/ui/Avatar";
 import ConversationInfo from "@/components/erp/messages/ConversationInfo";
 import { Skeleton } from "@/components/erp/ui/Loading";
+import { useConfirm } from "@/components/erp/ui/Feedback";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
 const EDIT_WINDOW_MS = 15 * 60 * 1000;
 const TYPING_SEND_EVERY_MS = 3000;
@@ -81,6 +83,7 @@ export default function ChatPane({
   onChanged,
 }) {
   const { t, lang } = useLanguage();
+  const confirm = useConfirm();
   const [messages, setMessages] = useState([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -347,7 +350,7 @@ export default function ChatPane({
   }
 
   async function remove(message) {
-    if (!window.confirm(t("erp.messages.confirmDelete"))) return;
+    if (!(await confirm({ text: t("erp.messages.confirmDelete"), kind: "delete" }))) return;
     const data = await api(`/api/messages/items/${message.id}`, { method: "DELETE" }).catch(() => null);
     if (data) setMessages((prev) => mergeMessages(prev, [data.message]));
   }
@@ -401,7 +404,7 @@ export default function ChatPane({
         <Avatar name={label.name} src={label.avatarUrl} size={40} online={label.otherId && online?.size ? otherOnline : undefined} />
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold">{label.name}</p>
-          <p className="truncate text-xs text-white/45">
+          <p className="truncate text-xs text-white/60">
             {typingNames.length
               ? t("erp.messages.typing", { names: typingNames.join("، ") })
               : conversation.type === "direct"
@@ -456,7 +459,7 @@ export default function ChatPane({
           />
           {searchResults && (
             <div className="absolute inset-x-2 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-xl border border-white/10 bg-brand-navy-light shadow-2xl">
-              {searchResults.length === 0 && <p className="p-4 text-center text-sm text-white/40">{t("erp.messages.noResults")}</p>}
+              {searchResults.length === 0 && <EmptyState compact text={t("erp.messages.noResults")} />}
               {searchResults.map((r) => (
                 <button
                   key={r.id}
@@ -467,7 +470,7 @@ export default function ChatPane({
                   }}
                   className="block w-full border-b border-white/5 px-3 py-2 text-start hover:bg-white/10"
                 >
-                  <span className="flex justify-between gap-2 text-[11px] text-white/45">
+                  <span className="flex justify-between gap-2 text-[11px] text-white/60">
                     <span>{nameOf(r.senderId)}</span>
                     <span>{formatDate(r.createdAt, lang)}</span>
                   </span>
@@ -493,7 +496,7 @@ export default function ChatPane({
             }}
             className="min-w-0 flex-1 text-start"
           >
-            <span className="block text-[10px] text-white/45">
+            <span className="block text-[11px] text-white/60">
               {t("erp.messages.pinned")} {pinned.length > 1 && `(${(pinIndex % pinned.length) + 1}/${pinned.length})`}
             </span>
             <span className="block truncate text-white/85" dir="auto">
@@ -504,7 +507,7 @@ export default function ChatPane({
             <button
               type="button"
               onClick={() => togglePin(pinned[pinIndex % pinned.length], false)}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-white/45 hover:bg-white/10 hover:text-white"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-white/60 hover:bg-white/10 hover:text-white"
               aria-label={t("erp.messages.unpin")}
             >
               <PinOff size={14} />
@@ -540,7 +543,7 @@ export default function ChatPane({
           </div>
         )}
         {!loading && messages.length === 0 && (
-          <p className="py-10 text-center text-sm text-white/40">{t("erp.messages.noMessages")}</p>
+          <EmptyState compact text={t("erp.messages.noMessages")} />
         )}
 
         {messages.map((m, i) => {
@@ -567,12 +570,12 @@ export default function ChatPane({
                 )}
                 <div className={`max-w-[78%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
                   {!mine && !grouped && conversation.type !== "direct" && (
-                    <span className="mb-1 px-1 text-[11px] text-white/45">{nameOf(m.senderId)}</span>
+                    <span className="mb-1 px-1 text-[11px] text-white/60">{nameOf(m.senderId)}</span>
                   )}
                   <div
                     className={`rounded-2xl px-3.5 py-2 text-sm ${
                       m.deleted && !review
-                        ? "border border-white/10 italic text-white/40"
+                        ? "border border-white/10 italic text-white/60"
                         : mine
                           ? "bg-brand-orange text-white"
                           : "bg-white/10 text-white"
@@ -597,12 +600,12 @@ export default function ChatPane({
                         )}
                         {m.text && <p className="whitespace-pre-wrap break-words" dir="auto">{m.text}</p>}
                         {review && m.deleted && (
-                          <span className="mt-1 block text-[10px] uppercase tracking-wider text-red-300">{t("erp.messages.deleted")}</span>
+                          <span className="mt-1 block text-[11px] uppercase tracking-wider text-red-300">{t("erp.messages.deleted")}</span>
                         )}
                       </>
                     )}
                   </div>
-                  <span className="mt-0.5 flex items-center gap-1 px-1 text-[10px] text-white/35">
+                  <span className="mt-0.5 flex items-center gap-1 px-1 text-[11px] text-white/55">
                     {formatClock(m.createdAt, lang)}
                     {m.editedAt && !m.deleted && ` · ${t("erp.messages.edited")}`}
                     {mine && lastMine?.id === m.id && !review &&
@@ -779,11 +782,11 @@ export default function ChatPane({
             </button>
           </div>
           {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
-          <p className="mt-2 text-[10px] text-white/30">{t("erp.messages.monitoredNote")}</p>
+          <p className="mt-2 text-[11px] text-white/50">{t("erp.messages.monitoredNote")}</p>
         </div>
       ) : (
         !review && (
-          <div className="shrink-0 border-t border-white/10 p-4 text-center text-xs text-white/40">
+          <div className="shrink-0 border-t border-white/10 p-4 text-center text-xs text-white/60">
             {t("erp.messages.readOnly")}
           </div>
         )

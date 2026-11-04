@@ -73,7 +73,7 @@ export default function StageFlowEditor({ stages, onChange, renderRow }) {
                   onPointerDown={() => setArmed(i)}
                   onPointerUp={() => from === null && setArmed(null)}
                   title={t("erp.stageFlow.drag")}
-                  className="cursor-grab text-white/35 hover:text-white active:cursor-grabbing"
+                  className="cursor-grab text-white/55 hover:text-white active:cursor-grabbing"
                 >
                   <GripVertical size={15} />
                 </span>
@@ -81,10 +81,10 @@ export default function StageFlowEditor({ stages, onChange, renderRow }) {
                 <span className="min-w-0 flex-1 truncate" dir="auto">
                   {name(s, i)}
                 </span>
-                <button type="button" onClick={() => move(i, i - 1)} disabled={i === 0} className="p-1 text-white/40 hover:text-white disabled:opacity-20">
+                <button type="button" onClick={() => move(i, i - 1)} disabled={i === 0} className="p-1 text-white/60 hover:text-white disabled:opacity-20">
                   <ArrowUp size={13} />
                 </button>
-                <button type="button" onClick={() => move(i, i + 1)} disabled={i === stages.length - 1} className="p-1 text-white/40 hover:text-white disabled:opacity-20">
+                <button type="button" onClick={() => move(i, i + 1)} disabled={i === stages.length - 1} className="p-1 text-white/60 hover:text-white disabled:opacity-20">
                   <ArrowDown size={13} />
                 </button>
               </div>
@@ -92,8 +92,8 @@ export default function StageFlowEditor({ stages, onChange, renderRow }) {
               {renderRow && <div className="mt-2">{renderRow(s, i)}</div>}
 
               <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-                <span className="text-white/45">{t("erp.stageFlow.waitsFor")}:</span>
-                {i === 0 && <span className="text-white/40">{t("erp.stageFlow.startsFirst")}</span>}
+                <span className="text-white/60">{t("erp.stageFlow.waitsFor")}:</span>
+                {i === 0 && <span className="text-white/60">{t("erp.stageFlow.startsFirst")}</span>}
                 {stages.slice(0, i).map((p, j) => {
                   const on = after.includes(p.key);
                   return (
@@ -103,13 +103,13 @@ export default function StageFlowEditor({ stages, onChange, renderRow }) {
                       onClick={() => toggle(i, p.key)}
                       title={name(p, j)}
                       aria-pressed={on}
-                      className={`min-w-[26px] rounded-full border px-2 py-0.5 ${on ? "border-brand-orange bg-brand-orange/20 text-white" : "border-white/10 text-white/45 hover:text-white"}`}
+                      className={`min-w-[26px] rounded-full border px-2 py-0.5 ${on ? "border-brand-orange bg-brand-orange/20 text-white" : "border-white/10 text-white/60 hover:text-white"}`}
                     >
                       {j + 1}
                     </button>
                   );
                 })}
-                {i > 0 && !after.length && <span className="text-white/40">— {t("erp.stageFlow.startsFirst")}</span>}
+                {i > 0 && !after.length && <span className="text-white/60">— {t("erp.stageFlow.startsFirst")}</span>}
               </div>
             </li>
           );
@@ -150,7 +150,7 @@ function FlowDiagram({ stages, name, rtl, label }) {
 
   return (
     <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
-      <p className="mb-1 text-[11px] text-white/40">{label}</p>
+      <p className="mb-1 text-[11px] text-white/60">{label}</p>
       <div className="overflow-x-auto">
         <div className="relative" style={{ width, height }}>
           <svg className="absolute inset-0" width={width} height={height}>

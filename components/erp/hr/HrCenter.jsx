@@ -18,9 +18,10 @@ import LeaveList from "@/components/erp/hr/LeaveList";
 import SalaryUnlock from "@/components/erp/hr/SalaryUnlock";
 import { SkeletonList, SkeletonTable } from "@/components/erp/ui/Loading";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
+import { useConfirm } from "@/components/erp/ui/Feedback";
 
 // Efficiency colour: actual (task) hours against fingerprint hours.
-const effTone = (e) => (e === null || e === undefined ? "text-white/35" : e >= 0.8 ? "text-emerald-300" : e >= 0.6 ? "text-amber-200" : "text-red-300");
+const effTone = (e) => (e === null || e === undefined ? "text-white/55" : e >= 0.8 ? "text-emerald-300" : e >= 0.6 ? "text-amber-200" : "text-red-300");
 
 function Overview({ data, lookups, onOpen, payroll }) {
   const { t, lang } = useLanguage();
@@ -50,7 +51,7 @@ function Overview({ data, lookups, onOpen, payroll }) {
           {data.rows.map((r) => {
             const s = r.summary;
             const exempt = r.staff.attendanceExempt;
-            const dash = <span className="text-white/30">—</span>;
+            const dash = <span className="text-white/50">—</span>;
             return (
               <tr key={r.staff.id} onClick={() => onOpen(r.staff)} className="cursor-pointer border-t border-white/5 hover:bg-white/[0.04]">
                 <td className="px-3 py-3">
@@ -61,7 +62,7 @@ function Overview({ data, lookups, onOpen, payroll }) {
                         <span className="truncate">{r.staff.name}</span>
                         <TraineeBadge id={r.staff.id} />
                       </span>
-                      <span className="block truncate text-xs text-white/40">
+                      <span className="block truncate text-xs text-white/60">
                         {lookups.dep(r.staff.department)}
                         {!r.staff.badgeId && !exempt && <span className="ms-1 text-amber-300">· {t("erp.hr.noBadge")}</span>}
                       </span>
@@ -84,7 +85,7 @@ function Overview({ data, lookups, onOpen, payroll }) {
                     <td className={`${td} text-center`}>
                       {s ? (
                         <>
-                          {ltr(hm(s.workedHours))} <span className="text-white/35">/ {ltr(hm(s.requiredToDate))}</span>
+                          {ltr(hm(s.workedHours))} <span className="text-white/55">/ {ltr(hm(s.requiredToDate))}</span>
                         </>
                       ) : (
                         dash
@@ -112,7 +113,7 @@ function Overview({ data, lookups, onOpen, payroll }) {
                 </td>
                 {payroll && (
                   <td className={`${td} text-end`}>
-                    {r.payroll?.hasSalary ? money(r.payroll.net, r.payroll.currency, lang) : <span className="text-xs text-white/35">{t("erp.hr.noSalary")}</span>}
+                    {r.payroll?.hasSalary ? money(r.payroll.net, r.payroll.currency, lang) : <span className="text-xs text-white/55">{t("erp.hr.noSalary")}</span>}
                   </td>
                 )}
               </tr>
@@ -126,11 +127,12 @@ function Overview({ data, lookups, onOpen, payroll }) {
 
 function PayrollPanel({ data, month, onChanged, settings }) {
   const { t, lang } = useLanguage();
+  const confirm = useConfirm();
   const [error, setError] = useState("");
   const closed = data.state.closed;
 
   async function act(action) {
-    if (!window.confirm(t(action === "close" ? "erp.hr.confirmClose" : "erp.hr.confirmReopen"))) return;
+    if (!(await confirm({ text: t(action === "close" ? "erp.hr.confirmClose" : "erp.hr.confirmReopen"), danger: true }))) return;
     setError("");
     try {
       await api(`/api/hr/months/${month}`, { method: "POST", body: { action } });
@@ -200,7 +202,7 @@ function PayrollPanel({ data, month, onChanged, settings }) {
                       <td className="px-3 py-2.5 font-semibold tabular-nums">{money(p.net, c, lang)}</td>
                     </>
                   ) : (
-                    <td colSpan={7} className="px-3 py-2.5 text-white/40">{t("erp.hr.noSalary")}</td>
+                    <td colSpan={7} className="px-3 py-2.5 text-white/60">{t("erp.hr.noSalary")}</td>
                   )}
                 </tr>
               );
@@ -214,6 +216,7 @@ function PayrollPanel({ data, month, onChanged, settings }) {
 
 function Devices() {
   const { t, lang } = useLanguage();
+  const confirm = useConfirm();
   const [devices, setDevices] = useState(null);
   const [name, setName] = useState("");
   const [newKey, setNewKey] = useState(null);
@@ -280,7 +283,7 @@ function Devices() {
           </span>
           <div className="min-w-0 flex-1">
             <p className="font-medium">{d.name}</p>
-            <p className="text-xs text-white/45">
+            <p className="text-xs text-white/60">
               …{d.keyHint} · {t("erp.hr.lastSeen")}: {d.lastSeenAt ? formatDateTime(d.lastSeenAt, lang) : "—"}
               {d.lastError && <span className="text-red-300"> · {d.lastError}</span>}
             </p>
@@ -288,7 +291,7 @@ function Devices() {
           <Toggle checked={d.active} onChange={(active) => api(`/api/hr/devices/${d.id}`, { method: "PATCH", body: { active } }).then(load)} label={t("erp.org.active")} />
           <button
             type="button"
-            onClick={() => window.confirm(t("common.confirmDelete")) && api(`/api/hr/devices/${d.id}`, { method: "DELETE" }).then(load)}
+            onClick={async () => (await confirm({ text: t("common.confirmDelete"), kind: "delete" })) && api(`/api/hr/devices/${d.id}`, { method: "DELETE" }).then(load)}
             className="text-red-400"
             aria-label={t("common.delete")}
           >
@@ -332,7 +335,7 @@ function Rules({ settings, onSaved }) {
       <div className="space-y-3 border-t border-white/10 pt-4">
         <Toggle checked={value.salaryCode !== false} onChange={set("salaryCode")} label={t("erp.hr.rule.salaryCode")} />
         <Toggle checked={Boolean(value.webCheckIn)} onChange={set("webCheckIn")} label={t("erp.hr.rule.webCheckIn")} />
-        <p className="text-xs text-white/40">{t("erp.hr.rule.webCheckInHint")}</p>
+        <p className="text-xs text-white/60">{t("erp.hr.rule.webCheckInHint")}</p>
       </div>
       <div>
         <p className="mb-2 text-sm font-medium text-white/70">{t("erp.hr.warningRules")}</p>
@@ -419,7 +422,7 @@ export default function HrCenter({ initialMonth }) {
         {visibleTabs.map((key) => (
           <button key={key} type="button" onClick={() => setTab(key)} className="relative px-4 py-3 text-sm font-medium text-white/60 data-[active=true]:text-white" data-active={tab === key}>
             {t(`erp.hr.tab.${key}`)}
-            {key === "leave" && pending > 0 && <span className="ms-1.5 rounded-full bg-brand-orange px-1.5 text-[10px] text-white">{pending}</span>}
+            {key === "leave" && pending > 0 && <span className="ms-1.5 rounded-full bg-brand-orange px-1.5 text-[11px] text-white">{pending}</span>}
             {tab === key && <motion.span layoutId="hr-tab" className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-brand-orange" />}
           </button>
         ))}
@@ -438,17 +441,17 @@ export default function HrCenter({ initialMonth }) {
       {tab === "leave" && leaves && (
         <div className="animate-fade-up space-y-8">
           <div>
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/45">{t("erp.leaveFlow.waitingYou")}</h3>
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/60">{t("erp.leaveFlow.waitingYou")}</h3>
             <LeaveList leaves={leaves.filter((l) => l.canDecide)} approver onChanged={loadLeaves} empty={t("erp.leaveFlow.nothingForYou")} />
           </div>
           {leaves.some((l) => l.status === "pending" && !l.canDecide) && (
             <div>
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/45">{t("erp.leaveFlow.inProgress")}</h3>
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/60">{t("erp.leaveFlow.inProgress")}</h3>
               <LeaveList leaves={leaves.filter((l) => l.status === "pending" && !l.canDecide)} approver onChanged={loadLeaves} />
             </div>
           )}
           <div>
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/45">{t("erp.hr.leaveHistory")}</h3>
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/60">{t("erp.hr.leaveHistory")}</h3>
             <LeaveList leaves={leaves.filter((l) => l.status !== "pending")} approver onChanged={loadLeaves} />
           </div>
         </div>

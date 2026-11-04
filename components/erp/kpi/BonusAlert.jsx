@@ -19,7 +19,7 @@ export default function BonusAlert({ bonus, isMe = true, showLink = false }) {
   if (!bonus.pool) {
     return (
       <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-4 text-sm text-white/55">
-        <Gift size={18} className="shrink-0 text-white/40" /> {t("erp.bonus.noPool")}
+        <Gift size={18} className="shrink-0 text-white/60" /> {t("erp.bonus.noPool")}
       </div>
     );
   }
@@ -43,7 +43,7 @@ export default function BonusAlert({ bonus, isMe = true, showLink = false }) {
         <>
           <p className="mb-3 text-sm text-white/70">
             {t(`erp.bonus.current_${who}`, { score: bonus.myScore, rank: bonus.myRank, of: bonus.of })}
-            {bonus.minScore > 0 && <span className="text-white/45"> · {t("erp.bonus.minScoreNote", { min: bonus.minScore })}</span>}
+            {bonus.minScore > 0 && <span className="text-white/60"> · {t("erp.bonus.minScoreNote", { min: bonus.minScore })}</span>}
           </p>
           <div className="grid gap-2 sm:grid-cols-3">
             {bonus.places.map((p) => (
@@ -73,7 +73,7 @@ export default function BonusAlert({ bonus, isMe = true, showLink = false }) {
                   )}
                 </p>
                 {p.scoreToBeat !== null && !p.mine && (
-                  <p className="mt-0.5 text-[11px] text-white/40">
+                  <p className="mt-0.5 text-[11px] text-white/60">
                     {t("erp.bonus.scoreAtPlace", { score: p.scoreToBeat })}
                     {p.holderName ? ` · ${p.holderName}` : ""}
                   </p>
@@ -93,7 +93,7 @@ export default function BonusAlert({ bonus, isMe = true, showLink = false }) {
               ))}
             </p>
           )}
-          {bonus.closed && <p className="mt-3 text-xs text-white/45">{t("erp.bonus.closedNote", { amount: m(bonus.myBonus) })}</p>}
+          {bonus.closed && <p className="mt-3 text-xs text-white/60">{t("erp.bonus.closedNote", { amount: m(bonus.myBonus) })}</p>}
         </>
       )}
       {bonus.note && <p className="mt-3 whitespace-pre-line rounded-xl bg-white/5 px-3 py-2 text-sm text-white/75">{bonus.note}</p>}

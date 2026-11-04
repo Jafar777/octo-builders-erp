@@ -33,15 +33,15 @@ export function DependencyPicker({ value, onChange, projectId, excludeId }) {
         <div className="mb-2 space-y-1.5">
           {chosen.map((c) => (
             <div key={c.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm">
-              <Link2 size={14} className="shrink-0 text-white/40" />
+              <Link2 size={14} className="shrink-0 text-white/60" />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
-                  <span className="shrink-0 text-xs text-white/45" dir="ltr">
+                  <span className="shrink-0 text-xs text-white/60" dir="ltr">
                     #{c.number}
                   </span>
                   <span className="truncate font-medium text-white">{c.status ? taskHeading(c, lang) : "…"}</span>
                 </span>
-                {c.assignee && <span className="block truncate text-xs text-white/45">{c.assignee.name}</span>}
+                {c.assignee && <span className="block truncate text-xs text-white/60">{c.assignee.name}</span>}
               </span>
               {c.status && <StatusBadge status={c.status} />}
               <button type="button" onClick={() => onChange(value.filter((id) => id !== c.id))} className="shrink-0 rounded-full p-1 text-white/50 hover:bg-white/10 hover:text-white" aria-label={t("common.delete")}>
@@ -97,7 +97,7 @@ export function PlanningBadges({ task }) {
         </span>
       )}
       {(task.recurrence || task.recurrenceOf) && (
-        <span className="text-white/45" title={t("erp.tasks.repeating")}>
+        <span className="text-white/60" title={t("erp.tasks.repeating")}>
           <Repeat size={13} />
         </span>
       )}
@@ -107,7 +107,7 @@ export function PlanningBadges({ task }) {
         </span>
       )}
       {task.parentTask && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-white/45" dir="ltr">
+        <span className="inline-flex items-center gap-1 text-[11px] text-white/60" dir="ltr">
           <Link2 size={12} /> #{task.parentTask.number}
         </span>
       )}

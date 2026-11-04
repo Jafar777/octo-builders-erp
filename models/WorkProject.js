@@ -62,6 +62,11 @@ const WorkProjectSchema = new mongoose.Schema(
         dependsOn: [{ type: ObjectId, ref: "Task" }],
         doneAt: { type: Date, default: null },
         baselineDate: { type: Date, default: null },
+        // Billing: when it's reached, an invoice for this share of the contract is drafted
+        // (percent of the contract, or a fixed amount in the project's currency).
+        billPercent: { type: Number, default: 0, min: 0, max: 100 },
+        billAmount: { type: Number, default: 0, min: 0 },
+        invoice: { type: ObjectId, ref: "Invoice", default: null },
       }),
     ],
     taskBaselineAt: { type: Date, default: null }, // last "Save baseline" on the Gantt

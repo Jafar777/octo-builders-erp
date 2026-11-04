@@ -103,9 +103,9 @@ export default function KpiView({ initialMonth, meId }) {
                 <p className="mt-1 text-sm text-white/60">
                   {t("erp.kpi.rank")} <span className="font-semibold text-white">{kpi.rank}</span> / {kpi.of}
                 </p>
-                <p className="text-xs text-white/40">{t("erp.kpi.target", { target: data.config.target })}</p>
+                <p className="text-xs text-white/60">{t("erp.kpi.target", { target: data.config.target })}</p>
                 {kpi.bonus > 0 && <p className="mt-1 text-sm text-emerald-300">{t("erp.kpi.bonusShare")}: {money(kpi.bonus, data.bonusCurrency, lang)}</p>}
-                {data.closed && <p className="mt-1 text-xs text-white/40">{t("erp.hr.closed")}</p>}
+                {data.closed && <p className="mt-1 text-xs text-white/60">{t("erp.hr.closed")}</p>}
               </div>
             </Card>
             <Card>
@@ -130,7 +130,7 @@ export default function KpiView({ initialMonth, meId }) {
                   <p className="font-semibold">{ind.name?.[lang]}</p>
                   <p className="shrink-0 text-lg font-bold tabular-nums">
                     {ind.points}
-                    <span className="text-sm text-white/40">/{ind.max}</span>
+                    <span className="text-sm text-white/60">/{ind.max}</span>
                   </p>
                 </div>
                 <div className="mt-2 h-1.5 rounded-full bg-white/[0.06]">
@@ -144,7 +144,7 @@ export default function KpiView({ initialMonth, meId }) {
                         <span className="block tabular-nums">
                           {item.points}/{item.max}
                         </span>
-                        <span className="block text-xs tabular-nums text-white/40" dir="ltr">
+                        <span className="block text-xs tabular-nums text-white/60" dir="ltr">
                           {item.value === null ? t("erp.kpi.noData") : `${item.value}${UNIT[metrics[item.metric]?.unit] ?? ""}`}
                         </span>
                       </span>
@@ -159,7 +159,7 @@ export default function KpiView({ initialMonth, meId }) {
 
       {board.length > 0 && (
         <section className="mt-10">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white/45">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-white/60">
             <Trophy size={15} /> {t("erp.kpi.leaderboard")}
           </h2>
           <div className="overflow-x-auto rounded-2xl border border-white/10">

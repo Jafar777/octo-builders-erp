@@ -15,6 +15,7 @@ import { StatTile, monthLabel } from "@/components/erp/hr/hrUi";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { PageSkeleton, SkeletonChart } from "@/components/erp/ui/Loading";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
 // Status palette (fixed) — always paired with an icon and a text label.
 const LEVEL = {
@@ -26,15 +27,15 @@ const LEVEL = {
 
 const PRESENCE = {
   present: "text-emerald-300",
-  not_in: "text-white/45",
+  not_in: "text-white/60",
   annual_leave: "text-sky-300",
   sick_leave: "text-sky-300",
   unpaid_leave: "text-amber-300",
-  no_badge: "text-white/30",
+  no_badge: "text-white/50",
 };
 
 // Same thresholds as ProjectScore.
-const kpiTone = (v) => (v === null || v === undefined ? "text-white/30" : v >= 80 ? "text-emerald-300" : v >= 60 ? "text-amber-300" : "text-red-300");
+const kpiTone = (v) => (v === null || v === undefined ? "text-white/50" : v >= 80 ? "text-emerald-300" : v >= 60 ? "text-amber-300" : "text-red-300");
 const avg = (list) => {
   const vals = list.filter((v) => v !== null && v !== undefined);
   return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
@@ -72,7 +73,7 @@ function ProgressCell({ p, t }) {
     <span className="block w-36" title={isFinished(p) ? undefined : t("erp.analytics.progressHint", { progress: p.progress, elapsed: p.elapsed })}>
       <span className="flex items-center justify-between text-xs tabular-nums">
         <span>{p.progress}%</span>
-        <span className="text-white/40" dir="ltr">
+        <span className="text-white/60" dir="ltr">
           {p.stagesDone}/{p.stagesTotal}
         </span>
       </span>
@@ -204,7 +205,7 @@ export default function Analytics() {
                       <Link href={`/dashboard/projects/${p.id}`} className="font-medium hover:text-brand-orange">
                         {p.name?.[lang]}
                       </Link>
-                      <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-white/40">
+                      <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-white/60">
                         {p.code && <span dir="ltr">{p.code}</span>}
                         {p.department && <span>{lookups.departmentName(p.department)}</span>}
                         {p.status === "on_hold" && <span className="rounded-full bg-amber-500/15 px-2 text-amber-300">{t("erp.projects.status.on_hold")}</span>}
@@ -231,9 +232,9 @@ export default function Analytics() {
                       <span className="inline-flex items-center gap-1.5 text-xs" style={{ color: L.color }}>
                         <L.Icon size={14} />
                         <span className="text-white/85">{t(`erp.analytics.level.${p.level}`)}</span>
-                        <span className="tabular-nums text-white/45">{p.score}</span>
+                        <span className="tabular-nums text-white/60">{p.score}</span>
                       </span>
-                      {p.reason !== "none" && <span className="mt-0.5 block text-[11px] text-white/45">{t(`erp.analytics.reason.${p.reason}`)}</span>}
+                      {p.reason !== "none" && <span className="mt-0.5 block text-[11px] text-white/60">{t(`erp.analytics.reason.${p.reason}`)}</span>}
                     </td>
                     <td className="px-2 py-2.5">
                       <ProgressCell p={p} t={t} />
@@ -253,7 +254,7 @@ export default function Analytics() {
                     <td className={`px-2 py-2.5 tabular-nums ${p.lateTasks ? "text-red-300" : ""}`}>{p.lateTasks}</td>
                     <td className={`px-2 py-2.5 tabular-nums ${p.rejections ? "text-amber-300" : ""}`}>{p.rejections}</td>
                     <td className="px-2 py-2.5 tabular-nums" dir="ltr">
-                      {p.openTasks} <span className="text-white/40">/ {p.totalTasks}</span>
+                      {p.openTasks} <span className="text-white/60">/ {p.totalTasks}</span>
                     </td>
                     <td className="px-2 py-2.5 tabular-nums" dir="ltr">
                       {p.hoursWorked}h
@@ -264,7 +265,7 @@ export default function Analytics() {
               })}
               {projects.length === 0 && (
                 <tr>
-                  <td colSpan={PROJECT_COLS.length} className="py-8 text-center text-white/40">
+                  <td colSpan={PROJECT_COLS.length} className="py-8 text-center text-white/60">
                     {t("erp.projects.none")}
                   </td>
                 </tr>
@@ -311,7 +312,7 @@ export default function Analytics() {
         </Card>
         <Card>
           <p className="mb-4 text-sm font-medium text-white/70">{t("erp.analytics.taskMix")}</p>
-          {types.length ? <HorizontalBars items={types} /> : <p className="py-10 text-center text-sm text-white/40">{t("erp.kpi.noData")}</p>}
+          {types.length ? <HorizontalBars items={types} /> : <EmptyState compact text={t("erp.kpi.noData")} />}
         </Card>
       </div>
 
@@ -327,7 +328,7 @@ export default function Analytics() {
                     <span className="truncate">{m.name}</span>
                     <TraineeBadge id={m.id} />
                   </p>
-                  <p className="truncate text-xs text-white/45">
+                  <p className="truncate text-xs text-white/60">
                     {m.workingOn ? (
                       <span className="inline-flex items-center gap-1 text-sky-300">
                         <Timer size={12} /> #{m.workingOn.number} {m.workingOn.title}
@@ -347,12 +348,12 @@ export default function Analytics() {
         </Card>
         <Card>
           <p className="mb-1 text-sm font-medium text-white/70">{t("erp.analytics.capacity")}</p>
-          <p className="mb-4 text-xs text-white/40">{t("erp.analytics.capacityHint")}</p>
+          <p className="mb-4 text-xs text-white/60">{t("erp.analytics.capacityHint")}</p>
           <div className="space-y-5">
             {data.capacity.map((d) => (
               <div key={d.department}>
                 <p className="mb-2 text-sm font-medium">
-                  {lookups.departmentName(d.department)} <span className="text-xs text-white/40">· {d.people} {t("erp.analytics.people")}</span>
+                  {lookups.departmentName(d.department)} <span className="text-xs text-white/60">· {d.people} {t("erp.analytics.people")}</span>
                 </p>
                 <div className="space-y-2">
                   {d.months.map((m) => {
@@ -367,7 +368,7 @@ export default function Analytics() {
                           {m.reserved}/{m.available}h · {m.load}%
                           {m.load > 100 && <span className="ms-1 text-red-300">{t("erp.analytics.overloaded")}</span>}
                           {m.load > 85 && m.load <= 100 && <span className="ms-1 text-amber-300">{t("erp.analytics.nearFull")}</span>}
-                          {m.load < 30 && <span className="ms-1 text-white/45">{t("erp.analytics.idle")}</span>}
+                          {m.load < 30 && <span className="ms-1 text-white/60">{t("erp.analytics.idle")}</span>}
                         </span>
                       </div>
                     );

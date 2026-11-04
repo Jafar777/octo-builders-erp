@@ -21,6 +21,7 @@ import {
 import BilingualField from "@/components/dashboard/BilingualField";
 import Avatar from "@/components/erp/ui/Avatar";
 import { Button, ErrorText, Toggle } from "@/components/erp/ui/fields";
+import { useConfirm } from "@/components/erp/ui/Feedback";
 import {
   Chip,
   GroupBox,
@@ -41,6 +42,7 @@ const blank = {
   limited: false,
   pages: [],
   crossDepartment: false,
+  requireMfa: false,
 };
 const formOf = (r) =>
   r
@@ -52,6 +54,7 @@ const formOf = (r) =>
         limited: r.limited,
         pages: r.pages,
         crossDepartment: Boolean(r.crossDepartment),
+        requireMfa: Boolean(r.requireMfa),
       }
     : blank;
 
@@ -66,6 +69,7 @@ function changeCount(a, b) {
     (a.scope !== b.scope) +
     (a.limited !== b.limited) +
     (a.crossDepartment !== b.crossDepartment) +
+    (Boolean(a.requireMfa) !== Boolean(b.requireMfa)) +
     (a.name.ar !== b.name.ar || a.name.en !== b.name.en) +
     (a.description.ar !== b.description.ar ||
       a.description.en !== b.description.en)
@@ -84,6 +88,7 @@ export default function RoleEditor({
   viewer,
 }) {
   const { t, lang } = useLanguage();
+  const confirm = useConfirm();
   const saved = useMemo(() => formOf(role), [role]);
   const [form, setForm] = useState(() => seed || formOf(role));
   const [query, setQuery] = useState("");
@@ -95,6 +100,8 @@ export default function RoleEditor({
   const noRole = role?.key === "user";
   const ownRole = role && viewer?.role === role.key && !top;
   const locked = top || noRole || ownRole;
+  // The CEO role is fixed except for its sign-in security.
+  const editable = !locked || (top && !ownRole);
   const changes = role ? changeCount(saved, form) : 1;
   const usable = form.permissions.filter(
     (p) => !form.limited || RESTRICTED_PERMISSIONS.includes(p),
@@ -158,7 +165,7 @@ export default function RoleEditor({
   }
 
   async function remove() {
-    if (!window.confirm(t("common.confirmDelete"))) return;
+    if (!(await confirm({ text: t("common.confirmDelete"), kind: "delete" }))) return;
     setError("");
     try {
       await api(`/api/roles/${role.key}`, { method: "DELETE" });
@@ -180,7 +187,7 @@ export default function RoleEditor({
               form.name.en ||
               form.name.ar ||
               t("erp.access.newRole")}
-            {locked && <Lock size={14} className="text-white/40" />}
+            {locked && <Lock size={14} className="text-white/60" />}
           </p>
           <div className="mt-1 flex flex-wrap gap-1.5">
             {role?.system && <Chip>{t("erp.access.system")}</Chip>}
@@ -208,7 +215,7 @@ export default function RoleEditor({
               {t("erp.access.saved")}
             </span>
           )}
-          {role && changes > 0 && !locked && (
+          {role && changes > 0 && editable && (
             <span className="text-xs text-brand-orange">
               {t("erp.access.unsaved", { n: changes })}
             </span>
@@ -241,12 +248,12 @@ export default function RoleEditor({
               <Trash2 size={15} />
             </Button>
           )}
-          {!locked && role && changes > 0 && (
+          {editable && role && changes > 0 && (
             <Button variant="ghost" onClick={() => setForm(saved)}>
               <Undo2 size={15} /> {t("erp.access.discard")}
             </Button>
           )}
-          {!locked && (
+          {editable && (
             <Button
               onClick={save}
               loading={busy}
@@ -293,6 +300,19 @@ export default function RoleEditor({
             </Section>
           )}
 
+          {!noRole && !ownRole && (
+            <Section title={t("erp.access.security.title")}>
+              <Toggle
+                checked={Boolean(form.requireMfa)}
+                onChange={set("requireMfa")}
+                label={t("erp.access.security.requireMfa")}
+              />
+              <p className="mt-2 text-xs leading-relaxed text-white/60">
+                {t("erp.access.security.requireMfaHint")}
+              </p>
+            </Section>
+          )}
+
           {!top && !noRole && (
             <Section title={t("erp.access.account")}>
               <div className={locked ? "pointer-events-none opacity-60" : ""}>
@@ -302,7 +322,7 @@ export default function RoleEditor({
                   label={t("erp.access.restricted")}
                 />
               </div>
-              <p className="mt-2 text-xs leading-relaxed text-white/45">
+              <p className="mt-2 text-xs leading-relaxed text-white/60">
                 {t("erp.access.restrictedHint")}
               </p>
             </Section>
@@ -317,7 +337,7 @@ export default function RoleEditor({
                   label={t("erp.access.work.roleToggle")}
                 />
               </div>
-              <p className="mt-2 text-xs leading-relaxed text-white/45">
+              <p className="mt-2 text-xs leading-relaxed text-white/60">
                 {t("erp.access.work.roleHint")}
               </p>
             </Section>
@@ -340,7 +360,7 @@ export default function RoleEditor({
                   <p className="text-sm font-medium">
                     {t(`erp.roles.scope_${s}`)}
                   </p>
-                  <p className="mt-1 text-[11px] leading-snug text-white/45">
+                  <p className="mt-1 text-[11px] leading-snug text-white/60">
                     {t(`erp.access.scopeHint.${s}`)}
                   </p>
                 </button>
@@ -362,7 +382,7 @@ export default function RoleEditor({
                   >
                     {t("erp.access.selectAll")}
                   </button>
-                  <span className="text-white/20">·</span>
+                  <span className="text-white/60">·</span>
                   <button
                     type="button"
                     className="text-white/50 hover:text-white"
@@ -377,7 +397,7 @@ export default function RoleEditor({
             <div className="relative mb-3">
               <Search
                 size={14}
-                className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-white/30"
+                className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-white/50"
               />
               <input
                 value={query}
@@ -407,10 +427,10 @@ export default function RoleEditor({
                         onClick={() => toggleGroup(group)}
                         label={t(`erp.perm_group.${group}`)}
                       />
-                      <p className="flex-1 text-xs font-semibold uppercase tracking-wider text-white/45">
+                      <p className="flex-1 text-xs font-semibold uppercase tracking-wider text-white/60">
                         {t(`erp.perm_group.${group}`)}
                       </p>
-                      <span className="text-[11px] text-white/35">
+                      <span className="text-[11px] text-white/55">
                         {n}/{perms.length}
                       </span>
                     </div>
@@ -425,7 +445,7 @@ export default function RoleEditor({
                             title={
                               off ? t("erp.access.restrictedPerm") : undefined
                             }
-                            className={`flex items-start gap-3 rounded-lg px-1.5 py-1.5 text-sm ${locked || off ? "text-white/40" : "cursor-pointer text-white/85 hover:bg-white/5"}`}
+                            className={`flex items-start gap-3 rounded-lg px-1.5 py-1.5 text-sm ${locked || off ? "text-white/60" : "cursor-pointer text-white/85 hover:bg-white/5"}`}
                           >
                             <input
                               type="checkbox"
@@ -443,7 +463,7 @@ export default function RoleEditor({
                                   </Chip>
                                 )}
                               </span>
-                              <span className="mt-0.5 block text-[11px] leading-snug text-white/40">
+                              <span className="mt-0.5 block text-[11px] leading-snug text-white/60">
                                 {t(hintKey(p.key))}
                               </span>
                             </span>
@@ -476,7 +496,7 @@ export default function RoleEditor({
           {role && (
             <Section title={`${t("erp.access.holders")} · ${holders.length}`}>
               {holders.length === 0 ? (
-                <p className="text-xs text-white/35">
+                <p className="text-xs text-white/55">
                   {t("erp.access.noHolders")}
                 </p>
               ) : (

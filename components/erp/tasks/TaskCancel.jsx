@@ -8,6 +8,7 @@ import { formatDateTime } from "@/lib/formatTime";
 import { cancelNeedsApproval, canUndoStart } from "@/lib/gantt";
 import { Button, ErrorText } from "@/components/erp/ui/fields";
 import { useNow } from "@/components/erp/tasks/taskUi";
+import { useConfirm } from "@/components/erp/ui/Feedback";
 
 const ACTIVE = ["todo", "in_progress", "on_hold", "help"];
 
@@ -17,6 +18,7 @@ const ACTIVE = ["todo", "in_progress", "on_hold", "help"];
 // `who` = { isAssignee, canManage, canPlan }.
 export default function TaskCancel({ task, who, onDone }) {
   const { t, lang } = useLanguage();
+  const confirm = useConfirm();
   const now = useNow(["in_progress", "on_hold"].includes(task.status) && Boolean(task.startedAt), 15000);
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
@@ -57,11 +59,11 @@ export default function TaskCancel({ task, who, onDone }) {
         <p className="flex items-center gap-2 font-semibold text-white/70">
           <Ban size={15} />
           {task.cancelledBy ? t("erp.tasks.cancelledBy", { name: task.cancelledBy.name }) : t("erp.tasks.status.cancelled")}
-          {task.cancelledAt && <span className="font-normal text-white/40">· {formatDateTime(task.cancelledAt, lang)}</span>}
+          {task.cancelledAt && <span className="font-normal text-white/60">· {formatDateTime(task.cancelledAt, lang)}</span>}
         </p>
         {task.cancelReason && <p className="whitespace-pre-wrap text-white/60">{task.cancelReason}</p>}
         {who.canPlan && (
-          <Button variant="ghost" onClick={() => window.confirm(t("erp.tasks.confirmRestore")) && act("restore")} disabled={busy}>
+          <Button variant="ghost" onClick={async () => (await confirm({ text: t("erp.tasks.confirmRestore"), danger: true })) && act("restore")} disabled={busy}>
             <RotateCcw size={15} /> {t("erp.tasks.restoreTask")}
           </Button>
         )}
@@ -90,7 +92,7 @@ export default function TaskCancel({ task, who, onDone }) {
           <p className="flex items-center gap-2 font-semibold text-amber-100">
             <Ban size={15} />
             {who.isAssignee && req.by?.id === task.assignee?.id ? t("erp.tasks.cancelPendingMine") : t("erp.tasks.cancelPending", { name: req.by?.name || "—" })}
-            <span className="font-normal text-white/40">· {formatDateTime(req.at, lang)}</span>
+            <span className="font-normal text-white/60">· {formatDateTime(req.at, lang)}</span>
           </p>
           <p className="whitespace-pre-wrap text-white/75">{req.reason}</p>
           {who.canPlan && (
@@ -120,7 +122,7 @@ export default function TaskCancel({ task, who, onDone }) {
               <Button
                 variant="danger"
                 disabled={busy}
-                onClick={() => (needsApproval ? setOpen(true) : window.confirm(t("erp.tasks.confirmCancel")) && act("cancel"))}
+                onClick={async () => (needsApproval ? setOpen(true) : (await confirm({ text: t("erp.tasks.confirmCancel"), danger: true })) && act("cancel"))}
               >
                 <Ban size={15} /> {t(needsApproval && !who.canPlan ? "erp.tasks.requestCancel" : "erp.tasks.cancelTask")}
               </Button>

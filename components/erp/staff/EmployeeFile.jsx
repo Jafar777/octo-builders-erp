@@ -18,13 +18,14 @@ import { DocumentsCard, EmergencyContactCard } from "@/components/erp/hr/HrFile"
 import StaffEditor from "@/components/erp/staff/StaffEditor";
 import KpiRing from "@/components/erp/staff/KpiRing";
 import { PendingSkills } from "@/components/erp/hr/SkillRequests";
+import { useConfirm } from "@/components/erp/ui/Feedback";
 
 const TABS = ["overview", "attendance", "contract", "salary", "documents"];
 
 function Field({ label, children }) {
   return (
     <div className="min-w-0">
-      <p className="text-xs text-white/45">{label}</p>
+      <p className="text-xs text-white/60">{label}</p>
       <div className="mt-0.5 truncate text-sm text-white/90">{children || "—"}</div>
     </div>
   );
@@ -155,11 +156,11 @@ function ContactCard({ person, profile, userId, onChanged, onPhone }) {
       <p className="font-semibold">{t("erp.staffFile.contact")}</p>
       <div className="space-y-3 text-sm">
         <a href={`mailto:${person.email}`} className="flex items-center gap-2 text-white/85 hover:text-brand-orange" dir="ltr">
-          <Mail size={15} className="text-white/45" /> {person.email}
+          <Mail size={15} className="text-white/60" /> {person.email}
         </a>
         {profile.phone && (
           <a href={`tel:${profile.phone}`} className="flex items-center gap-2 text-white/85 hover:text-brand-orange" dir="ltr">
-            <Phone size={15} className="text-white/45" /> {profile.phone}
+            <Phone size={15} className="text-white/60" /> {profile.phone}
           </a>
         )}
       </div>
@@ -207,7 +208,7 @@ function SkillsCard({ userId, skills: initial, requests, canApprove, onChanged }
             </button>
           </span>
         ))}
-        {skills.length === 0 && <p className="text-sm text-white/40">{t("erp.staffFile.noSkills")}</p>}
+        {skills.length === 0 && <p className="text-sm text-white/60">{t("erp.staffFile.noSkills")}</p>}
       </div>
       <PendingSkills userId={userId} requests={requests} canApprove={canApprove} onDone={onChanged} />
       <div className="flex items-end gap-2">
@@ -265,7 +266,7 @@ function KpiCard({ hrRow }) {
               )}
             </>
           ) : (
-            <p className="text-white/45">{t("erp.staffFile.noKpi")}</p>
+            <p className="text-white/60">{t("erp.staffFile.noKpi")}</p>
           )}
         </div>
       </div>
@@ -333,7 +334,7 @@ function WorkHoursCard({ userId, schedule, company, onChanged }) {
     <Card className="space-y-4">
       <p className="font-semibold">{t("erp.staffFile.workHours")}</p>
       <Toggle checked={form.custom} onChange={(custom) => setForm((f) => ({ ...f, custom }))} label={t("erp.staffFile.customHours")} />
-      <p className="text-xs text-white/45">
+      <p className="text-xs text-white/60">
         {t("erp.staffFile.companyHours", { start: company.workStart, end: company.workEnd, hours: company.dailyHours })}
       </p>
       {form.custom && (
@@ -349,7 +350,7 @@ function WorkHoursCard({ userId, schedule, company, onChanged }) {
               dir="ltr"
             />
           ))}
-          <p className="text-xs text-white/40 sm:col-span-2">{t("erp.staffFile.blankUsesCompany")}</p>
+          <p className="text-xs text-white/60 sm:col-span-2">{t("erp.staffFile.blankUsesCompany")}</p>
         </div>
       )}
       <div className="flex items-center gap-3">
@@ -365,13 +366,14 @@ function WorkHoursCard({ userId, schedule, company, onChanged }) {
 
 function SalaryCard({ userId, data, currencies, onChanged }) {
   const { t, lang } = useLanguage();
+  const confirm = useConfirm();
   const { user } = useAuth();
   const canPayManage = user?.permissions?.includes("payroll.manage");
   const [salary, setSalary] = useState({ amount: "", currency: currencies?.base || "USD", from: "", note: "" });
   const [error, setError] = useState("");
 
   if (data.salaryLocked) return <SalaryUnlock onUnlocked={onChanged} />;
-  if (!data.canPay) return <p className="text-sm text-white/45">{t("erp.noAccess")}</p>;
+  if (!data.canPay) return <p className="text-sm text-white/60">{t("erp.noAccess")}</p>;
 
   async function addSalary() {
     setError("");
@@ -384,7 +386,7 @@ function SalaryCard({ userId, data, currencies, onChanged }) {
     }
   }
   async function removeSalary(id) {
-    if (!window.confirm(t("common.confirmDelete"))) return;
+    if (!(await confirm({ text: t("common.confirmDelete"), kind: "delete" }))) return;
     await api(`/api/hr/salaries/${id}`, { method: "DELETE" }).catch((err) => setError(errorText(t, err)));
     onChanged();
   }
@@ -396,7 +398,7 @@ function SalaryCard({ userId, data, currencies, onChanged }) {
         <p className="font-semibold">{t("erp.hr.salaryHistory")}</p>
         {current && (
           <div>
-            <p className="text-xs text-white/45">{t("erp.staffFile.currentSalary")}</p>
+            <p className="text-xs text-white/60">{t("erp.staffFile.currentSalary")}</p>
             <p className="text-2xl font-bold tabular-nums text-brand-orange">{money(current.amount, current.currency, lang)}</p>
           </div>
         )}
@@ -407,7 +409,7 @@ function SalaryCard({ userId, data, currencies, onChanged }) {
               <span className="text-white/50" dir="ltr">
                 {t("erp.settings.from")} {s.from}
               </span>
-              {s.note && <span className="min-w-0 flex-1 truncate text-white/40">{s.note}</span>}
+              {s.note && <span className="min-w-0 flex-1 truncate text-white/60">{s.note}</span>}
               {canPayManage && (
                 <button type="button" onClick={() => removeSalary(s.id)} className="ms-auto text-red-400" aria-label={t("common.delete")}>
                   <Trash2 size={14} />
@@ -415,7 +417,7 @@ function SalaryCard({ userId, data, currencies, onChanged }) {
               )}
             </div>
           ))}
-          {data.salaries.length === 0 && <p className="text-sm text-white/40">{t("erp.hr.noSalary")}</p>}
+          {data.salaries.length === 0 && <p className="text-sm text-white/60">{t("erp.hr.noSalary")}</p>}
         </div>
       </Card>
       {canPayManage && (
@@ -544,7 +546,7 @@ export default function EmployeeFile({ person, hrRow, roles, org, canManage, meI
 
       {tab === "salary" && <SalaryCard userId={person.id} data={data} currencies={currencies} onChanged={changed} />}
 
-      {tab === "documents" && (data.canEditFile ? <DocumentsCard userId={person.id} data={data} onChanged={load} /> : <p className="text-sm text-white/45">{t("erp.noAccess")}</p>)}
+      {tab === "documents" && (data.canEditFile ? <DocumentsCard userId={person.id} data={data} onChanged={load} /> : <p className="text-sm text-white/60">{t("erp.noAccess")}</p>)}
     </div>
   );
 }

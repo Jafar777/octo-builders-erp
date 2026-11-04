@@ -195,7 +195,7 @@ function WorkHoursSettings({ initial, calendar }) {
     <Card className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold">{t("erp.settings.workHours")}</h2>
-        <p className="mt-1 text-xs text-white/45">{t("erp.settings.workHoursHint")}</p>
+        <p className="mt-1 text-xs text-white/60">{t("erp.settings.workHoursHint")}</p>
       </div>
 
       <div>
@@ -233,7 +233,7 @@ function WorkHoursSettings({ initial, calendar }) {
 
       <div>
         <p className="mb-1 text-sm font-medium text-white/70">{t("erp.settings.specialDays")}</p>
-        <p className="mb-3 text-xs text-white/40">{t("erp.settings.specialDaysHint")}</p>
+        <p className="mb-3 text-xs text-white/60">{t("erp.settings.specialDaysHint")}</p>
         <div className="space-y-3">
           {value.special.map((sd, i) => (
             <div key={i} className="space-y-3 rounded-xl border border-white/10 p-3">
@@ -277,7 +277,7 @@ function WorkHoursSettings({ initial, calendar }) {
           />
         ))}
       </div>
-      <p className="text-xs text-white/40">{t("erp.settings.rulesHint")}</p>
+      <p className="text-xs text-white/60">{t("erp.settings.rulesHint")}</p>
       <SaveBar status={status} error={error} onSave={() => save(value, setValue)} />
     </Card>
   );
@@ -298,7 +298,7 @@ function CurrencySettings({ initial }) {
         onChange={(base) => setValue((v) => ({ ...v, base }))}
         options={value.list.filter((c) => c.code).map((c) => ({ value: c.code, label: `${c.code} — ${c.name?.[lang] || ""}` }))}
       />
-      <p className="text-xs text-white/40">{t("erp.settings.rateHint", { base: value.base })}</p>
+      <p className="text-xs text-white/60">{t("erp.settings.rateHint", { base: value.base })}</p>
       <div className="space-y-3">
         {value.list.map((c, i) => (
           <div key={i} className="grid items-end gap-3 rounded-xl border border-white/10 p-3 sm:grid-cols-[110px_1fr_140px_auto]">
@@ -376,7 +376,7 @@ function ReorderList({ items, onReorder, className, renderRow, t }) {
       <span
         onPointerDown={() => setArmed(i)}
         onPointerUp={() => setArmed(null)}
-        className="flex shrink-0 cursor-grab items-center text-white/30 hover:text-white/70 active:cursor-grabbing"
+        className="flex shrink-0 cursor-grab items-center text-white/50 hover:text-white/70 active:cursor-grabbing"
         title={t("erp.settings.dragToOrder")}
       >
         <GripVertical size={16} />
@@ -408,7 +408,7 @@ function TasksSettings({ initial }) {
 
       <div>
         <p className="mb-1 text-sm font-medium text-white/70">{t("erp.settings.taskTypes")}</p>
-        <p className="mb-3 text-xs text-white/40">{t("erp.settings.keyHint")}</p>
+        <p className="mb-3 text-xs text-white/60">{t("erp.settings.keyHint")}</p>
         <div className="space-y-2">
           <ReorderList
             items={value.taskTypes}
@@ -433,7 +433,7 @@ function TasksSettings({ initial }) {
 
       <div>
         <p className="mb-1 text-sm font-medium text-white/70">{t("erp.settings.ratingTags")}</p>
-        <p className="mb-3 text-xs text-white/40">{t("erp.settings.ratingHint")}</p>
+        <p className="mb-3 text-xs text-white/60">{t("erp.settings.ratingHint")}</p>
         <div className="space-y-2">
           <ReorderList
             items={value.ratingTags}

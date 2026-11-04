@@ -12,7 +12,7 @@ export default function CategoriesField({ value, onChange }) {
   return (
     <div className="space-y-3">
       <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50">{t("dashboard.categories")}</h3>
-      <p className="text-xs text-white/40">{t("dashboard.categoriesHint")}</p>
+      <p className="text-xs text-white/60">{t("dashboard.categoriesHint")}</p>
       <ItemList
         items={value}
         onChange={onChange}

@@ -11,6 +11,8 @@ import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 import { Button, Card, ErrorText, Input, PageHeader } from "@/components/erp/ui/fields";
 import { SkeletonList } from "@/components/erp/ui/Loading";
 import { MonthPicker } from "@/components/erp/hr/hrUi";
+import { useConfirm, useToast } from "@/components/erp/ui/Feedback";
+import { Checkbox, EmptyState, TableToolbar, useTableTools } from "@/components/erp/ui/DataTools";
 
 const STATUS_STYLE = {
   pending: "border-amber-400/40 bg-amber-500/10 text-amber-200",
@@ -99,7 +101,7 @@ function RequestRow({ r, showUser, children }) {
       </div>
       {r.reason && <p className="whitespace-pre-wrap text-sm text-white/70">{r.reason}</p>}
       {r.decidedBy && (
-        <p className="text-xs text-white/45">
+        <p className="text-xs text-white/60">
           {t("erp.overtime.decidedBy", { name: r.decidedBy, at: formatDateTime(r.decidedAt, lang) })}
           {r.decisionNote ? ` — ${r.decisionNote}` : ""}
         </p>
@@ -111,6 +113,7 @@ function RequestRow({ r, showUser, children }) {
 
 function Mine({ data, onChanged }) {
   const { t, lang } = useLanguage();
+  const confirm = useConfirm();
   const mine = data.todayRequest;
   const [hours, setHours] = useState(mine ? String(mine.hours) : "1");
   const [reason, setReason] = useState(mine?.reason || "");
@@ -130,7 +133,7 @@ function Mine({ data, onChanged }) {
     }
   }
   async function withdraw(id) {
-    if (!window.confirm(t("erp.overtime.withdrawConfirm"))) return;
+    if (!(await confirm({ text: t("erp.overtime.withdrawConfirm"), danger: true }))) return;
     try {
       await api(`/api/overtime/${id}`, { method: "DELETE" });
       onChanged();
@@ -179,22 +182,64 @@ function Mine({ data, onChanged }) {
             )}
           </RequestRow>
         ))}
-        {data.requests.length === 0 && <p className="py-8 text-center text-white/40">{t("erp.overtime.none")}</p>}
+        {data.requests.length === 0 && <EmptyState icon={Timer} compact text={t("erp.overtime.none")} />}
       </div>
     </div>
   );
 }
 
+// Tick several requests to approve (the hours asked) or reject them at once.
 function Queue({ data, onChanged }) {
   const { t } = useLanguage();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const decidable = data.requests.filter((r) => r.canDecide);
+  const tools = useTableTools(decidable);
+  const bulk = (decision) => async (rows) => {
+    if (decision === "reject" && !(await confirm({ text: t("erp.ux.bulkRejectConfirm", { n: rows.length }), danger: true }))) return;
+    let done = 0;
+    for (const r of rows) {
+      try {
+        await api(`/api/overtime/${r.id}`, { method: "PATCH", body: { decision, hours: decision === "approve" ? r.hours : undefined }, quiet: true });
+        done += 1;
+      } catch {}
+    }
+    toast({ text: t("erp.ux.bulkDone", { n: done, total: rows.length }), tone: done === rows.length ? "success" : "error" });
+    onChanged();
+  };
   return (
     <div className="space-y-2">
+      {decidable.length > 1 && (
+        <>
+          <TableToolbar
+            tools={tools}
+            actions={[
+              { label: t("erp.ux.approveSelected"), icon: CheckCircle2, onClick: bulk("approve") },
+              { label: t("erp.ux.rejectSelected"), icon: XCircle, onClick: bulk("reject"), danger: true },
+            ]}
+          />
+          {!tools.someOn && (
+            <button type="button" onClick={tools.toggleAll} className="mb-1 inline-flex items-center gap-2 text-sm text-white/70 hover:text-white">
+              <Checkbox checked={false} onChange={tools.toggleAll} label={t("erp.ux.selectAll")} /> {t("erp.ux.selectAll")}
+            </button>
+          )}
+        </>
+      )}
       {data.requests.map((r) => (
-        <RequestRow key={r.id} r={r} showUser>
-          {r.canDecide && <Decide r={r} onDone={onChanged} />}
-        </RequestRow>
+        <div key={r.id} className="flex items-start gap-3">
+          {decidable.length > 1 && r.canDecide && (
+            <span className="pt-5">
+              <Checkbox checked={tools.selected.has(r.id)} onChange={() => tools.toggle(r.id)} label={r.user.name} />
+            </span>
+          )}
+          <div className="min-w-0 flex-1">
+            <RequestRow r={r} showUser>
+              {r.canDecide && <Decide r={r} onDone={onChanged} />}
+            </RequestRow>
+          </div>
+        </div>
       ))}
-      {data.requests.length === 0 && <p className="py-8 text-center text-white/40">{t("erp.overtime.noneQueue")}</p>}
+      {data.requests.length === 0 && <EmptyState icon={CheckCircle2} title={t("erp.ux.allClear")} text={t("erp.overtime.noneQueue")} />}
     </div>
   );
 }
@@ -262,7 +307,7 @@ function History({ data, month, onMonth }) {
                   <span className="truncate">{row.user.name}</span>
                   <TraineeBadge id={row.user.id} />
                 </span>
-                <span className="text-xs text-white/45">{t("erp.overtime.counts", { a: row.approved, r: row.rejected })}</span>
+                <span className="text-xs text-white/60">{t("erp.overtime.counts", { a: row.approved, r: row.rejected })}</span>
                 <span className="w-16 text-end font-semibold text-emerald-200" dir="ltr">
                   {t("erp.overtime.totalHours", { h: row.approvedHours })}
                 </span>
@@ -276,7 +321,7 @@ function History({ data, month, onMonth }) {
         {data.requests.map((r) => (
           <RequestRow key={r.id} r={r} showUser />
         ))}
-        {data.requests.length === 0 && <p className="py-8 text-center text-white/40">{t("erp.overtime.none")}</p>}
+        {data.requests.length === 0 && <EmptyState icon={Timer} compact text={t("erp.overtime.none")} />}
       </div>
     </div>
   );

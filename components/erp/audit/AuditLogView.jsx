@@ -7,6 +7,7 @@ import { api, errorText } from "@/lib/clientApi";
 import { formatDateTime } from "@/lib/formatTime";
 import { Button, ErrorText, PageHeader, Select } from "@/components/erp/ui/fields";
 import { SkeletonList } from "@/components/erp/ui/Loading";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
 const ACTION_FILTERS = ["", "user", "role", "task", "project", "template", "attendance", "payroll", "leave", "kpi", "finance", "departments", "branches", "jobTitles", "settings", "messages"];
 
@@ -72,13 +73,13 @@ export default function AuditLogView() {
               onClick={() => setOpen(open === log.id ? null : log.id)}
               className="flex w-full items-center gap-4 px-4 py-3 text-start text-sm"
             >
-              <span className="w-40 shrink-0 text-xs text-white/45">{formatDateTime(log.createdAt, lang)}</span>
+              <span className="w-40 shrink-0 text-xs text-white/60">{formatDateTime(log.createdAt, lang)}</span>
               <span className="min-w-0 flex-1">
                 <span className="font-medium">{log.actorName}</span>
                 <span className="text-white/60"> · {label(log.action)}</span>
-                {log.summary && <span className="text-white/45"> · {log.summary}</span>}
+                {log.summary && <span className="text-white/60"> · {log.summary}</span>}
               </span>
-              <ChevronDown size={16} className={`shrink-0 text-white/40 transition-transform ${open === log.id ? "rotate-180" : ""}`} />
+              <ChevronDown size={16} className={`shrink-0 text-white/60 transition-transform ${open === log.id ? "rotate-180" : ""}`} />
             </button>
             {open === log.id && (
               <pre dir="ltr" className="overflow-x-auto border-t border-white/10 px-4 py-3 text-xs text-white/60">
@@ -88,7 +89,7 @@ export default function AuditLogView() {
           </div>
         ))}
         {loading && logs.length === 0 && <SkeletonList rows={8} />}
-        {!loading && logs.length === 0 && <p className="py-10 text-center text-white/40">{t("dashboard.noItems")}</p>}
+        {!loading && logs.length === 0 && <EmptyState compact text={t("dashboard.noItems")} />}
       </div>
 
       <div className="mt-5 flex justify-center">

@@ -12,6 +12,7 @@ import Avatar from "@/components/erp/ui/Avatar";
 import ChatPane from "@/components/erp/messages/ChatPane";
 import { useConversationLabel, useDirectory } from "@/components/erp/messages/useDirectory";
 import { SkeletonList } from "@/components/erp/ui/Loading";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
 // Floating chat on every dashboard page except Messages itself: quick replies
 // without leaving the current screen.
@@ -72,7 +73,7 @@ function MiniChatPanel({ meId, canAnnounce, onClose }) {
           </div>
           <div className="flex-1 overflow-y-auto">
             {conversations === null && <SkeletonList rows={6} className="p-3" />}
-            {conversations?.length === 0 && <p className="p-6 text-center text-sm text-white/40">{t("erp.messages.empty")}</p>}
+            {conversations?.length === 0 && <EmptyState compact text={t("erp.messages.empty")} />}
             {conversations?.map((c) => {
               const label = labelOf(c);
               const group = c.type === "announcement" ? Megaphone : c.type === "direct" ? null : Users;
@@ -88,14 +89,14 @@ function MiniChatPanel({ meId, canAnnounce, onClose }) {
                   <span className="min-w-0 flex-1">
                     <span className="flex justify-between gap-2">
                       <span className="truncate text-sm font-medium">{label.name}</span>
-                      {c.lastMessage && <span className="shrink-0 text-[10px] text-white/35">{formatRelative(c.lastMessage.at, lang)}</span>}
+                      {c.lastMessage && <span className="shrink-0 text-[11px] text-white/55">{formatRelative(c.lastMessage.at, lang)}</span>}
                     </span>
                     <span className="flex items-center justify-between gap-2">
-                      <span className="truncate text-xs text-white/45">
+                      <span className="truncate text-xs text-white/60">
                         <bdi>{c.lastMessage?.text || t("erp.messages.noMessages")}</bdi>
                       </span>
                       {c.unread > 0 && (
-                        <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand-orange px-1.5 text-[10px] font-bold text-white">{c.unread}</span>
+                        <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand-orange px-1.5 text-[11px] font-bold text-white">{c.unread}</span>
                       )}
                     </span>
                   </span>
@@ -123,7 +124,7 @@ export default function MiniChat({ meId, canAnnounce, unread }) {
       >
         {open ? <X size={22} /> : <MessagesSquare size={22} />}
         {!open && unread > 0 && (
-          <span className="absolute -top-1 -end-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-brand-orange">
+          <span className="absolute -top-1 -end-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[11px] font-bold text-brand-orange">
             {unread > 99 ? "99+" : unread}
           </span>
         )}

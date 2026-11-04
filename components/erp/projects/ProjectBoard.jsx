@@ -1,5 +1,7 @@
 "use client";
 
+import ProjectFiles from "@/components/erp/projects/ProjectFiles";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -24,8 +26,10 @@ import StageFlowEditor from "@/components/erp/projects/StageFlowEditor";
 import ProjectDelivery, { DeliverySummary } from "@/components/erp/projects/ProjectDelivery";
 import { CustomerSelect } from "@/components/erp/projects/ProjectForm";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
+import { useAsk } from "@/components/erp/ui/Feedback";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
-const TABS = ["board", "tasks", "delivery", "settings"];
+const TABS = ["board", "tasks", "files", "delivery", "settings"];
 
 function CellModal({ project, cell, canManage, canPlan, lookups, onOpenTask, onNewTask, onChanged, onClose }) {
   const { t, lang } = useLanguage();
@@ -54,7 +58,7 @@ function CellModal({ project, cell, canManage, canPlan, lookups, onOpenTask, onN
     <div className="space-y-5">
       <p className="text-sm text-white/60">
         {project.name?.[lang]} · {stage?.name?.[lang]}
-        {state?.count > 1 && <span className="ms-2 text-white/40">({t("erp.projects.stageTasks", { count: state.count })})</span>}
+        {state?.count > 1 && <span className="ms-2 text-white/60">({t("erp.projects.stageTasks", { count: state.count })})</span>}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge status={state?.status === "pending" ? "submitted" : state?.status || "not_started"} />
@@ -122,6 +126,7 @@ function CellModal({ project, cell, canManage, canPlan, lookups, onOpenTask, onN
 
 function ProjectSettings({ project, lookups, onSaved }) {
   const { t, lang } = useLanguage();
+  const ask = useAsk();
   const { user } = useAuth();
   const canRoute = canRouteStages(user);
   const [form, setForm] = useState({
@@ -162,7 +167,7 @@ function ProjectSettings({ project, lookups, onSaved }) {
   }, []);
 
   async function saveAsTemplate() {
-    const name = window.prompt(t("erp.projects.templateName"), project.name.en);
+    const name = await ask({ text: t("erp.projects.templateName"), value: project.name.en, required: true, confirmLabel: t("common.save") });
     if (!name) return;
     try {
       await api("/api/project-templates", {
@@ -220,7 +225,7 @@ function ProjectSettings({ project, lookups, onSaved }) {
 
       <Card className="space-y-3">
         <p className="font-semibold">{t("erp.projects.stages")}</p>
-        {canRoute && <p className="text-xs text-white/45">{t("erp.projects.routingHint")}</p>}
+        {canRoute && <p className="text-xs text-white/60">{t("erp.projects.routingHint")}</p>}
         <StageFlowEditor
           stages={stages}
           onChange={setStages}
@@ -405,11 +410,11 @@ export default function ProjectBoard({ projectId }) {
                 <div key={s.key} className="flex flex-col gap-1.5">
                   <p className="flex min-h-9 flex-col items-center justify-end text-center text-xs font-medium text-white/60">
                     <span className="inline-flex items-center gap-1">
-                      {project.locked?.includes(s.key) && <Lock size={11} className="text-white/40" />}
+                      {project.locked?.includes(s.key) && <Lock size={11} className="text-white/60" />}
                       {s.name?.[lang]}
                     </span>
                     {s.department && s.department !== project.department && (
-                      <span className="block text-[10px] font-normal text-brand-orange">{lookups.departmentName(s.department)}</span>
+                      <span className="block text-[11px] font-normal text-brand-orange">{lookups.departmentName(s.department)}</span>
                     )}
                   </p>
                   <button
@@ -432,7 +437,7 @@ export default function ProjectBoard({ projectId }) {
             })}
           </div>
           {project.stages.length === 0 && (
-            <p className="px-4 py-10 text-center text-white/40">{canManage ? t("erp.projects.noStagesManage") : t("erp.projects.noStages")}</p>
+            <p className="px-4 py-10 text-center text-white/60">{canManage ? t("erp.projects.noStagesManage") : t("erp.projects.noStages")}</p>
           )}
         </div>
       )}
@@ -445,12 +450,13 @@ export default function ProjectBoard({ projectId }) {
             </Button>
           )}
           {sortedTasks.map((task) => (
-            <TaskRow key={task.id} task={task} lookups={lookups} now={now} onOpen={setOpenTaskId} showAssignee />
+            <TaskRow key={task.id} task={task} lookups={lookups} now={now} onOpen={setOpenTaskId} projectFirst={false} showAssignee />
           ))}
-          {sortedTasks.length === 0 && <p className="py-10 text-center text-white/40">{t("erp.tasks.none")}</p>}
+          {sortedTasks.length === 0 && <EmptyState compact text={t("erp.tasks.none")} />}
         </div>
       )}
 
+      {tab === "files" && <ProjectFiles project={project} />}
       {tab === "delivery" && <ProjectDelivery project={project} onOpenTask={setOpenTaskId} />}
       {tab === "settings" && canManage && <ProjectSettings key={project.id} project={project} lookups={lookups} onSaved={load} />}
 

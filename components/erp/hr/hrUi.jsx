@@ -7,15 +7,15 @@ import { locale } from "@/lib/formatTime";
 export const DAY_STYLE = {
   present: "text-emerald-300",
   absent: "bg-red-500/10 text-red-300",
-  weekend: "bg-white/[0.04] text-white/40",
+  weekend: "bg-white/[0.04] text-white/60",
   holiday: "bg-white/[0.04] text-sky-300",
   annual_leave: "bg-sky-500/10 text-sky-300",
   sick_leave: "bg-sky-500/10 text-sky-300",
   unpaid_leave: "bg-amber-500/10 text-amber-300",
   justified_absence: "bg-amber-500/10 text-amber-300",
-  upcoming: "text-white/30",
-  not_employed: "text-white/25",
-  exempt: "text-white/35",
+  upcoming: "text-white/50",
+  not_employed: "text-white/60",
+  exempt: "text-white/55",
 };
 
 // 7.5 → "7:30"
@@ -70,7 +70,7 @@ export function StatTile({ label, value, hint, tone = "" }) {
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
       <p className="text-xs text-white/50">{label}</p>
       <p className={`mt-1 text-2xl font-bold tabular-nums ${tone}`}>{value}</p>
-      {hint && <p className="mt-0.5 text-xs text-white/40">{hint}</p>}
+      {hint && <p className="mt-0.5 text-xs text-white/60">{hint}</p>}
     </div>
   );
 }

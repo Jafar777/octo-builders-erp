@@ -10,7 +10,7 @@ export default function Stars({ value = 0, onChange, size = 16, className = "" }
     <span className={`inline-flex items-center gap-0.5 ${className}`} dir="ltr" role="img" aria-label={`${value} / 5`}>
       {[1, 2, 3, 4, 5].map((n) => {
         const star = (
-          <Star size={size} className={n <= filled ? "fill-amber-400 text-amber-400" : "text-white/25"} />
+          <Star size={size} className={n <= filled ? "fill-amber-400 text-amber-400" : "text-white/60"} />
         );
         return onChange ? (
           <button

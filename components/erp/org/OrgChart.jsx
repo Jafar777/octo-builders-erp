@@ -10,6 +10,7 @@ import Avatar from "@/components/erp/ui/Avatar";
 import { ErrorText, Select } from "@/components/erp/ui/fields";
 import { Skeleton } from "@/components/erp/ui/Loading";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
 const ZOOMS = [0.6, 0.75, 0.9, 1, 1.15];
 const topRank = (p) => ({ gm: 0, ceo: 1 })[p.role] ?? 2;
@@ -41,12 +42,12 @@ function PersonCard({ person, depts = [], lang, t, isMe, selected, online, repor
           </span>
           <TraineeBadge id={person.id} className="mt-1" />
           <span className="mt-0.5 block truncate text-xs text-white/55">{person.jobTitle?.[lang] || person.roleName?.[lang]}</span>
-          {dept && <span className="mt-0.5 block truncate text-[11px] text-white/35">{dept.name?.[lang]}</span>}
+          {dept && <span className="mt-0.5 block truncate text-[11px] text-white/55">{dept.name?.[lang]}</span>}
           {/* A manager heading more than one department. */}
           {depts.length > 1 && (
             <span className="mt-1 flex flex-wrap justify-center gap-1">
               {depts.slice(1).map((d) => (
-                <span key={d.id} className="rounded-full border px-1.5 py-px text-[10px]" style={{ borderColor: `${d.color || "#ffffff"}66`, color: d.color || undefined }} title={t("erp.hierarchy.alsoManages")}>
+                <span key={d.id} className="rounded-full border px-1.5 py-px text-[11px]" style={{ borderColor: `${d.color || "#ffffff"}66`, color: d.color || undefined }} title={t("erp.hierarchy.alsoManages")}>
                   + {d.name?.[lang]}
                 </span>
               ))}
@@ -55,9 +56,9 @@ function PersonCard({ person, depts = [], lang, t, isMe, selected, online, repor
         </span>
         {(isMe || (showManual && person.source === "manual")) && (
           <span className="flex flex-wrap justify-center gap-1">
-            {isMe && <span className="rounded-full bg-brand-orange/20 px-2 py-0.5 text-[10px] text-brand-orange">{t("erp.hierarchy.you")}</span>}
+            {isMe && <span className="rounded-full bg-brand-orange/20 px-2 py-0.5 text-[11px] text-brand-orange">{t("erp.hierarchy.you")}</span>}
             {showManual && person.source === "manual" && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] text-sky-200" title={t("erp.hierarchy.manualHint")}>
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] text-sky-200" title={t("erp.hierarchy.manualHint")}>
                 <Hand size={10} /> {t("erp.hierarchy.manual")}
               </span>
             )}
@@ -243,13 +244,13 @@ export default function OrgChart() {
             </div>
 
             <div className="min-w-48">
-              <p className="mb-1.5 text-xs uppercase tracking-wider text-white/40">{t("erp.hierarchy.reportsTo")}</p>
+              <p className="mb-1.5 text-xs uppercase tracking-wider text-white/60">{t("erp.hierarchy.reportsTo")}</p>
               {boss ? (
                 <button type="button" onClick={() => select(boss.id, true)} className="flex items-center gap-2 rounded-xl px-1 py-0.5 hover:bg-white/5">
                   <Avatar name={boss.name} src={boss.avatarUrl} size={32} />
                   <span className="text-start">
                     <span className="block text-sm font-medium">{boss.name}</span>
-                    <span className="block text-xs text-white/45">{boss.jobTitle?.[lang] || boss.roleName?.[lang]}</span>
+                    <span className="block text-xs text-white/60">{boss.jobTitle?.[lang] || boss.roleName?.[lang]}</span>
                   </span>
                 </button>
               ) : (
@@ -261,7 +262,7 @@ export default function OrgChart() {
 
             {team.length > 0 && (
               <div className="min-w-48">
-                <p className="mb-1.5 text-xs uppercase tracking-wider text-white/40">{t("erp.hierarchy.team", { n: team.length })}</p>
+                <p className="mb-1.5 text-xs uppercase tracking-wider text-white/60">{t("erp.hierarchy.team", { n: team.length })}</p>
                 <div className="flex -space-x-2 rtl:space-x-reverse">
                   {team.slice(0, 8).map((k) => (
                     <button key={k.id} type="button" onClick={() => select(k.id, true)} title={k.name} className="rounded-full ring-2 ring-brand-navy">
@@ -277,7 +278,7 @@ export default function OrgChart() {
 
             {gm && gm.id !== focus.id && (
               <div className="min-w-48">
-                <p className="mb-1.5 text-xs uppercase tracking-wider text-white/40">{t("erp.hierarchy.gm")}</p>
+                <p className="mb-1.5 text-xs uppercase tracking-wider text-white/60">{t("erp.hierarchy.gm")}</p>
                 <button type="button" onClick={() => select(gm.id, true)} className="flex items-center gap-2 rounded-xl px-1 py-0.5 hover:bg-white/5">
                   <Avatar name={gm.name} src={gm.avatarUrl} size={32} />
                   <span className="text-sm font-medium">{gm.name}</span>
@@ -291,7 +292,7 @@ export default function OrgChart() {
             <div className="mt-4 flex flex-wrap items-center gap-1.5 border-t border-white/5 pt-3 text-xs">
               {chain.map((p, i) => (
                 <span key={p.id} className="flex items-center gap-1.5">
-                  {i > 0 && <ChevronLeft size={13} className="text-white/30 ltr:rotate-180" />}
+                  {i > 0 && <ChevronLeft size={13} className="text-white/50 ltr:rotate-180" />}
                   <button
                     type="button"
                     onClick={() => select(p.id, true)}
@@ -316,7 +317,7 @@ export default function OrgChart() {
                 placeholder={t("erp.hierarchy.automatic")}
                 options={data.people.filter((p) => p.id !== focus.id).map((p) => ({ value: p.id, label: p.name }))}
               />
-              <p className="text-xs text-white/40">{t("erp.hierarchy.autoHint")}</p>
+              <p className="text-xs text-white/60">{t("erp.hierarchy.autoHint")}</p>
             </div>
           )}
           <ErrorText>{error}</ErrorText>
@@ -326,7 +327,7 @@ export default function OrgChart() {
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative min-w-60 flex-1">
-          <Search size={15} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-white/40" />
+          <Search size={15} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-white/60" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -348,7 +349,7 @@ export default function OrgChart() {
                   <Avatar name={p.name} src={p.avatarUrl} size={28} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate">{p.name}</span>
-                    <span className="block truncate text-xs text-white/45">
+                    <span className="block truncate text-xs text-white/60">
                       {[p.jobTitle?.[lang] || p.roleName?.[lang], deptsOf(p).map((d) => d.name?.[lang]).join(" + ")].filter(Boolean).join(" · ")}
                     </span>
                   </span>
@@ -378,7 +379,7 @@ export default function OrgChart() {
         <div className="org-tree mx-auto w-max" style={{ zoom: ZOOMS[zoom] }}>
           <ul>{roots.map(renderNode)}</ul>
         </div>
-        {roots.length === 0 && <p className="py-10 text-center text-white/40">{t("dashboard.noItems")}</p>}
+        {roots.length === 0 && <EmptyState compact text={t("dashboard.noItems")} />}
       </div>
     </div>
   );

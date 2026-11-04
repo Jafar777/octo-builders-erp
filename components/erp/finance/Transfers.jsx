@@ -8,6 +8,8 @@ import Modal from "@/components/erp/ui/Modal";
 import { Button, ErrorText, Input, Select } from "@/components/erp/ui/fields";
 import { money } from "@/components/erp/hr/hrUi";
 import { SkeletonList } from "@/components/erp/ui/Loading";
+import { useConfirm } from "@/components/erp/ui/Feedback";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
 // Today on this device's clock (not UTC: after midnight here, UTC can still be yesterday).
 const today = () => {
@@ -36,6 +38,7 @@ function MoneyFields({ form, setForm, currencies, prefix = "" }) {
 
 export default function Transfers({ lookups, canManage, onChanged }) {
   const { t, lang } = useLanguage();
+  const confirm = useConfirm();
   const currencies = lookups.settings.currencies;
   const [list, setList] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -79,7 +82,7 @@ export default function Transfers({ lookups, canManage, onChanged }) {
   }
 
   async function remove(tr) {
-    if (!window.confirm(t("common.confirmDelete"))) return;
+    if (!(await confirm({ text: t("common.confirmDelete"), kind: "delete" }))) return;
     await api(`/api/finance/transfers/${tr.id}`, { method: "DELETE" }).catch(() => {});
     load();
     onChanged();
@@ -98,14 +101,14 @@ export default function Transfers({ lookups, canManage, onChanged }) {
           <div key={tr.id} className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
             <span className="text-white/60" dir="ltr">{tr.date}</span>
             <span className="flex items-center gap-2 font-medium">
-              {lookups.branchName(tr.fromBranch)} <ArrowLeftRight size={14} className="text-white/40" /> {lookups.branchName(tr.toBranch)}
+              {lookups.branchName(tr.fromBranch)} <ArrowLeftRight size={14} className="text-white/60" /> {lookups.branchName(tr.toBranch)}
             </span>
             <span className="tabular-nums">{money(tr.amountSent, tr.currencySent, lang)}</span>
             {tr.method && <span className="text-white/50">{tr.method}</span>}
             {tr.status === "received" ? (
               <span className="flex items-center gap-1.5 text-emerald-300">
                 <CheckCircle2 size={14} /> {t("erp.finance.received")} {money(tr.amountReceived, tr.currencyReceived, lang)}
-                <span className="text-xs text-white/45">({t("erp.finance.cost")}: {money(tr.cost, lookups.base, lang)})</span>
+                <span className="text-xs text-white/60">({t("erp.finance.cost")}: {money(tr.cost, lookups.base, lang)})</span>
               </span>
             ) : (
               <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs text-amber-300">{t("erp.finance.inTransit")}</span>
@@ -118,7 +121,7 @@ export default function Transfers({ lookups, canManage, onChanged }) {
             )}
           </div>
         ))}
-        {list?.length === 0 && <p className="py-8 text-center text-white/40">{t("dashboard.noItems")}</p>}
+        {list?.length === 0 && <EmptyState compact text={t("dashboard.noItems")} />}
       </div>
 
       <Modal open={creating || Boolean(receiving)} onClose={() => { setCreating(false); setReceiving(null); }} title={receiving ? t("erp.finance.markReceived") : t("erp.finance.newTransfer")}>

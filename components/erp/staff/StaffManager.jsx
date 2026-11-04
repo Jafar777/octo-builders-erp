@@ -15,6 +15,7 @@ import EmployeeFile from "@/components/erp/staff/EmployeeFile";
 import KpiRing from "@/components/erp/staff/KpiRing";
 import { SkillRequestsPanel } from "@/components/erp/hr/SkillRequests";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
+import { EmptyState, ShowMore, SortTh, TableToolbar, useTableTools } from "@/components/erp/ui/DataTools";
 
 const FILTERS = ["all", "pending", "active", "inactive"];
 
@@ -71,6 +72,26 @@ export default function StaffManager({ initialStaff, roles, org, canManage, canF
   }, [staff, query, filter]);
 
   const pendingCount = staff.filter((p) => p.role === "user" && !p.customer).length;
+  const tools = useTableTools(
+    visible,
+    {
+      name: (p) => p.name || p.email,
+      role: (p) => roleName(p.role),
+      department: (p) => nameOf(org.departments, p.department),
+      branch: (p) => nameOf(org.branches, p.branch),
+      joined: (p) => p.createdAt,
+      kpi: (p) => hrRows[p.id]?.kpi?.score ?? null,
+    },
+    { key: "staff" }
+  );
+  const exportColumns = [
+    { label: t("auth.name"), value: (p) => p.name },
+    { label: "Email", value: (p) => p.email },
+    { label: t("erp.staff.role"), value: (p) => roleName(p.role) },
+    { label: t("erp.org.department"), value: (p) => nameOf(org.departments, p.department) },
+    { label: t("erp.org.branch"), value: (p) => nameOf(org.branches, p.branch) },
+    { label: t("erp.staff.joined"), value: (p) => formatDate(p.createdAt, lang) },
+  ];
 
   return (
     <div>
@@ -79,7 +100,7 @@ export default function StaffManager({ initialStaff, roles, org, canManage, canF
 
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <div className="relative min-w-60 flex-1">
-          <Search size={16} className="absolute start-3 top-1/2 -translate-y-1/2 text-white/40" />
+          <Search size={16} className="absolute start-3 top-1/2 -translate-y-1/2 text-white/60" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -102,21 +123,22 @@ export default function StaffManager({ initialStaff, roles, org, canManage, canF
         </div>
       </div>
 
+      <TableToolbar tools={tools} exportFile={t("erp.nav.staff")} exportColumns={exportColumns} />
       <div className="overflow-x-auto rounded-2xl border border-white/10">
         <table className="w-full min-w-[760px] text-sm">
-          <thead className="bg-white/[0.04] text-xs uppercase tracking-wider text-white/45">
+          <thead className="bg-white/[0.04] text-xs uppercase tracking-wider text-white/60">
             <tr>
-              <th className="px-4 py-3 text-start font-medium">{t("auth.name")}</th>
-              <th className="px-4 py-3 text-start font-medium">{t("erp.staff.role")}</th>
-              <th className="px-4 py-3 text-start font-medium">{t("erp.org.department")}</th>
-              <th className="px-4 py-3 text-start font-medium">{t("erp.org.branch")}</th>
-              <th className="px-4 py-3 text-start font-medium">{t("erp.staff.joined")}</th>
-              {canFile && <th className="px-4 py-3 text-center font-medium">KPI</th>}
+              <SortTh tools={tools} col="name">{t("auth.name")}</SortTh>
+              <SortTh tools={tools} col="role">{t("erp.staff.role")}</SortTh>
+              <SortTh tools={tools} col="department">{t("erp.org.department")}</SortTh>
+              <SortTh tools={tools} col="branch">{t("erp.org.branch")}</SortTh>
+              <SortTh tools={tools} col="joined">{t("erp.staff.joined")}</SortTh>
+              {canFile && <SortTh tools={tools} col="kpi" align="center">KPI</SortTh>}
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
-            {visible.map((p) => {
+            {tools.shown.map((p) => {
               const expanded = canFile && open.has(p.id);
               const kpi = hrRows[p.id]?.kpi;
               return (
@@ -134,7 +156,7 @@ export default function StaffManager({ initialStaff, roles, org, canManage, canF
                         <span className="truncate">{p.name || "—"}</span>
                         <TraineeBadge id={p.id} />
                       </p>
-                      <p className="truncate text-xs text-white/45" dir="ltr">
+                      <p className="truncate text-xs text-white/60" dir="ltr">
                         {p.email}
                       </p>
                     </div>
@@ -206,15 +228,16 @@ export default function StaffManager({ initialStaff, roles, org, canManage, canF
               </Fragment>
               );
             })}
-            {visible.length === 0 && (
+            {tools.view.length === 0 && (
               <tr>
-                <td colSpan={cols} className="px-4 py-10 text-center text-white/40">
-                  {t("dashboard.noItems")}
+                <td colSpan={cols}>
+                  <EmptyState compact title={query || tools.query ? t("erp.ux.noMatches") : t("erp.ux.noStaff")} text={query || tools.query ? t("erp.ux.noMatchesText") : t("erp.ux.noStaffText")} />
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+        <ShowMore tools={tools} />
       </div>
 
       <Modal open={Boolean(editing)} onClose={() => setEditing(null)} title={t("erp.staff.edit")}>

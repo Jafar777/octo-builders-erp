@@ -12,6 +12,7 @@ import ChatPane from "@/components/erp/messages/ChatPane";
 import NewChatModal from "@/components/erp/messages/NewChatModal";
 import { useConversationLabel, useDirectory } from "@/components/erp/messages/useDirectory";
 import { SkeletonList } from "@/components/erp/ui/Loading";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
 // `switcher`: the "my chats / review" toggle of the Messages page (reviewers only).
 export default function MessagesApp({ meId, canAnnounce, switcher = null }) {
@@ -106,7 +107,7 @@ export default function MessagesApp({ meId, canAnnounce, switcher = null }) {
         {switcher}
         <div className="flex items-center gap-2 border-b border-white/10 p-3">
           <div className="relative flex-1">
-            <Search size={15} className="absolute start-3 top-1/2 -translate-y-1/2 text-white/40" />
+            <Search size={15} className="absolute start-3 top-1/2 -translate-y-1/2 text-white/60" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -154,11 +155,11 @@ export default function MessagesApp({ meId, canAnnounce, switcher = null }) {
                   <span className="flex items-center justify-between gap-2">
                     <span className="truncate text-sm font-medium">{label.name}</span>
                     {c.lastMessage && (
-                      <span className="shrink-0 text-[11px] text-white/35">{formatRelative(c.lastMessage.at, lang)}</span>
+                      <span className="shrink-0 text-[11px] text-white/55">{formatRelative(c.lastMessage.at, lang)}</span>
                     )}
                   </span>
                   <span className="flex items-center justify-between gap-2">
-                    <span className="truncate text-xs text-white/45">
+                    <span className="truncate text-xs text-white/60">
                       {c.lastMessage ? (
                         <>
                           {sender}
@@ -169,7 +170,7 @@ export default function MessagesApp({ meId, canAnnounce, switcher = null }) {
                       )}
                     </span>
                     {c.unread > 0 && (
-                      <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand-orange px-1.5 text-[10px] font-bold text-white">
+                      <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand-orange px-1.5 text-[11px] font-bold text-white">
                         {c.unread}
                       </span>
                     )}
@@ -179,10 +180,10 @@ export default function MessagesApp({ meId, canAnnounce, switcher = null }) {
             );
           })}
           {!loaded && <SkeletonList rows={7} className="p-3" />}
-          {loaded && visible.length === 0 && messageHits.length === 0 && <p className="p-6 text-center text-sm text-white/40">{t("erp.messages.empty")}</p>}
+          {loaded && visible.length === 0 && messageHits.length === 0 && <EmptyState compact text={t("erp.messages.empty")} />}
           {messageHits.length > 0 && (
             <div className="border-t border-white/10">
-              <p className="px-3 pb-1 pt-3 text-[11px] uppercase tracking-wider text-white/40">{t("erp.messages.messageResults")}</p>
+              <p className="px-3 pb-1 pt-3 text-[11px] uppercase tracking-wider text-white/60">{t("erp.messages.messageResults")}</p>
               {messageHits.map((m) => {
                 const c = conversations.find((x) => x.id === m.conversationId);
                 return (
@@ -192,7 +193,7 @@ export default function MessagesApp({ meId, canAnnounce, switcher = null }) {
                     onClick={() => select(m.conversationId, m.id)}
                     className="block w-full px-3 py-2.5 text-start hover:bg-white/[0.05]"
                   >
-                    <span className="flex justify-between gap-2 text-[11px] text-white/45">
+                    <span className="flex justify-between gap-2 text-[11px] text-white/60">
                       <span className="truncate">{c ? labelOf(c).name : "…"}</span>
                       <span className="shrink-0">{formatRelative(m.createdAt, lang)}</span>
                     </span>
@@ -225,7 +226,7 @@ export default function MessagesApp({ meId, canAnnounce, switcher = null }) {
             onChanged={load}
           />
         ) : (
-          <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-white/40">
+          <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-white/60">
             {t("erp.messages.pick")}
           </div>
         )}

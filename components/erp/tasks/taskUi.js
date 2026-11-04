@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 // Colour per task / board-cell status.
 export const STATUS_STYLE = {
-  not_started: "bg-white/5 text-white/40 border-white/10",
+  not_started: "bg-white/5 text-white/60 border-white/10",
   todo: "bg-slate-400/15 text-slate-200 border-slate-400/30",
   in_progress: "bg-sky-500/15 text-sky-300 border-sky-500/30",
   on_hold: "bg-amber-500/15 text-amber-300 border-amber-500/30",
@@ -14,8 +14,8 @@ export const STATUS_STYLE = {
   approved: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
   done: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
   rejected: "bg-red-500/15 text-red-300 border-red-500/30",
-  cancelled: "bg-white/5 text-white/35 border-white/10 line-through",
-  skip: "bg-transparent text-white/40 border-dashed border-white/25",
+  cancelled: "bg-white/5 text-white/55 border-white/10 line-through",
+  skip: "bg-transparent text-white/60 border-dashed border-white/25",
 };
 
 export const PRIORITY_STYLE = {

@@ -15,6 +15,9 @@ import ProjectForm from "@/components/erp/projects/ProjectForm";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { useFinanceLookups } from "@/components/erp/finance/useFinanceLookups";
 import { convert, currencySymbol, formatMoney, MoneyPair, partnerCurrency } from "@/components/erp/intake/MoneyFields";
+import { useConfirm, useAsk } from "@/components/erp/ui/Feedback";
+import { DraftBar, useDraft } from "@/components/erp/ui/useDraft";
+import { EmptyState } from "@/components/erp/ui/DataTools";
 
 const TABS = ["all", "new", "ready", "converted", "declined"];
 const STATUS_TONE = {
@@ -101,14 +104,14 @@ export default function IntakeCenter({ planner, finance, proposer = false }) {
         <div className="space-y-2">
           {data.intakes.map((i) => (
             <button key={i.id} type="button" onClick={() => open(i.id)} className="flex w-full flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-start hover:bg-white/[0.06]">
-              <span className="text-xs text-white/40" dir="ltr">
+              <span className="text-xs text-white/60" dir="ltr">
                 #{i.number}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium" dir="auto">
                   {i.project.name}
                 </span>
-                <span className="block text-xs text-white/45" dir="auto">
+                <span className="block text-xs text-white/60" dir="auto">
                   {[i.client.name, i.createdBy, formatDateTime(i.createdAt, lang)].filter(Boolean).join(" · ")}
                 </span>
               </span>
@@ -116,7 +119,7 @@ export default function IntakeCenter({ planner, finance, proposer = false }) {
               <StatusBadge status={i.status} />
             </button>
           ))}
-          {data.intakes.length === 0 && <p className="py-10 text-center text-white/40">{t("erp.intake.empty")}</p>}
+          {data.intakes.length === 0 && <EmptyState compact text={t("erp.intake.empty")} />}
         </div>
       )}
 
@@ -230,6 +233,8 @@ function IntakeForm({ intake, onSaved, onCancel }) {
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // A copy on this device while typing; offered back if the form is closed unsaved.
+  const draft = useDraft(intake ? `intake-${intake.id}` : "intake-new", form, setForm);
   const setIn = (group, key) => (value) => setForm((f) => ({ ...f, [group]: { ...f[group], [key]: value } }));
   const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }));
   const setMissing = (i, patch) => setForm((f) => ({ ...f, missing: f.missing.map((m, j) => (j === i ? { ...m, ...patch } : m)) }));
@@ -241,6 +246,7 @@ function IntakeForm({ intake, onSaved, onCancel }) {
       const res = intake
         ? await api(`/api/intakes/${intake.id}`, { method: "PATCH", body: form })
         : await api("/api/intakes", { method: "POST", body: form });
+      draft.clear();
       onSaved(res.intake);
     } catch (err) {
       setError(errorText(t, err));
@@ -255,6 +261,7 @@ function IntakeForm({ intake, onSaved, onCancel }) {
 
   return (
     <div className="space-y-5">
+      <DraftBar draft={draft} />
       <div className="grid gap-5 lg:grid-cols-2">
         <Section title={t("erp.intake.section.client")}>
           <Input label={required(t("erp.intake.field.clientName"))} value={form.client.name} onChange={setIn("client", "name")} />
@@ -353,7 +360,7 @@ function Row({ label, children }) {
   if (!children || (Array.isArray(children) && !children.length)) return null;
   return (
     <div className="grid gap-1 border-b border-white/5 py-2 text-sm sm:grid-cols-[200px_1fr]">
-      <span className="text-white/45">{label}</span>
+      <span className="text-white/60">{label}</span>
       <span className="whitespace-pre-wrap text-white/85" dir="auto">
         {children}
       </span>
@@ -363,6 +370,8 @@ function Row({ label, children }) {
 
 function IntakeDetail({ id, planner, finance, proposer, onClose, onChanged, onEdit, onConvert }) {
   const { t, lang } = useLanguage();
+  const ask = useAsk();
+  const confirm = useConfirm();
   const [intake, setIntake] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -386,7 +395,7 @@ function IntakeDetail({ id, planner, finance, proposer, onClose, onChanged, onEd
   };
 
   async function decide(action) {
-    const reason = action === "decline" ? window.prompt(t("erp.intake.declineReason")) : "";
+    const reason = action === "decline" ? await ask({ text: t("erp.intake.declineReason"), danger: true, required: true }) : "";
     if (action === "decline" && !reason?.trim()) return;
     setBusy(true);
     setError("");
@@ -400,7 +409,7 @@ function IntakeDetail({ id, planner, finance, proposer, onClose, onChanged, onEd
   }
 
   async function remove() {
-    if (!window.confirm(t("erp.intake.confirmDelete"))) return;
+    if (!(await confirm({ text: t("erp.intake.confirmDelete"), kind: "delete" }))) return;
     try {
       await api(`/api/intakes/${id}`, { method: "DELETE" });
       onChanged();
@@ -468,7 +477,7 @@ function IntakeDetail({ id, planner, finance, proposer, onClose, onChanged, onEd
           {/* The money side: GM / CEO only (the server sends it to nobody else). */}
           {finance && ["new", "ready"].includes(i.status) && <FinanceSection intake={i} onSaved={changed} />}
           {finance && i.finance && !["new", "ready"].includes(i.status) && <FinanceSummary f={i.finance} />}
-          {!finance && i.status === "new" && <p className="text-xs text-white/45">{t("erp.intake.waitingPricing")}</p>}
+          {!finance && i.status === "new" && <p className="text-xs text-white/60">{t("erp.intake.waitingPricing")}</p>}
 
           {/* The requested project set-up: waiting for the CEO to accept or reject it. */}
           {i.proposal && ["new", "ready"].includes(i.status) && (
@@ -546,7 +555,7 @@ function FinanceSummary({ f }) {
       <Row label={t("erp.intake.fin.advancePaid")}>{f.advancePaid > 0 ? `${both(f.advancePaid, f.currency)} · ${formatDate(f.advanceDate, lang)}` : ""}</Row>
       <Row label={t("erp.intake.fin.paymentTerms")}>{f.paymentTerms}</Row>
       <Row label={t("erp.intake.fin.notes")}>{f.notes}</Row>
-      {f.by && <p className="mt-2 text-[11px] text-white/40">{t("erp.intake.pricedBy", { name: f.by, at: formatDateTime(f.at, lang) })}</p>}
+      {f.by && <p className="mt-2 text-[11px] text-white/60">{t("erp.intake.pricedBy", { name: f.by, at: formatDateTime(f.at, lang) })}</p>}
     </Card>
   );
 }
