@@ -4,7 +4,7 @@ import { forbidden } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
 import { getWorkCalendar, pullForward } from "@/lib/ganttServer";
 import { trackDelays } from "@/lib/projectDelay";
-import { canRouteStages } from "@/lib/projects";
+import { canEditGantt } from "@/lib/gantt";
 
 // "Fill free time" on the Gantt (GM / CEO): not-started work moves earlier into free
 // time the plan has (see pullForward). The plan otherwise only moves later on its own,
@@ -12,7 +12,7 @@ import { canRouteStages } from "@/lib/projects";
 // Returns { moved: number }.
 export async function POST() {
   const user = await requireStaff();
-  if (!user || !canRouteStages(user)) return forbidden();
+  if (!user || !canEditGantt(user)) return forbidden();
   const moved = await pullForward(await getWorkCalendar(), user);
   if (moved.length) {
     await audit(user, "plan.filled_free_time", { entityType: "task", summary: `${moved.length}` });

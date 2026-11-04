@@ -2,14 +2,15 @@ import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
-import { canRouteStages, projectChannel } from "@/lib/projects";
+import { projectChannel } from "@/lib/projects";
+import { canEditGantt } from "@/lib/gantt";
 import { publish } from "@/lib/realtime/server";
 import Task from "@/models/Task";
 import WorkProject from "@/models/WorkProject";
 import { serializeMilestone } from "@/lib/ganttServer";
 
 async function load(user, params) {
-  if (!user || !canRouteStages(user)) return { error: forbidden() };
+  if (!user || !canEditGantt(user)) return { error: forbidden() };
   const { id } = await params;
   const project = isObjectId(id) ? await WorkProject.findById(id) : null;
   return project ? { project } : { error: notFound() };

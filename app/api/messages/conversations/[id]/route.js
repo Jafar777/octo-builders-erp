@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
-import { conversationAccess, serializeConversation, STAFF_FILTER } from "@/lib/messaging";
+import { conversationAccess, serializeConversation, staffFilter } from "@/lib/messaging";
 import { notify } from "@/lib/notify";
 import { publish, userChannel } from "@/lib/realtime/server";
 import Conversation from "@/models/Conversation";
@@ -52,7 +52,7 @@ export async function PATCH(request, { params }) {
 
     if (Array.isArray(body.addMemberIds) && isAdmin) {
       const valid = await User.find(
-        { _id: { $in: body.addMemberIds.filter(isObjectId) }, ...STAFF_FILTER },
+        { _id: { $in: body.addMemberIds.filter(isObjectId) }, ...(await staffFilter()) },
         { _id: 1 }
       ).lean();
       for (const u of valid) {

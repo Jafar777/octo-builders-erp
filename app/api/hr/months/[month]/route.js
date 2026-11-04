@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { HIDDEN_ROLES, LIMITED_ROLES } from "@/lib/permissions";
+import { outsideRoleKeys } from "@/lib/scope";
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
@@ -30,7 +30,7 @@ export async function POST(request, { params }) {
     const result = await closeMonth(month, user.id);
     if (result.error) return fail(result.error, 409);
     await audit(user, "payroll.month_closed", { entityType: "month", entityId: month, summary: month });
-    const staff = await User.find({ status: "active", role: { $nin: ["user", ...LIMITED_ROLES, ...HIDDEN_ROLES] } }, { _id: 1 }).lean();
+    const staff = await User.find({ status: "active", role: { $nin: await outsideRoleKeys() } }, { _id: 1 }).lean();
     await notify({
       type: "payroll.ready",
       recipients: staff.map((s) => s._id.toString()),

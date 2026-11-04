@@ -3,7 +3,7 @@ import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
 import { buildHierarchy, wouldLoop } from "@/lib/hierarchy";
-import { DEFAULT_ROLE, HIDDEN_ROLES, LIMITED_ROLES } from "@/lib/permissions";
+import { outsideRoleKeys } from "@/lib/scope";
 import { pickName, viewerLang } from "@/lib/personName";
 import Department from "@/models/Department";
 import JobTitle from "@/models/JobTitle";
@@ -16,7 +16,7 @@ async function loadPeople() {
   const [users, roles] = await Promise.all([
     User.find(
       // The general manager (a limited role) isn't part of the organization.
-      { role: { $nin: [DEFAULT_ROLE, ...LIMITED_ROLES, ...HIDDEN_ROLES] }, status: "active" },
+      { role: { $nin: await outsideRoleKeys() }, status: "active" },
       { name: 1, nameAr: 1, email: 1, avatarUrl: 1, role: 1, department: 1, managedDepartments: 1, jobTitle: 1, reportsTo: 1 }
     )
       .sort({ name: 1 })

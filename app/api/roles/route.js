@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser, hasPermission, requirePermission } from "@/lib/currentUser";
 import { fail, forbidden, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
-import { cleanRoleBody, loadRolesWithCounts, serializeRole } from "@/lib/roles";
+import { cleanRoleBody, escalation, loadRolesWithCounts, serializeRole, trimRestricted } from "@/lib/roles";
 import { isBilingualComplete } from "@/lib/validateBilingual";
 import Role from "@/models/Role";
 import { CODER_ROLE, isHiddenRole } from "@/lib/permissions";
@@ -21,8 +21,10 @@ export async function POST(request) {
   if (!actor) return forbidden();
 
   const body = await readJson(request);
-  const data = cleanRoleBody(body);
+  const data = trimRestricted(cleanRoleBody(body));
   if (!isBilingualComplete(data.name)) return fail("bilingual_required");
+  const why = escalation(actor, [], data.permissions, data.scope);
+  if (why) return fail(why, 403);
 
   // Keys are generated from the English name and never change afterwards.
   const base =

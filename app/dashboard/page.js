@@ -4,7 +4,8 @@ import DashboardOverview from "@/components/dashboard/DashboardOverview";
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
-  // The general manager has no overview: their dashboard starts at the intake forms.
-  if (user?.limited) redirect("/dashboard/intake");
+  // A restricted account (the GM by default) has no overview: it starts at the intake
+  // forms when it has them, otherwise at its profile.
+  if (user?.limited) redirect(!user.pages || user.pages.includes("intake") ? "/dashboard/intake" : "/dashboard/profile");
   return <DashboardOverview user={publicUser(user)} />;
 }

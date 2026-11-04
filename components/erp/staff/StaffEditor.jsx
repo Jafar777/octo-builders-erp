@@ -9,7 +9,6 @@ import Avatar from "@/components/erp/ui/Avatar";
 import { Button, ErrorText, Input, Select, Toggle } from "@/components/erp/ui/fields";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 import NameFields, { initialNames, namesComplete } from "@/components/erp/staff/NameFields";
-import { isTopRole } from "@/lib/permissions";
 
 // Role, department, branch, job title and account status of one person (users.manage).
 // `header` shows the person's avatar and email above the form (used in the modal).
@@ -18,7 +17,7 @@ export default function StaffEditor({ person, roles, org, meId, onSaved, onClose
   const { user: viewer } = useAuth();
   const router = useRouter();
   // Only the CEO decides who is a trainee (lib/training.js).
-  const canSetTrainee = isTopRole(viewer?.role);
+  const canSetTrainee = Boolean(viewer?.permissions?.includes("training.manage"));
   const [names, setNames] = useState(() => initialNames(person));
   const [form, setForm] = useState({
     role: person.role,

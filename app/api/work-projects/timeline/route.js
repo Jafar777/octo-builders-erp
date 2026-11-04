@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/currentUser";
 import { forbidden } from "@/lib/apiUtils";
-import { canSeeGantt, HOLDING_STATUSES, isGanttDeptManager, makeCalendar } from "@/lib/gantt";
+import { canEditGantt, canSeeGantt, HOLDING_STATUSES, isGanttDeptManager, makeCalendar } from "@/lib/gantt";
 import { freeTime, serializeMilestone } from "@/lib/ganttServer";
 import { markOverrunsSoon } from "@/lib/projectDelay";
 import { pickName, viewerLang } from "@/lib/personName";
@@ -38,7 +38,8 @@ export async function GET(request) {
   const taskQuery = { project: { $in: projects.map((p) => p._id) } };
   if (departmentOnly) {
     const team = user.department ? await User.find(inDepartments(user), { _id: 1 }).lean() : [];
-    taskQuery.assignee = { $in: [user.id, ...team.map((u) => u._id.toString())] };
+    // ...and their departments' work given to employees of other departments.
+    taskQuery.$or = [{ assignee: { $in: [user.id, ...team.map((u) => u._id.toString())] } }, inDepartments(user)];
   }
   // Cancelled tasks stay on the chart, greyed out (like inactive tasks in MS Project).
   const tasks = await Task.find(taskQuery)
@@ -62,7 +63,7 @@ export async function GET(request) {
   const people = await User.find({ _id: { $in: assigneeIds } }, { name: 1, nameAr: 1, email: 1, avatarUrl: 1, workSchedule: 1 }).lean();
   const lang = await viewerLang();
   const calendar = makeCalendar(settings);
-  const canSchedule = canRouteStages(user);
+  const canSchedule = canEditGantt(user);
 
   return NextResponse.json({
     tasks: await enrichTasks(tasks),

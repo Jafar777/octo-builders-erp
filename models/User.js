@@ -76,6 +76,19 @@ const UserSchema = new mongoose.Schema(
     },
     annualLeaveDays: { type: Number, default: 21 },
     kpiExcluded: { type: Boolean, default: false },
+    // This person's exceptions to their role, set by the CEO on the Roles page
+    // (lib/permissions.js effectiveAccess).
+    access: {
+      grant: { type: [String], default: [] },
+      deny: { type: [String], default: [] },
+      scope: { type: String, enum: ["self", "department", "all", null], default: null },
+      hiddenPages: { type: [String], default: [] },
+      // Other departments whose tasks this person can be given (besides their own), and
+      // "any department" (null = as the role says).
+      workDepartments: [{ type: ObjectId, ref: "Department" }],
+      crossDepartment: { type: Boolean, default: null },
+      note: { type: String, default: "" },
+    },
     // A trainee: gets the Training Program page (lib/training.js) and a "Trainee" badge
     // on the GM / CEO's screens. Set by the GM / CEO.
     trainee: { type: Boolean, default: false },

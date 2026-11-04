@@ -18,7 +18,6 @@ import { DocumentsCard, EmergencyContactCard } from "@/components/erp/hr/HrFile"
 import StaffEditor from "@/components/erp/staff/StaffEditor";
 import KpiRing from "@/components/erp/staff/KpiRing";
 import { PendingSkills } from "@/components/erp/hr/SkillRequests";
-import { isTopRole } from "@/lib/permissions";
 
 const TABS = ["overview", "attendance", "contract", "salary", "documents"];
 
@@ -68,7 +67,7 @@ function TraineeSwitch({ person, onStaffSaved }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  if (!isTopRole(viewer?.role)) return null;
+  if (!viewer?.permissions?.includes("training.manage")) return null;
 
   async function change(trainee) {
     if (busy) return;

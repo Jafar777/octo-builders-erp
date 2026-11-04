@@ -53,7 +53,15 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
   // The people the creator may give work to: the CEO anyone; a department manager the
   // employees of their departments (and themselves); everyone else only themselves.
   const myDepartments = user?.departments?.length ? user.departments : [user?.department].filter(Boolean);
-  const assignable = lookups.people.filter((p) => isScheduler || p.id === user?.id || myDepartments.includes(p.department));
+  // ...and employees of other departments the CEO opened this work's department to.
+  const workDepartment = stage?.department || project?.department || null;
+  const assignable = lookups.people.filter(
+    (p) =>
+      isScheduler ||
+      p.id === user?.id ||
+      myDepartments.includes(p.department) ||
+      (workDepartment && myDepartments.includes(workDepartment) && (p.work === "all" || p.work?.includes(workDepartment)))
+  );
   // Someone who can't give work to others is the task's employee themselves.
   const assigneeId = canAssign ? form.assigneeId : user?.id;
   const missingAssignee = !assigneeId;

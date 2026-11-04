@@ -28,6 +28,7 @@ import User from "@/models/User";
 import { NAME_FIELDS, pickName, viewerLang } from "@/lib/personName";
 import { canRouteStages } from "@/lib/projects";
 import { userDepartments } from "@/lib/scope";
+import { withWorkDepartments } from "@/lib/roles";
 
 const HISTORY_FIELDS = { number: 1, revision: 1, status: 1, assignee: 1, ratings: 1, submittedAt: 1, previousTask: 1, kind: 1 };
 
@@ -170,11 +171,15 @@ export async function PATCH(request, { params }) {
     if (["normal", "important", "urgent"].includes(body.priority)) changes.priority = body.priority;
     if (typeof body.description === "string") changes.description = body.description.slice(0, 4000);
     if (isObjectId(body.assigneeId) && body.assigneeId !== task.assignee.toString()) {
-      const next = await User.findOne({ _id: body.assigneeId, status: "active", role: { $ne: "user" } }, { department: 1 }).lean();
+      const found = await User.findOne(
+        { _id: body.assigneeId, status: "active", role: { $ne: "user" } },
+        { department: 1, managedDepartments: 1, access: 1, role: 1 }
+      ).lean();
+      const next = found ? (await withWorkDepartments([found]))[0] : null;
       if (!next) return fail("invalid_assignee");
       if (task.status !== "todo") return fail("reassign_only_todo");
       // Below the CEO: only their own employees' tasks, only to their own employees.
-      if (!canRouteStages(user) && (!managesIt || !managesEmployee(user, next))) return fail("reassign_own_department", 403);
+      if (!canRouteStages(user) && (!managesIt || !managesEmployee(user, next, task.department))) return fail("reassign_own_department", 403);
       reassignedFrom = task.assignee.toString();
       changes.assignee = body.assigneeId;
     }

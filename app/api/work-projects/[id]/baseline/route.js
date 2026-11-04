@@ -4,7 +4,7 @@ import { forbidden, isObjectId, notFound } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
 import { taskSpan } from "@/lib/gantt";
 import { projectEnd, projectStart } from "@/lib/projectDelay";
-import { canRouteStages } from "@/lib/projects";
+import { canEditGantt } from "@/lib/gantt";
 import Task from "@/models/Task";
 import { getWorkCalendar } from "@/lib/ganttServer";
 import WorkProject from "@/models/WorkProject";
@@ -14,7 +14,7 @@ import WorkProject from "@/models/WorkProject";
 // baseline (2, 3…) with the project's expected start and delivery as planned now.
 export async function POST(request, { params }) {
   const user = await requireStaff();
-  if (!user || !canRouteStages(user)) return forbidden();
+  if (!user || !canEditGantt(user)) return forbidden();
   const { id } = await params;
   const project = isObjectId(id) ? await WorkProject.findById(id) : null;
   if (!project) return notFound();

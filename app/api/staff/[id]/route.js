@@ -13,7 +13,7 @@ import Department from "@/models/Department";
 import Branch from "@/models/Branch";
 import JobTitle from "@/models/JobTitle";
 import Task from "@/models/Task";
-import { DEFAULT_ROLE, isHiddenRole } from "@/lib/permissions";
+import { DEFAULT_ROLE, isHiddenRole, isTopRole } from "@/lib/permissions";
 import { usersWithPermissionFor } from "@/lib/scope";
 import { ACTIVE_STATUSES } from "@/lib/tasks";
 import { isTrainingAdmin } from "@/lib/training";
@@ -40,6 +40,8 @@ export async function PATCH(request, { params }) {
   if (typeof body.role === "string" && body.role !== before.role) {
     // Nobody changes their own role, so the company can't lock itself out.
     if (id === actor.id) return fail("cannot_change_own_role", 403);
+    // Only the CEO gives or takes the CEO role.
+    if ((isTopRole(body.role) || isTopRole(before.role)) && !isTopRole(actor.role)) return forbidden();
     const role = await Role.findOne({ key: body.role }).lean();
     if (!role) return fail("invalid_role");
     if (before.role === "ceo") {
@@ -95,6 +97,13 @@ export async function PATCH(request, { params }) {
 
   if (changes.role) {
     const role = await Role.findOne({ key: changes.role }).lean();
+    // For the Roles page's history.
+    await audit(actor, "user.role_changed", {
+      entityType: "user",
+      entityId: id,
+      summary: target.email,
+      details: { from: before.role, to: changes.role },
+    });
     await notify({
       type: "user.role_changed",
       recipients: [id],

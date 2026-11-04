@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
-import { directKeyFor, serializeConversation, STAFF_FILTER, unreadCount } from "@/lib/messaging";
+import { directKeyFor, serializeConversation, staffFilter, unreadCount } from "@/lib/messaging";
 import { notify } from "@/lib/notify";
 import { publish, userChannel } from "@/lib/realtime/server";
 import Conversation from "@/models/Conversation";
@@ -33,7 +33,7 @@ export async function POST(request) {
 
   if (body.type === "direct") {
     if (!isObjectId(body.userId) || body.userId === user.id) return fail("invalid_request");
-    const other = await User.findOne({ _id: body.userId, ...STAFF_FILTER }, { _id: 1 }).lean();
+    const other = await User.findOne({ _id: body.userId, ...(await staffFilter()) }, { _id: 1 }).lean();
     if (!other) return fail("not_found", 404);
 
     const directKey = directKeyFor(user.id, body.userId);
@@ -64,7 +64,7 @@ export async function POST(request) {
     const name = String(body.name || "").trim().slice(0, 80);
     if (!name) return fail("name_required");
     const requested = (Array.isArray(body.memberIds) ? body.memberIds : []).filter(isObjectId);
-    const valid = await User.find({ _id: { $in: requested }, ...STAFF_FILTER }, { _id: 1 }).lean();
+    const valid = await User.find({ _id: { $in: requested }, ...(await staffFilter()) }, { _id: 1 }).lean();
     const memberIds = [...new Set([user.id, ...valid.map((u) => u._id.toString())])];
     if (memberIds.length < 2) return fail("members_required");
 

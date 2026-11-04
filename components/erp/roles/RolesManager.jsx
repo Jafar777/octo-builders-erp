@@ -1,200 +1,208 @@
 "use client";
 
-import { useState } from "react";
-import { Lock, Pencil, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Grid3x3, History, Lock, Plus, Search, ShieldCheck, Users } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
-import { api, errorText } from "@/lib/clientApi";
-import { PERMISSIONS, SCOPES } from "@/lib/permissions";
-import BilingualField from "@/components/dashboard/BilingualField";
-import Modal from "@/components/erp/ui/Modal";
-import { Button, Card, ErrorText, PageHeader, Select } from "@/components/erp/ui/fields";
+import { useAuth } from "@/context/AuthContext";
+import { api } from "@/lib/clientApi";
+import { Button, PageHeader } from "@/components/erp/ui/fields";
+import RoleEditor from "./RoleEditor";
+import PermissionMatrix from "./PermissionMatrix";
+import PeopleAccess, { hasExceptions } from "./PeopleAccess";
+import AccessHistory from "./AccessHistory";
+import { Chip } from "./accessShared";
 
-const GROUPS = [...new Set(PERMISSIONS.map((p) => p.group))];
+const TABS = [
+  { key: "roles", icon: ShieldCheck },
+  { key: "matrix", icon: Grid3x3 },
+  { key: "people", icon: Users },
+  { key: "history", icon: History },
+];
 
-function RoleEditor({ role, onSaved, onClose }) {
-  const { t } = useLanguage();
-  const [form, setForm] = useState({
-    name: role?.name || { ar: "", en: "" },
-    permissions: role?.permissions || [],
-    scope: role?.scope || "self",
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const locked = ["ceo", "gm", "user"].includes(role?.key);
-
-  function toggle(key) {
-    setForm((f) => ({
-      ...f,
-      permissions: f.permissions.includes(key) ? f.permissions.filter((p) => p !== key) : [...f.permissions, key],
-    }));
-  }
-
-  async function save() {
-    setSaving(true);
-    setError("");
-    try {
-      const { role: saved } = role
-        ? await api(`/api/roles/${role.key}`, { method: "PATCH", body: form })
-        : await api("/api/roles", { method: "POST", body: form });
-      onSaved({ ...saved, userCount: role?.userCount || 0 });
-    } catch (err) {
-      setError(errorText(t, err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="space-y-5">
-      <BilingualField label={t("erp.roles.name")} value={form.name} onChange={(name) => setForm((f) => ({ ...f, name }))} />
-
-      <Select
-        label={t("erp.roles.scope")}
-        value={form.scope}
-        onChange={(scope) => setForm((f) => ({ ...f, scope }))}
-        options={SCOPES.map((s) => ({ value: s, label: t(`erp.roles.scope_${s}`) }))}
-      />
-
-      <div>
-        <p className="mb-2 text-sm font-medium text-white/70">{t("erp.roles.permissions")}</p>
-        {locked && <p className="mb-3 text-xs text-white/40">{t("erp.roles.lockedNote")}</p>}
-        <div className="space-y-4">
-          {GROUPS.map((group) => (
-            <div key={group} className="rounded-xl border border-white/10 p-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-white/40">{t(`erp.perm_group.${group}`)}</p>
-              <div className="space-y-2">
-                {PERMISSIONS.filter((p) => p.group === group).map((p) => (
-                  <label key={p.key} className="flex cursor-pointer items-start gap-3 text-sm text-white/80">
-                    <input
-                      type="checkbox"
-                      disabled={locked}
-                      checked={form.permissions.includes(p.key)}
-                      onChange={() => toggle(p.key)}
-                      className="mt-0.5 h-4 w-4 accent-[#f37b20]"
-                    />
-                    <span>
-                      {t(`erp.perm.${p.key}`)}
-                      <span className="block text-xs text-white/35" dir="ltr">
-                        {p.key}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <ErrorText>{error}</ErrorText>
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={onClose}>
-          {t("common.cancel")}
-        </Button>
-        <Button onClick={save} disabled={saving}>
-          {t("common.save")}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
+// The Roles page: the CEO's control over what everyone sees and does.
+//   Roles   — each role's permissions, data scope, restricted account, visible pages
+//   Matrix  — every role side by side, edited together
+//   People  — one person: their role, and exceptions to it (allow / deny, scope, pages)
+//   History — who changed what
 export default function RolesManager({ initialRoles }) {
   const { t, lang } = useLanguage();
+  const { user: viewer } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const tab = TABS.some((x) => x.key === params.get("tab")) ? params.get("tab") : "roles";
   const [roles, setRoles] = useState(initialRoles);
-  const [editing, setEditing] = useState(null); // role object, or "new"
-  const [error, setError] = useState("");
+  const [people, setPeople] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [picked, setPicked] = useState(initialRoles.find((r) => r.key === "gm")?.key || initialRoles[0]?.key || null);
+  const [draft, setDraft] = useState(null); // a new role's starting form (new / duplicate)
+  const [query, setQuery] = useState("");
 
-  async function remove(role) {
-    if (!window.confirm(t("common.confirmDelete"))) return;
-    setError("");
-    try {
-      await api(`/api/roles/${role.key}`, { method: "DELETE" });
-      setRoles((prev) => prev.filter((r) => r.key !== role.key));
-    } catch (err) {
-      setError(errorText(t, err));
+  useEffect(() => {
+    api("/api/access")
+      .then((data) => {
+        setPeople(data.people);
+        setDepartments(data.departments);
+      })
+      .catch(() => {});
+  }, []);
+
+  const go = (key) => router.replace(`${pathname}?tab=${key}`, { scroll: false });
+  const role = draft ? null : roles.find((r) => r.key === picked) || null;
+  const holdersOf = (key) => people.filter((p) => p.role === key);
+
+  const stats = useMemo(
+    () => [
+      { label: t("erp.access.stats.roles"), value: roles.length },
+      { label: t("erp.access.stats.people"), value: people.length },
+      { label: t("erp.access.stats.exceptions"), value: people.filter((p) => hasExceptions(p.access)).length },
+      { label: t("erp.access.stats.restricted"), value: roles.filter((r) => r.limited).length },
+    ],
+    [roles, people, t]
+  );
+
+  function savedRole(saved, created) {
+    setRoles((prev) => (prev.some((r) => r.key === saved.key) ? prev.map((r) => (r.key === saved.key ? { ...r, ...saved } : r)) : [...prev, saved]));
+    if (created) {
+      setDraft(null);
+      setPicked(saved.key);
     }
   }
+
+  const q = query.trim().toLowerCase();
+  const listed = roles.filter((r) => !q || `${r.name?.ar} ${r.name?.en} ${r.key}`.toLowerCase().includes(q));
 
   return (
     <div>
       <PageHeader
-        title={t("erp.nav.roles")}
-        subtitle={t("erp.roles.subtitle")}
+        title={t("erp.access.title")}
+        subtitle={t("erp.access.subtitle")}
         actions={
-          <Button onClick={() => setEditing("new")}>
-            <Plus size={16} />
-            {t("erp.roles.add")}
+          <Button
+            onClick={() => {
+              setDraft({ name: { ar: "", en: "" }, description: { ar: "", en: "" }, permissions: [], scope: "self", limited: false, pages: [], crossDepartment: false });
+              go("roles");
+            }}
+          >
+            <Plus size={16} /> {t("erp.access.newRole")}
           </Button>
         }
       />
-      <ErrorText>{error}</ErrorText>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {roles.map((role) => (
-          <Card key={role.key}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="flex items-center gap-2 font-semibold">
-                  {role.name?.[lang]}
-                  {role.system && <Lock size={13} className="text-white/35" />}
-                </p>
-                <p className="mt-1 text-xs text-white/45">
-                  {t(`erp.roles.scope_${role.scope}`)} · {role.userCount} {t("erp.roles.people")}
-                </p>
-              </div>
-              <div className="flex gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setEditing(role)}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-white/60 hover:bg-white/10 hover:text-white"
-                  aria-label={t("common.edit")}
-                >
-                  <Pencil size={14} />
-                </button>
-                {!role.system && (
-                  <button
-                    type="button"
-                    onClick={() => remove(role)}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10"
-                    aria-label={t("common.delete")}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-1.5">
-              {role.permissions.length === 0 && <span className="text-xs text-white/35">{t("erp.roles.noPermissions")}</span>}
-              {role.permissions.map((p) => (
-                <span key={p} className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-white/70">
-                  {t(`erp.perm.${p}`)}
-                </span>
-              ))}
-            </div>
-          </Card>
+      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+        {stats.map((s) => (
+          <div key={s.label} className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+            <p className="text-2xl font-semibold tabular-nums">{s.value}</p>
+            <p className="text-xs text-white/45">{s.label}</p>
+          </div>
         ))}
       </div>
 
-      <Modal
-        open={Boolean(editing)}
-        onClose={() => setEditing(null)}
-        title={editing === "new" ? t("erp.roles.add") : t("erp.roles.edit")}
-        wide
-      >
-        {editing && (
-          <RoleEditor
-            role={editing === "new" ? null : editing}
-            onClose={() => setEditing(null)}
-            onSaved={(saved) => {
-              setRoles((prev) =>
-                prev.some((r) => r.key === saved.key) ? prev.map((r) => (r.key === saved.key ? saved : r)) : [...prev, saved]
-              );
-              setEditing(null);
+      <div className="mt-5 flex gap-1 overflow-x-auto border-b border-white/10">
+        {TABS.map(({ key, icon: Icon }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => go(key)}
+            className={`-mb-px flex shrink-0 items-center gap-2 border-b-2 px-4 py-2.5 text-sm transition ${
+              tab === key ? "border-brand-orange text-white" : "border-transparent text-white/50 hover:text-white"
+            }`}
+          >
+            <Icon size={15} /> {t(`erp.access.tab.${key}`)}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-5">
+        {tab === "roles" && (
+          <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+            <div className="space-y-2">
+              <div className="relative">
+                <Search size={14} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-white/30" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={t("erp.access.search")}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pe-3 ps-9 text-sm outline-none focus:border-white/30"
+                />
+              </div>
+              <ul className="space-y-1 lg:max-h-[70vh] lg:overflow-y-auto">
+                {draft && (
+                  <li>
+                    <div className="rounded-xl border border-dashed border-brand-orange/60 bg-brand-orange/10 px-3 py-2.5 text-sm">{draft.name[lang] || t("erp.access.newRole")}</div>
+                  </li>
+                )}
+                {listed.map((r) => (
+                  <li key={r.key}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDraft(null);
+                        setPicked(r.key);
+                      }}
+                      className={`w-full rounded-xl px-3 py-2.5 text-start transition ${!draft && picked === r.key ? "bg-brand-orange/15 ring-1 ring-brand-orange/50" : "hover:bg-white/5"}`}
+                    >
+                      <span className="flex items-center gap-1.5 text-sm font-medium">
+                        {r.name?.[lang] || r.key}
+                        {(r.top || r.key === "user") && <Lock size={12} className="text-white/35" />}
+                      </span>
+                      <span className="mt-1 flex flex-wrap items-center gap-1">
+                        <Chip tone="sky">{t(`erp.roles.scope_${r.scope}`)}</Chip>
+                        {r.limited && <Chip tone="red">{t("erp.access.restrictedChip")}</Chip>}
+                        {r.crossDepartment && !r.top && <Chip tone="green">{t("erp.access.work.anyChip")}</Chip>}
+                        <span className="text-[10px] text-white/35">
+                          {r.permissions.length} · {t("erp.access.peopleCount", { n: r.userCount })}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {draft || role ? (
+              <RoleEditor
+                key={draft ? `new-${draft.name.en}` : role.key}
+                role={role}
+                seed={draft}
+                holders={role ? holdersOf(role.key) : []}
+                viewer={viewer}
+                onSaved={savedRole}
+                onDeleted={(key) => {
+                  setRoles((prev) => prev.filter((r) => r.key !== key));
+                  setPicked(roles.find((r) => r.key !== key)?.key || null);
+                }}
+                onDuplicate={(form) => setDraft(form)}
+              />
+            ) : null}
+          </div>
+        )}
+
+        {tab === "matrix" && <PermissionMatrix roles={roles} viewer={viewer} onSaved={(saved) => savedRole(saved, false)} />}
+
+        {tab === "people" && (
+          <PeopleAccess
+            people={people}
+            roles={roles}
+            departments={departments}
+            viewer={viewer}
+            onPersonChanged={(next) => {
+              const before = people.find((p) => p.id === next.id);
+              setPeople((prev) => prev.map((p) => (p.id === next.id ? next : p)));
+              if (before && before.role !== next.role) {
+                setRoles((prev) =>
+                  prev.map((r) =>
+                    r.key === before.role ? { ...r, userCount: Math.max(0, r.userCount - 1) } : r.key === next.role ? { ...r, userCount: r.userCount + 1 } : r
+                  )
+                );
+              }
             }}
           />
         )}
-      </Modal>
+
+        {tab === "history" && <AccessHistory roles={roles} departments={departments} />}
+      </div>
     </div>
   );
 }

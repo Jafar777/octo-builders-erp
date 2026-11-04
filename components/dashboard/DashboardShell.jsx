@@ -48,7 +48,7 @@ import TopProgress from "@/components/erp/ui/TopProgress";
 import MiniChat from "@/components/erp/messages/MiniChat";
 import { TraineeProvider } from "@/components/erp/ui/TraineeBadge";
 import NoAccess from "@/components/erp/NoAccess";
-import { isTopRole } from "@/lib/permissions";
+import { pageForPath, RESTRICTED_PAGES } from "@/lib/permissions";
 
 // Sidebar entries; `perm` hides an entry from roles without that permission,
 // `staff` hides it from accounts that have no role yet, and `when(user)` is a custom rule.
@@ -85,7 +85,7 @@ const NAV = [
       { href: "/dashboard/messages", key: "messages", icon: MessagesSquare, staff: true, badge: "messages", exact: true },
       { href: "/dashboard/notifications", key: "notifications", icon: Bell, show: (u) => u.isStaff || u.isCustomer },
       // Trainees and the CEO only (lib/training.js canOpenTraining).
-      { href: "/dashboard/training", key: "training", icon: GraduationCap, show: (u) => (u.trainee && !u.limited) || (u.isStaff && isTopRole(u.role)) },
+      { href: "/dashboard/training", key: "training", icon: GraduationCap, show: (u) => (u.trainee && !u.limited) || (u.isStaff && u.permissions.includes("training.manage")) },
     ],
   },
   {
@@ -115,10 +115,24 @@ const NAV = [
   },
 ];
 
-// The general manager (a limited role) only gets these pages: their profile, their own
-// messages and notifications, and the intake forms.
-const LIMITED_PAGES = ["/dashboard/profile", "/dashboard/messages", "/dashboard/intake", "/dashboard/notifications"];
-const limitedAllows = (path) => LIMITED_PAGES.some((p) => path === p || (path.startsWith(`${p}/`) && p !== "/dashboard/messages"));
+// Pages the CEO took away on the Roles page: the role's page list (user.pages, with the
+// person's own hidden pages), and a restricted account (the GM by default) never gets
+// more than RESTRICTED_PAGES.
+export function pageAllowed(user, key) {
+  if (!key) return true;
+  if (user.pages && !user.pages.includes(key)) return false;
+  return !user.limited || RESTRICTED_PAGES.includes(key);
+}
+
+// Is a sidebar entry shown to `user`? (Also the Roles page's "what they see" preview.)
+export function navItemVisible(item, user) {
+  if (!pageAllowed(user, item.key)) return false;
+  if (item.show) return item.show(user);
+  return (!item.staff || user.isStaff) && (!item.perm || user.permissions.includes(item.perm)) && (!item.when || (user.isStaff && item.when(user)));
+}
+
+// The sidebar keys `user` sees, in order.
+export const visibleNavKeys = (user) => NAV.flatMap((g) => g.items.filter((i) => navItemVisible(i, user)).map((i) => i.key));
 
 export default function DashboardShell({ user, traineeIds = [], children }) {
   const trainees = useMemo(() => new Set(traineeIds), [traineeIds]);
@@ -164,13 +178,7 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
     router.refresh();
   });
 
-  // The general manager sees only LIMITED_PAGES; everyone else by each entry's rule.
-  const visible = (item) => {
-    if (user.limited && !LIMITED_PAGES.includes(item.href)) return false;
-    if (item.show) return item.show(user);
-    return (!item.staff || user.isStaff) && (!item.perm || user.permissions.includes(item.perm)) && (!item.when || (user.isStaff && item.when(user)));
-  };
-  const groups = NAV.map((g) => ({ ...g, items: g.items.filter(visible) })).filter((g) => g.items.length > 0);
+  const groups = NAV.map((g) => ({ ...g, items: g.items.filter((i) => navItemVisible(i, user)) })).filter((g) => g.items.length > 0);
 
   async function handleLogout() {
     await logout();
@@ -273,7 +281,7 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
         </header>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-10">
-          {user.limited && !limitedAllows(pathname) ? <NoAccess /> : <TraineeProvider ids={trainees}>{children}</TraineeProvider>}
+          {!pageAllowed(user, pageForPath(pathname)) ? <NoAccess /> : <TraineeProvider ids={trainees}>{children}</TraineeProvider>}
         </main>
       </div>
 

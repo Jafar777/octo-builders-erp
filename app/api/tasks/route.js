@@ -6,6 +6,7 @@ import { holdsTime, HOUR, readyTime } from "@/lib/gantt";
 import { cascadeFrom, clearOverlaps, findOverlap, freeSlot, getWorkCalendar } from "@/lib/ganttServer";
 import { trackDelays } from "@/lib/projectDelay";
 import { syncStageDependencies } from "@/lib/taskSchedule";
+import { withWorkDepartments } from "@/lib/roles";
 import { canRouteStages, isStageLocked, projectAccess, stageDepartment } from "@/lib/projects";
 import { getTaskSettings } from "@/lib/settings";
 import { inScope, userDepartments } from "@/lib/scope";
@@ -140,7 +141,10 @@ export async function POST(request) {
     return forbidden();
   }
   // Below the CEO, work goes only to the employees of one's own departments.
-  if (assigneeId !== user.id && !canRouteStages(user) && !managesEmployee(user, assignee)) return fail("reassign_own_department", 403);
+  // (Or employees the CEO opened this department to, Roles page.)
+  if (assigneeId !== user.id && !canRouteStages(user) && !managesEmployee(user, (await withWorkDepartments([assignee]))[0], department)) {
+    return fail("reassign_own_department", 403);
+  }
 
   const type = settings.taskTypes.some((t) => t.key === body.type) ? body.type : stage?.taskType || "other";
   // Time is set by the system: only the GM / CEO may give dates, hours, predecessors
