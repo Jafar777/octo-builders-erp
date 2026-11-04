@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Banknote, ExternalLink, FilePlus2, FolderPlus, Pencil, Plus, RotateCcw, Trash2, XCircle } from "lucide-react";
+import { Banknote, CheckCircle2, ExternalLink, FilePlus2, FolderPlus, Pencil, Plus, RotateCcw, Trash2, XCircle } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
 import { formatDate, formatDateTime } from "@/lib/formatTime";
@@ -14,6 +14,7 @@ import { SkeletonList } from "@/components/erp/ui/Loading";
 import ProjectForm from "@/components/erp/projects/ProjectForm";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { useFinanceLookups } from "@/components/erp/finance/useFinanceLookups";
+import { convert, currencySymbol, formatMoney, MoneyPair, partnerCurrency } from "@/components/erp/intake/MoneyFields";
 
 const TABS = ["all", "new", "ready", "converted", "declined"];
 const STATUS_TONE = {
@@ -41,7 +42,8 @@ function StatusBadge({ status }) {
 
 // The new-project intake forms: the secretary fills them in, the GM / CEO add the money
 // side and turn them into projects. `planner` = GM / CEO; `finance` = may see money.
-export default function IntakeCenter({ planner, finance }) {
+// `proposer` = may set up the intake's project as a request (department managers, the CEO).
+export default function IntakeCenter({ planner, finance, proposer = false }) {
   const { t, lang } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -50,7 +52,8 @@ export default function IntakeCenter({ planner, finance }) {
   const [error, setError] = useState("");
   const [openId, setOpenId] = useState(searchParams.get("intake"));
   const [editing, setEditing] = useState(null); // null | "new" | intake
-  const [converting, setConverting] = useState(null);
+  const [converting, setConverting] = useState(null); // { intake, mode: "propose" | "accept" }
+  const [detailKey, setDetailKey] = useState(0);
 
   const load = useCallback(() => {
     api(`/api/intakes${tab === "all" ? "" : `?status=${tab}`}`)
@@ -131,24 +134,38 @@ export default function IntakeCenter({ planner, finance }) {
         )}
       </Modal>
 
+      {/* A new key after a request is saved: the detail reloads with it. */}
       <IntakeDetail
+        key={detailKey}
         id={openId}
         planner={planner}
         finance={finance}
+        proposer={proposer}
         onClose={() => open(null)}
         onChanged={load}
         onEdit={(intake) => setEditing(intake)}
-        onConvert={(intake) => setConverting(intake)}
+        onConvert={(intake, mode) => setConverting({ intake, mode })}
       />
 
-      <Modal open={Boolean(converting)} onClose={() => setConverting(null)} title={t("erp.intake.createProject")} wide>
+      <Modal
+        open={Boolean(converting)}
+        onClose={() => setConverting(null)}
+        title={converting?.mode === "propose" ? t("erp.intake.projectSetup") : t("erp.intake.acceptProject")}
+        wide
+      >
         {converting && (
           <ConvertProject
-            intake={converting}
+            intake={converting.intake}
+            mode={converting.mode}
             onCancel={() => setConverting(null)}
-            onCreated={(project) => {
+            onCreated={(result) => {
               setConverting(null);
-              router.push(`/dashboard/projects/${project.id}`);
+              // A request is saved on the intake; an accepted project opens.
+              if (converting.mode === "propose") {
+                load();
+                setDetailKey((k) => k + 1);
+              }
+              else router.push(`/dashboard/projects/${result.id}`);
             }}
           />
         )}
@@ -157,9 +174,9 @@ export default function IntakeCenter({ planner, finance }) {
   );
 }
 
-function ConvertProject({ intake, onCancel, onCreated }) {
+function ConvertProject({ intake, mode, onCancel, onCreated }) {
   const lookups = useTaskLookups();
-  return <ProjectForm lookups={lookups} intake={intake} onCancel={onCancel} onCreated={onCreated} />;
+  return <ProjectForm lookups={lookups} intake={intake} mode={mode} initial={intake.proposal?.body || null} onCancel={onCancel} onCreated={onCreated} />;
 }
 
 // ---------- the form (the secretary's part — never money) ----------
@@ -191,6 +208,9 @@ function Section({ title, children }) {
     </section>
   );
 }
+
+// A required question's label: red, with a star.
+const required = (text) => <span className="text-red-400">{text} *</span>;
 
 function IntakeForm({ intake, onSaved, onCancel }) {
   const { t } = useLanguage();
@@ -237,7 +257,7 @@ function IntakeForm({ intake, onSaved, onCancel }) {
     <div className="space-y-5">
       <div className="grid gap-5 lg:grid-cols-2">
         <Section title={t("erp.intake.section.client")}>
-          <Input label={`${t("erp.intake.field.clientName")} *`} value={form.client.name} onChange={setIn("client", "name")} />
+          <Input label={required(t("erp.intake.field.clientName"))} value={form.client.name} onChange={setIn("client", "name")} />
           <div className="grid gap-3 sm:grid-cols-2">
             <Input label={t("erp.intake.field.clientNumber")} value={form.client.number} onChange={setIn("client", "number")} />
             <Input label={t("erp.intake.field.phone")} value={form.client.phone} onChange={setIn("client", "phone")} dir="ltr" />
@@ -249,7 +269,7 @@ function IntakeForm({ intake, onSaved, onCancel }) {
           </div>
         </Section>
         <Section title={t("erp.intake.section.project")}>
-          <Input label={`${t("erp.intake.field.projectName")} *`} value={form.project.name} onChange={setIn("project", "name")} />
+          <Input label={required(t("erp.intake.field.projectName"))} value={form.project.name} onChange={setIn("project", "name")} />
           <div className="grid gap-3 sm:grid-cols-2">
             <Input label={t("erp.intake.field.location")} value={form.project.location} onChange={setIn("project", "location")} />
             <Input label={t("erp.intake.field.area")} value={form.project.area} onChange={setIn("project", "area")} />
@@ -341,7 +361,7 @@ function Row({ label, children }) {
   );
 }
 
-function IntakeDetail({ id, planner, finance, onClose, onChanged, onEdit, onConvert }) {
+function IntakeDetail({ id, planner, finance, proposer, onClose, onChanged, onEdit, onConvert }) {
   const { t, lang } = useLanguage();
   const [intake, setIntake] = useState(null);
   const [error, setError] = useState("");
@@ -450,6 +470,15 @@ function IntakeDetail({ id, planner, finance, onClose, onChanged, onEdit, onConv
           {finance && i.finance && !["new", "ready"].includes(i.status) && <FinanceSummary f={i.finance} />}
           {!finance && i.status === "new" && <p className="text-xs text-white/45">{t("erp.intake.waitingPricing")}</p>}
 
+          {/* The requested project set-up: waiting for the CEO to accept or reject it. */}
+          {i.proposal && ["new", "ready"].includes(i.status) && (
+            <div className="rounded-xl border border-sky-400/30 bg-sky-400/[0.06] px-4 py-3 text-sm">
+              <p className="font-semibold text-sky-100">{t("erp.intake.proposalWaiting")}</p>
+              <p className="mt-1 text-xs text-white/55">{t("erp.intake.proposalBy", { name: i.proposal.by || "—", at: formatDateTime(i.proposal.at, lang) })}</p>
+            </div>
+          )}
+          {planner && i.status === "new" && <p className="text-xs text-amber-200/80">{t("erp.intake.acceptNeedsPricing")}</p>}
+
           <ErrorText>{error}</ErrorText>
           <div className="flex flex-wrap gap-2">
             {i.canEdit && (
@@ -457,14 +486,21 @@ function IntakeDetail({ id, planner, finance, onClose, onChanged, onEdit, onConv
                 <Pencil size={15} /> {t("erp.intake.edit")}
               </Button>
             )}
+            {/* Department managers (and the CEO) set the project up: a request. */}
+            {proposer && ["new", "ready"].includes(i.status) && (
+              <Button variant="ghost" onClick={() => onConvert(i, "propose")}>
+                <FolderPlus size={15} /> {t(i.proposal ? "erp.intake.editProposal" : "erp.intake.projectSetup")}
+              </Button>
+            )}
+            {/* The CEO alone accepts: the project starts and goes to the Gantt. */}
             {planner && finance && i.status === "ready" && (
-              <Button onClick={() => onConvert(i)}>
-                <FolderPlus size={15} /> {t("erp.intake.createProject")}
+              <Button onClick={() => onConvert(i, "accept")}>
+                <CheckCircle2 size={15} /> {t("erp.intake.acceptProject")}
               </Button>
             )}
             {planner && ["new", "ready"].includes(i.status) && (
               <Button variant="danger" onClick={() => decide("decline")} disabled={busy}>
-                <XCircle size={15} /> {t("erp.intake.decline")}
+                <XCircle size={15} /> {t("erp.intake.rejectProject")}
               </Button>
             )}
             {planner && i.status === "declined" && (
@@ -489,17 +525,25 @@ function IntakeDetail({ id, planner, finance, onClose, onChanged, onEdit, onConv
 function FinanceSummary({ f }) {
   const { t, lang } = useLanguage();
   const fin = useFinanceLookups();
-  const n = (v) => (v === null || v === undefined ? "—" : Number(v).toLocaleString(lang === "ar" ? "ar" : "en"));
+  const currencies = fin.settings?.currencies;
+  const rates = Object.fromEntries((currencies?.list || []).map((c) => [c.code, c.code === f.currency && f.rate > 0 ? f.rate : c.rate]));
+  // "120,000 $ (456,000 ر.س)": the amount and, beside it, in the partner currency.
+  const both = (v, code) => {
+    if (v === null || v === undefined) return "";
+    const other = partnerCurrency(code, currencies);
+    const alt = other ? convert(v, code, other, rates) : "";
+    return alt === "" ? formatMoney(v, code, lang) : `${formatMoney(v, code, lang)} (${formatMoney(alt, other, lang)})`;
+  };
   return (
     <Card className="border-emerald-500/20">
       <p className="mb-2 flex items-center gap-2 font-semibold text-emerald-200">
         <Banknote size={16} /> {t("erp.intake.section.finance")}
       </p>
-      <Row label={t("erp.intake.fin.contractValue")}>{`${n(f.contractValue)} ${f.currency}`}</Row>
-      <Row label={t("erp.intake.fin.budget")}>{f.budget !== null ? `${n(f.budget)} ${fin.base}` : ""}</Row>
+      <Row label={t("erp.intake.fin.contractValue")}>{both(f.contractValue, f.currency)}</Row>
+      <Row label={t("erp.intake.fin.budget")}>{f.budget !== null ? both(f.budget, fin.base) : ""}</Row>
       <Row label={t("erp.intake.fin.branch")}>{f.branch ? fin.branchName(f.branch) : ""}</Row>
       <Row label={t("erp.intake.fin.client")}>{f.client ? fin.clientName(f.client) : ""}</Row>
-      <Row label={t("erp.intake.fin.advancePaid")}>{f.advancePaid > 0 ? `${n(f.advancePaid)} ${f.currency} · ${formatDate(f.advanceDate, lang)}` : ""}</Row>
+      <Row label={t("erp.intake.fin.advancePaid")}>{f.advancePaid > 0 ? `${both(f.advancePaid, f.currency)} · ${formatDate(f.advanceDate, lang)}` : ""}</Row>
       <Row label={t("erp.intake.fin.paymentTerms")}>{f.paymentTerms}</Row>
       <Row label={t("erp.intake.fin.notes")}>{f.notes}</Row>
       {f.by && <p className="mt-2 text-[11px] text-white/40">{t("erp.intake.pricedBy", { name: f.by, at: formatDateTime(f.at, lang) })}</p>}
@@ -528,6 +572,11 @@ function FinanceSection({ intake, onSaved }) {
   const set = (k) => (v) => setForm((x) => ({ ...x, [k]: v }));
   const currencies = fin.settings?.currencies.list || [];
   const currency = form.currency || fin.base;
+  // Units per 1 base currency; the chosen currency uses the typed rate when there is one.
+  const rates = Object.fromEntries(currencies.map((c) => [c.code, c.code === currency && Number(form.rate) > 0 ? Number(form.rate) : c.rate]));
+  const partner = partnerCurrency(currency, fin.settings?.currencies);
+  const basePartner = partnerCurrency(fin.base, fin.settings?.currencies);
+  const sym = (code) => currencySymbol(code, lang);
 
   async function save() {
     setBusy(true);
@@ -551,14 +600,15 @@ function FinanceSection({ intake, onSaved }) {
         <p className="mt-1 text-xs text-white/50">{t("erp.intake.financeHint")}</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
-        <Input type="number" min="0" label={`${t("erp.intake.fin.contractValue")} *`} value={form.contractValue} onChange={set("contractValue")} dir="ltr" />
-        <Select label={t("erp.intake.fin.currency")} value={currency} onChange={set("currency")} options={currencies.map((c) => ({ value: c.code, label: `${c.code} · ${c.name?.[lang] || ""}` }))} />
-        {currency !== fin.base && <Input type="number" min="0" step="0.0001" label={t("erp.intake.fin.rate", { base: fin.base })} value={form.rate} onChange={set("rate")} dir="ltr" placeholder={String(currencies.find((c) => c.code === currency)?.rate || "")} />}
-        <Input type="number" min="0" label={t("erp.intake.fin.budgetIn", { base: fin.base })} value={form.budget} onChange={set("budget")} dir="ltr" />
-        <Select label={t("erp.intake.fin.branch")} value={form.branch} onChange={set("branch")} placeholder="—" options={fin.branches.map((b) => ({ value: b.id, label: b.name?.[lang] }))} />
+        <Select label={t("erp.intake.fin.currency")} value={currency} onChange={set("currency")} options={currencies.map((c) => ({ value: c.code, label: `${c.code} (${sym(c.code)}) · ${c.name?.[lang] || ""}` }))} />
+        {currency !== fin.base && <Input type="number" min="0" step="0.0001" label={t("erp.intake.fin.rate", { base: `${sym(fin.base)} ${fin.base}`, cur: sym(currency) })} value={form.rate} onChange={set("rate")} dir="ltr" placeholder={String(currencies.find((c) => c.code === currency)?.rate || "")} />}
+        {/* Typed in either currency: the other one is worked out with the exchange rate. */}
+        <MoneyPair label={required(t("erp.intake.fin.contractValue"))} value={form.contractValue} onChange={set("contractValue")} currency={currency} partner={partner} rates={rates} lang={lang} />
+        <MoneyPair label={t("erp.intake.fin.budget")} value={form.budget} onChange={set("budget")} currency={fin.base} partner={basePartner} rates={rates} lang={lang} />
+        <Select label={Number(form.advancePaid) > 0 ? required(t("erp.intake.fin.branch")) : t("erp.intake.fin.branch")} value={form.branch} onChange={set("branch")} placeholder="—" options={fin.branches.map((b) => ({ value: b.id, label: b.name?.[lang] }))} />
         <Select label={t("erp.intake.fin.client")} value={form.client} onChange={set("client")} placeholder={t("erp.intake.fin.newClient", { name: intake.client.name })} options={fin.clients.map((c) => ({ value: c.id, label: c.name }))} />
-        <Input type="number" min="0" label={t("erp.intake.fin.advancePaid")} value={form.advancePaid} onChange={set("advancePaid")} dir="ltr" />
-        {Number(form.advancePaid) > 0 && <Input type="date" label={t("erp.intake.fin.advanceDate")} value={form.advanceDate} onChange={set("advanceDate")} />}
+        <MoneyPair label={t("erp.intake.fin.advancePaid")} value={form.advancePaid} onChange={set("advancePaid")} currency={currency} partner={partner} rates={rates} lang={lang} />
+        {Number(form.advancePaid) > 0 && <Input type="date" label={required(t("erp.intake.fin.advanceDate"))} value={form.advanceDate} onChange={set("advanceDate")} />}
       </div>
       <Input label={t("erp.intake.fin.paymentTerms")} value={form.paymentTerms} onChange={set("paymentTerms")} />
       <Input label={t("erp.intake.fin.notes")} value={form.notes} onChange={set("notes")} />

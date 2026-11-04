@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, ArrowDown, ArrowUp, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, FileSpreadsheet, Loader2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api } from "@/lib/clientApi";
@@ -14,6 +14,7 @@ import Stars from "@/components/erp/tasks/Stars";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { formatDuration, PRIORITY_STYLE, revisionLabel, useNow, liveActiveMs } from "@/components/erp/tasks/taskUi";
 import { Skeleton } from "@/components/erp/ui/Loading";
+import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const pad = (n) => String(n).padStart(2, "0");
@@ -28,7 +29,7 @@ const shiftMonth = (month, by) => {
 };
 const time = (d) => (d ? new Date(d).getTime() : null);
 const FINISHED = ["approved", "done"];
-const ACTIVE = ["todo", "in_progress", "on_hold", "help"];
+const ACTIVE = ["in_progress", "on_hold", "help"]; // scheduled ("todo") tasks aren't in the log
 
 function DateCell({ value, lang, danger }) {
   if (!value) return <span className="text-white/25">—</span>;
@@ -41,6 +42,7 @@ function Person({ person }) {
     <span className="flex items-center gap-2">
       <Avatar name={person.name} src={person.avatarUrl} size={22} />
       {person.name}
+      <TraineeBadge id={person.id} />
     </span>
   );
 }
@@ -74,9 +76,12 @@ function Stat({ label, value, tone = "text-white" }) {
   );
 }
 
-export default function TaskLog() {
+// `mine`: the signed-in employee's own log (a tab of My Tasks), without the page header
+// and the assignee column.
+export default function TaskLog({ mine = false }) {
   const { t, lang } = useLanguage();
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const lookups = useTaskLookups();
   const initialMonth = MONTH_RE.test(searchParams.get("month") || "") ? searchParams.get("month") : thisMonth();
@@ -89,10 +94,10 @@ export default function TaskLog() {
 
   const load = useCallback(async (m) => {
     setLoading(true);
-    const d = await api(`/api/tasks/log?month=${m}`).catch(() => null);
+    const d = await api(`/api/tasks/log?month=${m}${mine ? "&mine=1" : ""}`).catch(() => null);
     if (d) setData(d);
     setLoading(false);
-  }, []);
+  }, [mine]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -100,9 +105,12 @@ export default function TaskLog() {
   }, [load, month]);
 
   function go(next, taskId = openId) {
-    const q = new URLSearchParams({ month: next });
+    // Keep the page's other params (My Tasks' ?tab=log).
+    const q = new URLSearchParams(searchParams.toString());
+    q.set("month", next);
     if (taskId) q.set("task", taskId);
-    router.replace(`/dashboard/task-log?${q}`, { scroll: false });
+    else q.delete("task");
+    router.replace(`${pathname}?${q}`, { scroll: false });
   }
   function changeMonth(next) {
     if (!MONTH_RE.test(next)) return;
@@ -134,7 +142,13 @@ export default function TaskLog() {
         width: 36,
         cell: (x) => (
           <span className="block min-w-56 max-w-80">
-            <span className="block truncate font-medium text-white" title={taskHeading(x, lang)}>
+            {/* My own log: the project's name first, bigger than the task's. */}
+            {mine && x.project?.name?.[lang] && (
+              <span className="mb-0.5 block truncate text-base font-bold text-white" title={x.project.name[lang]}>
+                {x.project.name[lang]}
+              </span>
+            )}
+            <span className={`block truncate ${mine && x.project ? "text-sm text-white/80" : "font-medium text-white"}`} title={taskHeading(x, lang)}>
               {taskHeading(x, lang)}
             </span>
             <span className="mt-1 flex flex-wrap gap-1">
@@ -150,10 +164,10 @@ export default function TaskLog() {
         ),
       },
       { key: "status", sort: (x) => t(`erp.tasks.status.${x.status}`), excel: (x) => t(`erp.tasks.status.${x.status}`), width: 16, cell: (x) => <StatusBadge status={x.status} /> },
-      { key: "project", sort: (x) => x.project?.name?.[lang] || "", excel: (x) => x.project?.name?.[lang] || "", width: 26, cell: (x) => x.project?.name?.[lang] },
+      { key: "project", excelOnly: mine, sort: (x) => x.project?.name?.[lang] || "", excel: (x) => x.project?.name?.[lang] || "", width: 26, cell: (x) => x.project?.name?.[lang] },
       { key: "department", sort: (x) => (x.department ? lookups.departmentName(x.department) : ""), excel: (x) => (x.department ? lookups.departmentName(x.department) : ""), width: 20, cell: (x) => x.department && lookups.departmentName(x.department) },
       { key: "type", sort: (x) => lookups.typeName(x.type), excel: (x) => lookups.typeName(x.type), width: 18, cell: (x) => lookups.typeName(x.type) },
-      { key: "assignee", sort: (x) => x.assignee?.name || "", excel: (x) => x.assignee?.name || "", width: 22, cell: (x) => <Person person={x.assignee} /> },
+      !mine && { key: "assignee", sort: (x) => x.assignee?.name || "", excel: (x) => x.assignee?.name || "", width: 22, cell: (x) => <Person person={x.assignee} /> },
       { key: "createdBy", sort: (x) => x.createdBy?.name || "", excel: (x) => x.createdBy?.name || "", width: 22, cell: (x) => <Person person={x.createdBy} /> },
       { key: "created", sort: (x) => time(x.createdAt), excel: (x) => (x.createdAt ? new Date(x.createdAt) : null), date: true, cell: (x) => <DateCell value={x.createdAt} lang={lang} /> },
       { key: "started", sort: (x) => time(x.startedAt), excel: (x) => (x.startedAt ? new Date(x.startedAt) : null), date: true, cell: (x) => <DateCell value={x.startedAt} lang={lang} /> },
@@ -238,8 +252,11 @@ export default function TaskLog() {
             </a>
           ),
       },
-    ];
-  }, [lookups, lang, t, now]);
+    ].filter(Boolean);
+  }, [lookups, lang, t, now, mine]);
+
+  // Columns marked `excelOnly` go to the Excel file but not the table.
+  const tableColumns = useMemo(() => columns.filter((c) => !c.excelOnly), [columns]);
 
   const rows = useMemo(() => {
     const col = columns.find((c) => c.key === sort.key) || columns[0];
@@ -306,6 +323,13 @@ export default function TaskLog() {
     }
   }
 
+  const exportButton = (
+    <Button variant="ghost" onClick={exportExcel} disabled={exporting || !rows.length}>
+      {exporting ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
+      {t("erp.taskLog.export")}
+    </Button>
+  );
+
   const current = month === thisMonth();
   // Sticky first two columns (# and task) so the row stays readable while scrolling sideways.
   const stickyFirst = "sticky start-0 z-10 w-16 min-w-16";
@@ -313,16 +337,11 @@ export default function TaskLog() {
 
   return (
     <div>
-      <PageHeader
-        title={t("erp.nav.taskLog")}
-        subtitle={t("erp.taskLog.subtitle")}
-        actions={
-          <Button variant="ghost" onClick={exportExcel} disabled={exporting || !rows.length}>
-            {exporting ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
-            {t("erp.taskLog.export")}
-          </Button>
-        }
-      />
+      {mine ? (
+        <p className="mb-4 text-sm text-white/50">{t("erp.taskLog.mineSubtitle")}</p>
+      ) : (
+        <PageHeader title={t("erp.nav.taskLog")} subtitle={t("erp.taskLog.subtitle")} actions={exportButton} />
+      )}
 
       {/* The one filter: the month */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
@@ -363,6 +382,7 @@ export default function TaskLog() {
           </button>
         )}
         {loading && data && <Loader2 size={16} className="animate-spin text-white/40" />}
+        {mine && <div className="ms-auto">{exportButton}</div>}
       </div>
 
       {/* Month at a glance */}
@@ -389,7 +409,7 @@ export default function TaskLog() {
             <table className="w-full border-collapse text-sm">
               <thead className="sticky top-0 z-20 bg-brand-navy">
                 <tr className="border-b border-white/10">
-                  {columns.map((c, i) => (
+                  {tableColumns.map((c, i) => (
                     <th
                       key={c.key}
                       className={`whitespace-nowrap bg-brand-navy px-3 py-3 text-start text-xs font-semibold uppercase tracking-wider text-white/50 ${
@@ -411,7 +431,7 @@ export default function TaskLog() {
                     onClick={() => open(x.id)}
                     className="group cursor-pointer border-b border-white/5 text-white/75 last:border-0 hover:bg-white/[0.04]"
                   >
-                    {columns.map((c, i) => (
+                    {tableColumns.map((c, i) => (
                       <td
                         key={c.key}
                         className={`whitespace-nowrap px-3 py-2.5 align-middle ${

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Ban, ChevronDown, ChevronsDownUp, ChevronsUpDown, Crosshair, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Plus, Sparkles, UserCheck } from "lucide-react";
+import { AlertTriangle, Ban, Building2, ChevronDown, GripVertical, ChevronsDownUp, ChevronsUpDown, Crosshair, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Plus, Sparkles, UserCheck } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
 import { locale } from "@/lib/formatTime";
@@ -15,6 +15,7 @@ import {
   criticalPath,
   dateHours,
   DAY,
+  externalSpan,
   heldSpan,
   HOLDING_STATUSES,
   HOUR,
@@ -39,6 +40,8 @@ import TaskForm from "@/components/erp/tasks/TaskForm";
 import { taskHeading } from "@/components/erp/tasks/TaskRow";
 import { revisionLabel, toLocalInput, useNow } from "@/components/erp/tasks/taskUi";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
+import TraineeBadge from "@/components/erp/ui/TraineeBadge";
+import { ExternalHoursField, ExternalReviewBox } from "@/components/erp/tasks/ExternalReview";
 
 // The task-name column: narrower on phones so the chart keeps most of the screen.
 const LABEL_W = 270;
@@ -177,7 +180,8 @@ export default function ProjectsTimeline({ projects, status }) {
   // Saved expected deliveries per project (Baseline 1 at creation, 2, 3… from here).
   const baselinesOf = useMemo(() => Object.fromEntries((data?.projects || []).map((p) => [p.id, p.baselines || []])), [data]);
   const forecastOf = useMemo(() => Object.fromEntries((data?.projects || []).map((p) => [p.id, p.forecastEnd])), [data]);
-  const forecastStartOf = useMemo(() => Object.fromEntries((data?.projects || []).map((p) => [p.id, p.forecastStart])), [data]);
+  // The CEO's priority order (dragged on the chart): 0 = top. Unranked projects follow.
+  const rankOf = useMemo(() => Object.fromEntries((data?.projects || []).map((p) => [p.id, p.rank ?? Infinity])), [data]);
 
   const groups = useMemo(() => {
     const visible = tasks
@@ -194,7 +198,12 @@ export default function ProjectsTimeline({ projects, status }) {
     }
     const byProject = {};
     for (const x of visible) (byProject[x.project.id] ||= []).push(x);
-    return projects.map((project) => {
+    // A department manager only gets their department's tasks: other projects are hidden.
+    const shown = (data?.departmentOnly ? projects.filter((p) => byProject[p.id]) : projects)
+      .map((p, i) => ({ p, i }))
+      .sort((a, b) => (rankOf[a.p.id] ?? Infinity) - (rankOf[b.p.id] ?? Infinity) || a.i - b.i)
+      .map(({ p }) => p);
+    return shown.map((project) => {
       const list = sortTasks(byProject[project.id] || []);
       // Like a Gantt summary bar: from its first task's start to its last task's finish
       // (the expected delivery), so it grows when the tasks are delayed.
@@ -205,7 +214,55 @@ export default function ProjectsTimeline({ projects, status }) {
       const end = Math.max(start + HOUR, forecast, ...live.map((x) => heldSpan(x).end));
       return { id: project.id, kind: "project", project, span: { start, end }, tasks: list };
     });
-  }, [tasks, projects, visibleIds, groupBy, data, forecastOf, opts.cancelled]);
+  }, [tasks, projects, visibleIds, groupBy, data, forecastOf, rankOf, opts.cancelled]);
+
+  // ---------- ranking the projects (CEO): drag a project's header up or down ----------
+  const [rankDrag, setRankDrag] = useState(null); // the dragged project's id
+  const [rankDrop, setRankDrop] = useState(null); // { id, after } — where it would land
+  const canRank = canSchedule && groupBy === "project";
+  async function dropRank(targetId, after) {
+    const from = rankDrag;
+    setRankDrag(null);
+    setRankDrop(null);
+    if (!from || from === targetId) return;
+    const order = groups.filter((g) => g.kind === "project").map((g) => g.id).filter((id) => id !== from);
+    order.splice(order.indexOf(targetId) + (after ? 1 : 0), 0, from);
+    // Shown at once; saved in the background.
+    const ranks = Object.fromEntries(order.map((id, i) => [id, i]));
+    setData((d) => ({ ...d, projects: d.projects.map((p) => (p.id in ranks ? { ...p, rank: ranks[p.id] } : p)) }));
+    try {
+      await api("/api/work-projects/rank", { method: "PUT", body: { ids: order } });
+    } catch (err) {
+      setError(errorText(t, err));
+      load();
+    }
+  }
+  const rankHandlers = (id) =>
+    canRank && {
+      draggable: true,
+      onDragStart: (e) => {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", id);
+        setRankDrag(id);
+      },
+      onDragOver: (e) => {
+        if (!rankDrag) return;
+        e.preventDefault();
+        const box = e.currentTarget.getBoundingClientRect();
+        const after = e.clientY > box.top + box.height / 2;
+        setRankDrop((x) => (x?.id === id && x.after === after ? x : { id, after }));
+      },
+      onDrop: (e) => {
+        e.preventDefault();
+        if (rankDrop) dropRank(rankDrop.id, rankDrop.after);
+      },
+      onDragEnd: () => {
+        setRankDrag(null);
+        setRankDrop(null);
+      },
+      indicator: rankDrop?.id === id && rankDrag !== id ? (rankDrop.after ? "after" : "before") : null,
+      dragging: rankDrag === id,
+    };
 
   // Rows with their y position, and the visible date range.
   const layout = useMemo(() => {
@@ -431,19 +488,47 @@ export default function ProjectsTimeline({ projects, status }) {
     if (mode === "link" ? !canSchedule : !editable(item)) return;
     e.preventDefault();
     e.stopPropagation();
-    setDrag({ id: item.id, item, mode, startX: e.clientX, dx: 0, pointer: null });
+    // The chart's scroll at the start: the drag distance counts the scrolling too.
+    setDrag({ id: item.id, item, mode, startX: e.clientX, startScroll: scrollRef.current?.scrollLeft || 0, dx: 0, pointer: null });
   };
 
   useEffect(() => {
     if (!drag) return undefined;
-    const onMove = (e) => {
+    const box = scrollRef.current;
+    // How far the bar moved: the pointer, plus however far the chart scrolled under it.
+    const distance = (clientX, d) => clientX - d.startX + ((box?.scrollLeft || 0) - d.startScroll);
+    let lastX = drag.startX;
+    let lastY = 0;
+    const follow = (clientX, clientY) => {
       const rect = chartRef.current?.getBoundingClientRect();
-      setDrag((d) => d && { ...d, dx: e.clientX - d.startX, pointer: rect ? { x: e.clientX - rect.left, y: e.clientY - rect.top } : null });
+      setDrag((d) => d && { ...d, dx: distance(clientX, d), pointer: rect ? { x: clientX - rect.left, y: clientY - rect.top } : null });
     };
+    const onMove = (e) => {
+      lastX = e.clientX;
+      lastY = e.clientY;
+      follow(e.clientX, e.clientY);
+    };
+    // Near the chart's left or right edge it scrolls along with the drag, faster the
+    // closer the pointer is to the edge (or past it).
+    const EDGE = 70;
+    const MAX_SPEED = 28;
+    let frame = requestAnimationFrame(function step() {
+      if (box) {
+        const { left, right } = box.getBoundingClientRect();
+        const speed =
+          lastX < left + EDGE ? -Math.min(MAX_SPEED, ((left + EDGE - lastX) / EDGE) * MAX_SPEED) : lastX > right - EDGE ? Math.min(MAX_SPEED, ((lastX - (right - EDGE)) / EDGE) * MAX_SPEED) : 0;
+        if (speed) {
+          const before = box.scrollLeft;
+          box.scrollLeft = before + speed;
+          if (box.scrollLeft !== before) follow(lastX, lastY);
+        }
+      }
+      frame = requestAnimationFrame(step);
+    });
     const onUp = (e) => {
       const d = drag;
       setDrag(null);
-      const dx = e.clientX - d.startX;
+      const dx = distance(e.clientX, d);
       const clicked = Math.abs(dx) <= 3;
       const task = d.item;
       if (d.mode === "link") {
@@ -476,6 +561,7 @@ export default function ProjectsTimeline({ projects, status }) {
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, { once: true });
     return () => {
+      cancelAnimationFrame(frame);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
@@ -532,6 +618,18 @@ export default function ProjectsTimeline({ projects, status }) {
 
   // ---------- drawing ----------
 
+  // A task's external review on the chart (another office checks it after delivery):
+  // { start, end, late, received } or null. Not handed in yet: it follows the bar (also
+  // while it's dragged).
+  const externalOf = (task, span) => {
+    if (!(task.externalReview?.hours > 0) || task.status === "cancelled") return null;
+    if (HOLDING_STATUSES.includes(task.status)) {
+      const end = cal ? addWorkHours(span.end, task.externalReview.hours, cal) : span.end + task.externalReview.hours * HOUR;
+      return { start: span.end, end, late: false, received: null };
+    }
+    return externalSpan(task, cal, now);
+  };
+
   const arrows = [];
   for (const row of Object.values(taskRows)) {
     for (const dep of row.task.dependsOn || []) {
@@ -539,9 +637,11 @@ export default function ProjectsTimeline({ projects, status }) {
       if (!fromRow) continue;
       const a = previewSpan(fromRow.task);
       const b = previewSpan(row.task);
+      // From where the work is ready: after its external review, if it has one.
+      const ext = externalOf(fromRow.task, a);
       arrows.push({
         key: `${dep.id}-${row.task.id}`,
-        x1: x(a.end),
+        x1: x(ext ? ext.end : a.end),
         y1: fromRow.y + TASK_H / 2,
         x2: x(b.start),
         y2: row.y + TASK_H / 2,
@@ -698,7 +798,7 @@ export default function ProjectsTimeline({ projects, status }) {
                 row.kind === "task" ? (
                   <div
                     key={row.task.id}
-                    dir="auto"
+                    dir="rtl"
                     className="flex items-center gap-2 border-b border-white/5 pe-3 ps-8 text-xs"
                     style={{ height: TASK_H }}
                     title={taskHeading(row.task, lang)}
@@ -724,8 +824,8 @@ export default function ProjectsTimeline({ projects, status }) {
                     cal={cal}
                     baselines={row.kind === "project" ? baselinesOf[row.group.id] : null}
                     forecastEnd={row.kind === "project" ? forecastOf[row.group.id] : null}
-                    forecastStart={row.kind === "project" ? forecastStartOf[row.group.id] : null}
                     onSaveBaseline={canSchedule && row.kind === "project" ? () => saveBaseline(row.group.project) : null}
+                    rank={row.kind === "project" ? rankHandlers(row.group.id) : null}
                   />
                 )
               )}
@@ -799,7 +899,7 @@ export default function ProjectsTimeline({ projects, status }) {
                     style={{ left, width: w, top: row.y + 5, height: row.h - 10 }}
                   >
                     {w > 90 && (
-                      <span className="flex items-center gap-1 whitespace-nowrap rounded bg-brand-navy/70 px-1.5 py-px" dir="auto">
+                      <span className="flex items-center gap-1 whitespace-nowrap rounded bg-brand-navy/70 px-1.5 py-px" dir="rtl">
                         <UserCheck size={11} /> {t("erp.gantt.freeBlock")} · {h}
                       </span>
                     )}
@@ -820,7 +920,7 @@ export default function ProjectsTimeline({ projects, status }) {
                     style={{ left, width: w, top: row.y + 5, height: row.h - 10 }}
                   >
                     {w > 60 && (
-                      <span className="truncate whitespace-nowrap px-1.5" dir="auto">
+                      <span className="truncate whitespace-nowrap px-1.5" dir="rtl">
                         #{o.number} · {t("erp.gantt.busyBlock")}
                       </span>
                     )}
@@ -844,7 +944,7 @@ export default function ProjectsTimeline({ projects, status }) {
                       >
                         {/* Progress fills the bar from its start. */}
                         <span className="absolute inset-y-0 left-0 bg-emerald-500/35" style={{ width: `${pct}%` }} />
-                        <span className="relative truncate whitespace-nowrap px-2 text-[10px] font-semibold text-white" dir="auto">
+                        <span className="relative truncate whitespace-nowrap px-2 text-[10px] font-semibold text-white" dir="rtl">
                           {name} · {pct}%
                         </span>
                       </Link>
@@ -889,7 +989,7 @@ export default function ProjectsTimeline({ projects, status }) {
                       {canEdit && <span onPointerDown={(e) => beginDrag(e, task, "start")} className="absolute inset-y-0 left-0 z-[1] w-2 cursor-ew-resize hover:bg-white/30" />}
                       <span className="relative shrink-0 ps-1.5 text-[10px]">{BAR_ICON[state]}</span>
                       {barW > 60 && <span className="relative shrink-0 rounded bg-black/20 px-1 text-[9px] font-medium uppercase tracking-wide">{t(`erp.plan.state.${state}`)}</span>}
-                      <span className="relative truncate pe-2" dir="auto">
+                      <span className="relative truncate pe-2" dir="rtl">
                         {barW > 140 ? label : barW > 90 ? `#${task.number}` : ""}
                       </span>
                       {canEdit && <span onPointerDown={(e) => beginDrag(e, task, "end")} className="absolute inset-y-0 right-0 z-[1] w-2 cursor-ew-resize hover:bg-white/30" />}
@@ -908,7 +1008,31 @@ export default function ProjectsTimeline({ projects, status }) {
                         title={t("erp.gantt.overrun", { at: nowFmt.format(new Date(task.expectedEnd)) })}
                       />
                     )}
-                    {task.estimatedHours > 0 && !(task.expectedEnd && HOLDING_STATUSES.includes(task.status)) && (
+                    {(() => {
+                      // Out for an external review after delivery: a striped bar that holds
+                      // nobody's time; the next tasks start after it.
+                      const ext = externalOf(task, span);
+                      if (!ext) return null;
+                      const w = Math.max(6, x(ext.end) - x(ext.start));
+                      const tone = ext.received
+                        ? "border-emerald-400/50 bg-[repeating-linear-gradient(135deg,rgba(52,211,153,0.28)_0_5px,transparent_5px_10px)] text-emerald-100"
+                        : ext.late
+                          ? "border-red-400/70 bg-[repeating-linear-gradient(135deg,rgba(248,113,113,0.35)_0_5px,transparent_5px_10px)] text-red-100"
+                          : "border-violet-400/60 bg-[repeating-linear-gradient(135deg,rgba(167,139,250,0.35)_0_5px,transparent_5px_10px)] text-violet-100";
+                      const text = ext.received ? t("erp.external.barReceived") : ext.late ? t("erp.external.barLate") : t("erp.external.bar", { h: task.externalReview.hours });
+                      return (
+                        <span
+                          className={`absolute inset-y-0.5 flex items-center gap-1 overflow-hidden whitespace-nowrap rounded-md border border-dashed px-1.5 text-[10px] font-medium ${tone}`}
+                          style={{ left: x(ext.start) - left, width: w }}
+                          title={`${text} — ${nowFmt.format(new Date(ext.start))} → ${nowFmt.format(new Date(ext.end))}`}
+                          onClick={() => setEditing(task)}
+                        >
+                          {w > 26 && <Building2 size={11} className="shrink-0" />}
+                          {w > 110 && <span className="truncate">{text}</span>}
+                        </span>
+                      );
+                    })()}
+                    {!(task.externalReview?.hours > 0) && task.estimatedHours > 0 && !(task.expectedEnd && HOLDING_STATUSES.includes(task.status)) && (
                       <span className="pointer-events-none absolute left-full top-1/2 ms-4 -translate-y-1/2 whitespace-nowrap text-[10px] text-white/40">{hourLabel(task.estimatedHours)}</span>
                     )}
                   </div>
@@ -987,7 +1111,8 @@ function barTitle(task, lang) {
   return [taskHeading(task, lang), task.revision > 0 ? revisionLabel(task.revision) : ""].filter(Boolean).join(" · ");
 }
 
-function GroupLabel({ group, lang, t, collapsed, onToggle, load, today, cal, baselines, forecastEnd, forecastStart, onSaveBaseline }) {
+// `rank` (CEO, projects): drag handlers to move the project up or down the priority order.
+function GroupLabel({ group, lang, t, collapsed, onToggle, load, today, cal, baselines, forecastEnd, onSaveBaseline, rank = null }) {
   const isProject = group.kind === "project";
   const title = isProject ? group.project.name?.[lang] : group.person.name;
   // People: hours planned this week (next 7 office days) against capacity.
@@ -998,33 +1123,30 @@ function GroupLabel({ group, lang, t, collapsed, onToggle, load, today, cal, bas
     // Capacity is that day's working hours (or the person's own daily hours).
     weekLoad = { hours, over: dates.some((d) => load[d] > (group.person.dailyHours ?? dateHours(d, cal)) + 0.01) };
   }
-  // Projects: how far the expected delivery moved from Baseline 1 (working time).
-  const first = baselines?.find((b) => b.n === 1);
   const last = baselines?.length ? baselines.reduce((a, b) => (b.n > a.n ? b : a)) : null;
-  let delay = null;
-  if (first && forecastEnd && cal) {
-    const a = new Date(first.end).getTime();
-    const b = new Date(forecastEnd).getTime();
-    const ms = b >= a ? workMsBetween(a, b, cal) : -workMsBetween(b, a, cal);
-    const hours = Math.round((Math.abs(ms) / HOUR) * 10) / 10;
-    if (Math.abs(ms) >= HOUR / 2) delay = { ms, label: `${ms > 0 ? "+" : "-"}${t("erp.gantt.hours", { n: hours })}` };
-  }
-  // …and how far the start moved from Baseline 1's expected start.
-  let startDelay = null;
-  if (first?.start && forecastStart && cal) {
-    const a = new Date(first.start).getTime();
-    const b = new Date(forecastStart).getTime();
-    const ms = b >= a ? workMsBetween(a, b, cal) : -workMsBetween(b, a, cal);
-    const hours = Math.round((Math.abs(ms) / HOUR) * 10) / 10;
-    if (Math.abs(ms) >= HOUR / 2) startDelay = { ms, label: `▶${ms > 0 ? "+" : "-"}${t("erp.gantt.hours", { n: hours })}` };
-  }
   const nextBaseline = (last?.n || 0) + 1;
   const moved = Boolean(last && forecastEnd && Math.abs(new Date(forecastEnd) - new Date(last.end)) >= 60000);
   return (
-    <div className="group flex items-center gap-1 border-b border-white/10 bg-white/[0.04] pe-2" style={{ height: GROUP_H }}>
-      <button type="button" dir="auto" onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 ps-3 text-start text-sm font-semibold" style={{ height: GROUP_H }}>
+    <div
+      className={`group relative flex items-center gap-1 border-b border-white/10 bg-white/[0.04] pe-2 ${rank?.dragging ? "opacity-40" : ""}`}
+      style={{ height: GROUP_H }}
+      draggable={Boolean(rank)}
+      onDragStart={rank?.onDragStart}
+      onDragOver={rank?.onDragOver}
+      onDrop={rank?.onDrop}
+      onDragEnd={rank?.onDragEnd}
+    >
+      {/* Where the dragged project would land. */}
+      {rank?.indicator && <span className={`pointer-events-none absolute inset-x-0 z-10 h-0.5 bg-brand-orange ${rank.indicator === "after" ? "-bottom-px" : "-top-px"}`} />}
+      {rank && (
+        <span className="flex h-full shrink-0 cursor-grab items-center ps-1 text-white/30 hover:text-white/70 active:cursor-grabbing" title={t("erp.gantt.rankHint")}>
+          <GripVertical size={14} />
+        </span>
+      )}
+      <button type="button" dir="rtl" onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 ps-3 text-start text-sm font-semibold" style={{ height: GROUP_H }}>
         <ChevronDown size={15} className={`shrink-0 text-white/50 transition-transform ${collapsed ? "-rotate-90" : ""}`} />
         <span className="min-w-0 flex-1 truncate">{title}</span>
+        {!isProject && <TraineeBadge id={group.person.id} />}
         {isProject && (group.project.late || group.project.dueRisk) && (
           <AlertTriangle size={13} className="shrink-0 text-red-300" title={group.project.late ? undefined : t("erp.gantt.dueRisk")} />
         )}
@@ -1034,17 +1156,6 @@ function GroupLabel({ group, lang, t, collapsed, onToggle, load, today, cal, bas
             {t("erp.gantt.hours", { n: Math.round(weekLoad.hours) })}
           </span>
         )}
-        {startDelay && (
-          <span className={`shrink-0 text-[11px] font-medium ${startDelay.ms > 0 ? "text-red-300" : "text-emerald-300"}`} title={t("erp.gantt.startVsBaseline1")} dir="ltr">
-            {startDelay.label}
-          </span>
-        )}
-        {delay && (
-          <span className={`shrink-0 text-[11px] font-medium ${delay.ms > 0 ? "text-red-300" : "text-emerald-300"}`} title={t("erp.gantt.vsBaseline1")} dir="ltr">
-            {delay.label}
-          </span>
-        )}
-        <span className="shrink-0 text-[11px] font-normal text-white/40">{group.tasks.length}</span>
       </button>
       {onSaveBaseline && (
         <button
@@ -1073,6 +1184,10 @@ function Legend({ t, free }) {
           {t(`erp.plan.legend.${state}`)}
         </span>
       ))}
+      <span className="flex items-center gap-2">
+        <span className="h-4 w-7 rounded-sm border border-dashed border-violet-400/60 bg-[repeating-linear-gradient(135deg,rgba(167,139,250,0.35)_0_4px,transparent_4px_8px)]" />
+        {t("erp.external.legend")}
+      </span>
       <span className="flex items-center gap-2">
         <span className="h-4 border-s-2 border-sky-300" /> {t("erp.gantt.startLine")}
       </span>
@@ -1190,7 +1305,6 @@ function ScheduleForm({ task, canEdit, canPlan, cal, onSave, onCancel, onChanged
   // A new start keeps the hours (the due time follows); a new due time changes the hours;
   // new hours move the due time.
   const setStart = (plannedStart) => setForm((f) => ({ ...f, plannedStart, dueAt: dueFor(plannedStart, f.hours) ?? f.dueAt }));
-  const setDue = (dueAt) => setForm((f) => ({ ...f, dueAt, hours: cal && ms(dueAt) > ms(f.plannedStart) ? String(hoursOf(ms(f.plannedStart), ms(dueAt))) : f.hours }));
   const setHours = (hours) => setForm((f) => ({ ...f, hours, dueAt: dueFor(f.plannedStart, hours) ?? f.dueAt }));
 
   const timeChanged = form.plannedStart !== init.plannedStart || form.dueAt !== init.dueAt;
@@ -1238,7 +1352,13 @@ function ScheduleForm({ task, canEdit, canPlan, cal, onSave, onCancel, onChanged
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
           <Input type="datetime-local" label={t("erp.gantt.start")} value={form.plannedStart} onChange={setStart} />
-          <Input type="datetime-local" label={t("erp.gantt.due")} value={form.dueAt} onChange={setDue} />
+          {/* The finish follows from the start and the working hours (the Gantt decides it). */}
+          <div>
+            <p className="mb-2 text-sm font-medium text-white/70">{t("erp.gantt.due")}</p>
+            <p className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-white/70" dir="ltr">
+              {form.dueAt ? new Date(form.dueAt).toLocaleString(lang === "ar" ? "ar" : "en", { dateStyle: "medium", timeStyle: "short" }) : "—"}
+            </p>
+          </div>
           <Input type="number" min="0.5" max="1000" step="0.5" label={t("erp.plan.hours")} value={form.hours} onChange={setHours} dir="ltr" />
         </div>
         <Select
@@ -1249,6 +1369,9 @@ function ScheduleForm({ task, canEdit, canPlan, cal, onSave, onCancel, onChanged
         />
         {canEdit && task.project && <DependencyPicker value={form.dependsOn} onChange={set("dependsOn")} projectId={task.project.id} excludeId={task.id} />}
       </fieldset>
+      {/* The CEO: how long the work is out for an external review after delivery. */}
+      {canPlan && <ExternalHoursField task={task} onChanged={onChanged} />}
+      {task.externalReview && <ExternalReviewBox task={task} onChanged={onChanged} />}
       {/* Cancel requests and cancelling / restoring, for the GM / CEO. */}
       {canPlan && <TaskCancel task={task} who={{ canPlan: true }} onDone={onChanged} />}
       <div className="flex flex-wrap items-center justify-between gap-2 pt-2">

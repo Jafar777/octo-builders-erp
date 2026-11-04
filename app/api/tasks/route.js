@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { notify } from "@/lib/notify";
-import { finishTime, holdsTime, HOUR } from "@/lib/gantt";
+import { holdsTime, HOUR, readyTime } from "@/lib/gantt";
 import { cascadeFrom, clearOverlaps, findOverlap, freeSlot, getWorkCalendar } from "@/lib/ganttServer";
 import { trackDelays } from "@/lib/projectDelay";
 import { syncStageDependencies } from "@/lib/taskSchedule";
 import { canRouteStages, isStageLocked, projectAccess, stageDepartment } from "@/lib/projects";
 import { getTaskSettings } from "@/lib/settings";
-import { inScope } from "@/lib/scope";
+import { inScope, userDepartments } from "@/lib/scope";
 import {
   canManageTask,
   canViewTask,
@@ -23,6 +23,7 @@ import {
   publishTaskChange,
   starSummary,
   taskTitle,
+  managesEmployee,
 } from "@/lib/tasks";
 import { nextNumber } from "@/models/Counter";
 import Task, { TASK_STATUSES } from "@/models/Task";
@@ -68,7 +69,7 @@ export async function GET(request) {
     query.status = { $in: [...ACTIVE_STATUSES, "submitted"] };
   } else if (view === "all") {
     if (!hasPermission(user, "projects.view") && !hasPermission(user, "tasks.assign")) return forbidden();
-    if (user.scope !== "all") query.department = user.department;
+    if (user.scope !== "all") query.department = { $in: userDepartments(user) };
   } else {
     return fail("invalid_request");
   }
@@ -138,6 +139,8 @@ export async function POST(request) {
   if (assigneeId !== user.id && !(hasPermission(user, "tasks.assign") && inScope(user, department))) {
     return forbidden();
   }
+  // Below the CEO, work goes only to the employees of one's own departments.
+  if (assigneeId !== user.id && !canRouteStages(user) && !managesEmployee(user, assignee)) return fail("reassign_own_department", 403);
 
   const type = settings.taskTypes.some((t) => t.key === body.type) ? body.type : stage?.taskType || "other";
   // Time is set by the system: only the GM / CEO may give dates, hours, predecessors
@@ -177,8 +180,9 @@ export async function POST(request) {
       // The employee's first free time that fits (from the chosen start, if any), once
       // the tasks it waits for are planned to finish.
       const preds = deps.ids.length ? await Task.find({ _id: { $in: deps.ids }, status: { $ne: "cancelled" } }).lean() : [];
-      const earliest = Math.max(Date.now(), plannedStart?.getTime() || 0, ...preds.map(finishTime));
-      const slot = await freeSlot(assigneeId, earliest, maxHours * HOUR, await getWorkCalendar());
+      const cal = await getWorkCalendar();
+      const earliest = Math.max(Date.now(), plannedStart?.getTime() || 0, ...preds.map((p) => readyTime(p, cal)));
+      const slot = await freeSlot(assigneeId, earliest, maxHours * HOUR, cal);
       plannedStart = new Date(slot.start);
       dueAt = new Date(slot.end);
     }

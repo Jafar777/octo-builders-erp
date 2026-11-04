@@ -12,7 +12,7 @@ const result = (u) => ({ skills: u.skills || [], skillRequests: serializeSkillRe
 
 // The employee adds a skill; it waits for the general manager. Body: { name }
 export async function POST(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   const { id } = await params;
   if (!user || !isObjectId(id) || id !== user.id) return forbidden();
   const name = cleanSkill((await readJson(request)).name);
@@ -43,7 +43,7 @@ export async function POST(request, { params }) {
 
 // The employee withdraws a pending request or dismisses a refused one. ?name=
 export async function DELETE(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   const { id } = await params;
   if (!user || !isObjectId(id) || id !== user.id) return forbidden();
   const name = cleanSkill(new URL(request.url).searchParams.get("name"));
@@ -56,7 +56,7 @@ export async function DELETE(request, { params }) {
 
 // The general manager decides. Body: { name, decision: "approve" | "reject" }
 export async function PATCH(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   const { id } = await params;
   if (!user || !canApproveSkills(user) || !isObjectId(id)) return forbidden();
   const body = await readJson(request);

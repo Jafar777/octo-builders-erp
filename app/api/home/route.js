@@ -18,6 +18,7 @@ import Task from "@/models/Task";
 import User from "@/models/User";
 import WorkProject from "@/models/WorkProject";
 import { NAME_FIELDS, pickName, viewerLang } from "@/lib/personName";
+import { inDepartments } from "@/lib/scope";
 
 const idStr = (v) => (v ? v.toString() : null);
 
@@ -26,7 +27,7 @@ const idStr = (v) => (v ? v.toString() : null);
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return forbidden();
-  if (!user.isStaff) return NextResponse.json({ sections: [] });
+  if (!user.isStaff || user.limited) return NextResponse.json({ sections: [] });
 
   const settings = await getSettings();
   const tz = settings.hr.timezone;
@@ -34,7 +35,7 @@ export async function GET() {
   const month = today.slice(0, 7);
   const now = Date.now();
   const can = (p) => hasPermission(user, p);
-  const deptFilter = user.scope === "all" ? {} : { department: user.department };
+  const deptFilter = user.scope === "all" ? {} : inDepartments(user);
   const lang = await viewerLang();
   const out = {};
 
@@ -104,7 +105,7 @@ export async function GET() {
     );
     jobs.push(
       (async () => {
-        const staff = await hrStaff({ status: "active", ...(user.scope === "all" ? {} : { department: user.department }) });
+        const staff = await hrStaff({ status: "active", ...(user.scope === "all" ? {} : inDepartments(user)) });
         const punches = await RawPunch.find({ time: { $gte: new Date(now - 36 * 3600000) } }, { badgeId: 1, time: 1 }).lean();
         const inToday = new Set(punches.filter((p) => localParts(p.time, tz).date === today).map((p) => p.badgeId));
         const onLeave = await LeaveRequest.countDocuments({ status: "approved", from: { $lte: today }, to: { $gte: today }, user: { $in: staff.map((s) => s.id) } });

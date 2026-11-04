@@ -12,16 +12,17 @@ async function load(params) {
 }
 
 export async function GET(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user || !canUseIntake(user)) return forbidden();
   const intake = await load(params);
   if (!intake) return notFound();
   return NextResponse.json({ intake: serializeIntake(intake.toObject(), user, await intakeNames([intake])) });
 }
 
-// The details (never money): the secretary until the GM / CEO price it, then the GM / CEO.
+// The details (never money): the secretary, department managers, the GM and the CEO,
+// until it becomes a project (lib/intake.js canEditIntake).
 export async function PATCH(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user || !canUseIntake(user)) return forbidden();
   const intake = await load(params);
   if (!intake) return notFound();
@@ -36,7 +37,7 @@ export async function PATCH(request, { params }) {
 
 // A form handed in by mistake: its author (or the GM / CEO) can delete it while it's new.
 export async function DELETE(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user || !canUseIntake(user)) return forbidden();
   const intake = await load(params);
   if (!intake) return notFound();

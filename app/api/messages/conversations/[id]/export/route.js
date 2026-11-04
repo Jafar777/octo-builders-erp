@@ -12,7 +12,7 @@ const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 // Whole conversation as a CSV file (opens in Excel, Arabic included). Members and
 // management with review access; every export is audited.
 export async function GET(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user) return forbidden();
   const { id } = await params;
   const conversation = isObjectId(id) ? await Conversation.findById(id).lean() : null;

@@ -14,6 +14,7 @@ import { GroupedBarChart, HorizontalBars } from "@/components/erp/charts/BarChar
 import { StatTile, monthLabel } from "@/components/erp/hr/hrUi";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { PageSkeleton, SkeletonChart } from "@/components/erp/ui/Loading";
+import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 
 // Status palette (fixed) — always paired with an icon and a text label.
 const LEVEL = {
@@ -322,7 +323,10 @@ export default function Analytics() {
               <div key={m.id} className="flex items-center gap-3 rounded-xl bg-white/[0.03] px-3 py-2 text-sm">
                 <Avatar name={m.name} src={m.avatarUrl} size={32} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{m.name}</p>
+                  <p className="flex items-center gap-1.5 truncate font-medium">
+                    <span className="truncate">{m.name}</span>
+                    <TraineeBadge id={m.id} />
+                  </p>
                   <p className="truncate text-xs text-white/45">
                     {m.workingOn ? (
                       <span className="inline-flex items-center gap-1 text-sky-300">

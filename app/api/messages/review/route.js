@@ -1,21 +1,23 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/currentUser";
+import { requireStaff } from "@/lib/currentUser";
 import { forbidden, isObjectId } from "@/lib/apiUtils";
-import { serializeConversation } from "@/lib/messaging";
+import { messageReviewScope, serializeConversation } from "@/lib/messaging";
 import Conversation from "@/models/Conversation";
 import User from "@/models/User";
+import { inDepartments } from "@/lib/scope";
 
-// Conversations management may read (see D9 in plan.txt).
+// Conversations management may read, on the Messages page's review view: the CEO
+// everyone's, a department manager their departments' (lib/messaging messageReviewScope).
 // ?userId=<id> narrows to conversations that person is in.
 export async function GET(request) {
-  const user = await requirePermission("messages.review");
-  if (!user) return forbidden();
+  const user = await requireStaff();
+  const scope = messageReviewScope(user);
+  if (!scope) return forbidden();
 
   const query = { type: { $in: ["direct", "group", "department"] } };
 
-  if (user.scope !== "all") {
-    if (user.scope !== "department" || !user.department) return NextResponse.json({ conversations: [] });
-    const deptUsers = await User.find({ department: user.department }, { _id: 1 }).lean();
+  if (scope === "department") {
+    const deptUsers = await User.find(inDepartments(user), { _id: 1 }).lean();
     query.members = { $in: deptUsers.map((u) => u._id) };
   }
 

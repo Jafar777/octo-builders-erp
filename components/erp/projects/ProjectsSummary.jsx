@@ -11,6 +11,7 @@ import { StatTile } from "@/components/erp/hr/hrUi";
 import { SkeletonCards } from "@/components/erp/ui/Loading";
 import { taskHeading } from "@/components/erp/tasks/TaskRow";
 import { useNow } from "@/components/erp/tasks/taskUi";
+import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 
 // Risk levels always come with an icon and a label, never colour alone.
 const RISK = {
@@ -173,7 +174,10 @@ export default function ProjectsSummary() {
               <div key={person.id} className="flex items-center gap-3">
                 <span className="w-4 text-center text-xs text-white/40">{i + 1}</span>
                 <Avatar name={person.name} src={person.avatarUrl} size={28} />
-                <span className="min-w-0 flex-1 truncate text-sm">{person.name}</span>
+                <span className="flex min-w-0 flex-1 items-center gap-1.5 text-sm">
+                  <span className="truncate">{person.name}</span>
+                  <TraineeBadge id={person.id} />
+                </span>
                 <span className="shrink-0 text-xs text-white/60">{t("erp.summary.doneCount", { n: person.completed })}</span>
                 {person.onTimeRate !== null && <span className={`w-10 shrink-0 text-end text-xs ${rateTone(person.onTimeRate)}`}>{person.onTimeRate}%</span>}
                 {person.stars !== null && (

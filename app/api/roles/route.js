@@ -5,12 +5,15 @@ import { audit } from "@/lib/audit";
 import { cleanRoleBody, loadRolesWithCounts, serializeRole } from "@/lib/roles";
 import { isBilingualComplete } from "@/lib/validateBilingual";
 import Role from "@/models/Role";
+import { CODER_ROLE, isHiddenRole } from "@/lib/permissions";
 
 export async function GET() {
   const user = await getCurrentUser();
   if (!hasPermission(user, "users.view") && !hasPermission(user, "roles.manage")) return forbidden();
 
-  return NextResponse.json({ roles: await loadRolesWithCounts() });
+  // The hidden coder role is only listed for a coder.
+  const roles = await loadRolesWithCounts();
+  return NextResponse.json({ roles: user.role === CODER_ROLE ? roles : roles.filter((r) => !isHiddenRole(r.key)) });
 }
 
 export async function POST(request) {

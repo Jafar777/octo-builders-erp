@@ -14,8 +14,8 @@ const KINDS = ["task", "meeting", "personal"];
 // Create a task. `preset` fixes the project / stage when opened from a board
 // cell, `preset.assigneeId` the employee (free time on the Gantt), or `preset.parent`
 // (a task) for a sub-task. A project task gets the working
-// hours entered here and is scheduled in the employee's queue automatically. Only
-// the GM / CEO may set a due date by hand.
+// hours entered here and is scheduled in the employee's queue automatically: the Gantt
+// decides when it's delivered, nobody types a delivery date.
 export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
@@ -31,8 +31,8 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
     stage: preset.stage || "",
     type: "",
     title: "",
-    assigneeId: preset.assigneeId || user?.id || "",
-    dueAt: "",
+    // Chosen in the list (a preset employee from the Gantt's free time, else nobody yet).
+    assigneeId: preset.assigneeId || "",
     hours: "",
     priority: "normal",
     description: "",
@@ -49,11 +49,19 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
   // Project tasks need their working hours (the GM / CEO may give a due date instead).
   // An employee's sub-task is a step inside its task's time: no hours of its own.
   const needsHours = form.kind === "task" && Boolean(project || parent?.project) && (isScheduler || !parent);
-  const missingHours = needsHours && !(Number(form.hours) >= 0.5) && !(isScheduler && form.dueAt);
+  const missingHours = needsHours && !(Number(form.hours) >= 0.5);
+  // The people the creator may give work to: the CEO anyone; a department manager the
+  // employees of their departments (and themselves); everyone else only themselves.
+  const myDepartments = user?.departments?.length ? user.departments : [user?.department].filter(Boolean);
+  const assignable = lookups.people.filter((p) => isScheduler || p.id === user?.id || myDepartments.includes(p.department));
+  // Someone who can't give work to others is the task's employee themselves.
+  const assigneeId = canAssign ? form.assigneeId : user?.id;
+  const missingAssignee = !assigneeId;
   // Project work: the GM / CEO pick its reviewers (manager, GM / CEO, the project's customer).
   const picksReview = isScheduler && form.kind === "task" && Boolean(project) && !parent;
   const review = { ...form.review, customer: Boolean(project?.customer) && form.review.customer };
-  const missingReview = picksReview && !review.manager && !review.gm && !review.customer;
+  // The department manager always reviews (lib/reviewFlow): nothing can be missing.
+  const missingReview = false;
 
   async function save() {
     setSaving(true);
@@ -62,7 +70,8 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
       const body = {
         ...form,
         type: form.type || stage?.taskType || "",
-        dueAt: isScheduler && form.dueAt ? new Date(form.dueAt).toISOString() : null,
+        assigneeId,
+        dueAt: null,
         hours: needsHours ? Number(form.hours) || 0 : 0,
       };
       if (body.kind !== "task" && !body.projectId) {
@@ -148,7 +157,8 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
             label={t("erp.tasks.assignee")}
             value={form.assigneeId}
             onChange={set("assigneeId")}
-            options={lookups.people.map((p) => ({ value: p.id, label: p.id === user?.id ? `${p.name} (${t("erp.messages.you")})` : p.name }))}
+            placeholder="—"
+            options={assignable.map((p) => ({ value: p.id, label: p.id === user?.id ? `${p.name} (${t("erp.messages.you")})` : p.name }))}
           />
         ) : (
           <Select
@@ -160,14 +170,6 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
         )}
         {needsHours && (
           <Input type="number" min="0.5" max="200" step="0.5" label={t("erp.plan.hours")} value={form.hours} onChange={set("hours")} dir="ltr" />
-        )}
-        {isScheduler && (
-          <Input
-            type="datetime-local"
-            label={`${t("erp.tasks.dueAt")}${needsHours || form.kind !== "task" ? ` ${t("dashboard.optional")}` : ""}`}
-            value={form.dueAt}
-            onChange={set("dueAt")}
-          />
         )}
         {canAssign && (
           <Select
@@ -184,7 +186,6 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
           <Timer size={16} className="mt-0.5 shrink-0" />
           <span>
             {t("erp.plan.formInfo")}
-            {isScheduler && <span className="block text-xs text-sky-200/70">{t("erp.plan.formOverride")}</span>}
           </span>
         </p>
       )}
@@ -211,7 +212,7 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
         <Button variant="ghost" onClick={onCancel}>
           {t("common.cancel")}
         </Button>
-        <Button onClick={save} disabled={saving || missingHours || missingReview}>
+        <Button onClick={save} disabled={saving || missingHours || missingReview || missingAssignee}>
           {t("erp.tasks.create")}
         </Button>
       </div>

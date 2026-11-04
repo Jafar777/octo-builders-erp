@@ -49,7 +49,7 @@ const scheduleOut = (s) => ({
 // HR profile: contract, leave allowance, badge, KPI exclusion, skills, working hours
 // (+ salary history for payroll.view).
 export async function GET(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   const { id } = await params;
   if (!user || !isObjectId(id) || !(await canSeePerson(user, id, "attendance.view"))) return forbidden();
   const u = await User.findById(id).lean();
@@ -89,7 +89,7 @@ export async function GET(request, { params }) {
 }
 
 export async function PATCH(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   const { id } = await params;
   if (!user || !isObjectId(id)) return forbidden();
   const body = await readJson(request);

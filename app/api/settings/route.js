@@ -8,7 +8,7 @@ import Setting from "@/models/Setting";
 
 export async function GET() {
   // Every employee needs the calendar/work hours for their own screens.
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user) return forbidden();
   return NextResponse.json({ settings: await getSettings() });
 }

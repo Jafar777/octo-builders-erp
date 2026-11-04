@@ -23,7 +23,15 @@ ok("older tasks wait for the manager", pendingLevel({ reviews: [] }) === "manage
 ok("nothing chosen falls back to the manager", reviewPlan({ review: { manager: false, gm: false, customer: false } }).join() === "manager");
 
 // Validation from the forms.
-ok("at least one reviewer", cleanReviewFlags({ manager: false, gm: false, customer: false }).error === "review_required");
+// The department manager always reviews; the CEO only when the manager asks at review time.
+const forced = cleanReviewFlags({ manager: false, gm: true, customer: false }).value;
+ok("the department manager always reviews, the CEO isn't chosen up front", forced.manager === true && forced.gm === false);
+// "Accept if the CEO accepts": the manager approved, now the CEO's turn; then the customer.
+const asked = { review: { manager: true, gm: false, customer: true }, ceoApproval: true, reviews: [{ level: "manager", decision: "approve" }] };
+ok("asking for the CEO adds the CEO after the manager", reviewPlan(asked).join() === "manager,gm,customer", reviewPlan(asked).join());
+ok("after the manager's conditional accept it waits for the CEO", pendingLevel(asked) === "gm", pendingLevel(asked));
+const plain = { review: { manager: true, gm: false, customer: false }, reviews: [{ level: "manager", decision: "approve" }] };
+ok("a plain accept needs nobody else", pendingLevel(plain) === null);
 ok("the customer review needs a customer", cleanReviewFlags({ customer: true }, { hasCustomer: false }).error === "customer_review_needs_customer");
 ok("customer review with a customer", cleanReviewFlags({ customer: true }, { hasCustomer: true }).value?.customer === true);
 ok("default is the manager", cleanReviewFlags(undefined).value.manager === true);

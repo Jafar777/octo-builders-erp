@@ -7,7 +7,7 @@ import { syncStaffChannels } from "@/lib/messaging";
 import { isBilingualComplete } from "@/lib/validateBilingual";
 
 export async function GET(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user) return forbidden();
   const { type } = await params;
   const config = ORG_TYPES[type];

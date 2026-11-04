@@ -19,6 +19,7 @@ import {
   openBlockers,
   publishTaskChange,
   taskTitle,
+  managesAssignee,
 } from "@/lib/tasks";
 import { nextNumber } from "@/models/Counter";
 import Task from "@/models/Task";
@@ -58,7 +59,9 @@ export async function POST(request, { params }) {
   if (["cancel", "cancel_decision", "restore"].includes(action)) return cancelling(user, task, body, isAssignee);
 
   if (!ASSIGNEE_ACTIONS.includes(action)) return fail("invalid_action");
-  if (!isAssignee) return forbidden();
+  // A department manager may start (or resume) the work of their department's employees.
+  const onBehalf = !isAssignee && ["start", "resume"].includes(action) && (await managesAssignee(user, task));
+  if (!isAssignee && !onBehalf) return forbidden();
 
   // The employee says how long the work still needs; the plan moves to match.
   if (action === "hours_left") {
@@ -138,10 +141,23 @@ export async function POST(request, { params }) {
   }
   await logActivity(task._id, user, action, action === "help" ? String(body.note || "").slice(0, 1000) : "", {
     helperId: helper?._id?.toString(),
+    onBehalf: onBehalf || undefined,
   });
 
   const enriched = await enrichTask(task);
   const notifyParams = { actor: actorName, number: task.number, title: taskTitle(enriched) };
+  // Started by their manager: the employee is told.
+  if (onBehalf) {
+    await notify({
+      type: "task.started_for_you",
+      recipients: [task.assignee.toString()],
+      actor: user,
+      params: notifyParams,
+      link: `/dashboard/tasks?task=${task._id}`,
+      entityType: "task",
+      entityId: task._id,
+    });
+  }
   let extra = [];
 
   if (action === "help") {

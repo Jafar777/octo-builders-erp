@@ -7,6 +7,7 @@ import { customerTask, isTopReviewer, queueQuery, reviewerRoles } from "@/lib/ta
 import Department from "@/models/Department";
 import Task from "@/models/Task";
 import User from "@/models/User";
+import { userDepartments } from "@/lib/scope";
 
 const idStr = (v) => (v ? v.toString() : null);
 const LIMIT = 500;
@@ -72,7 +73,7 @@ export async function GET(request) {
   } else {
     // employees
     query = { $or: [{ "reviews.0": { $exists: true } }, { reviewedBy: { $ne: null } }] };
-    if (!top) query.department = user.department;
+    if (!top) query.department = { $in: userDepartments(user) };
     if (person) query.assignee = person;
     keep = () => true;
   }

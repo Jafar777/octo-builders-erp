@@ -20,7 +20,7 @@ function RoleEditor({ role, onSaved, onClose }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const locked = role?.key === "gm" || role?.key === "user";
+  const locked = ["ceo", "gm", "user"].includes(role?.key);
 
   function toggle(key) {
     setForm((f) => ({

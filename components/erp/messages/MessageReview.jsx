@@ -11,9 +11,10 @@ import ChatPane from "@/components/erp/messages/ChatPane";
 import { useConversationLabel, useDirectory } from "@/components/erp/messages/useDirectory";
 import { SkeletonList } from "@/components/erp/ui/Loading";
 
-// Read-only access for management to conversations inside their scope.
-// Every opened conversation is written to the audit log by the API.
-export default function MessageReview({ meId }) {
+// Read-only access for management to conversations inside their scope: the CEO
+// everyone's, a department manager their departments' (`departments`: the people list is
+// limited to them). Every opened conversation is written to the audit log by the API.
+export default function MessageReview({ meId, departments = null, switcher = null }) {
   const { t, lang } = useLanguage();
   const directory = useDirectory();
   const baseLabel = useConversationLabel(directory, meId);
@@ -52,8 +53,9 @@ export default function MessageReview({ meId }) {
   return (
     <div className="-m-4 flex h-[calc(100vh-4rem)] sm:-m-6 lg:-m-10">
       <aside className={`flex w-full shrink-0 flex-col border-e border-white/10 md:w-96 ${active ? "hidden md:flex" : "flex"}`}>
+        {switcher}
         <div className="space-y-3 border-b border-white/10 p-3">
-          <h1 className="text-lg font-bold">{t("erp.nav.messageReview")}</h1>
+          <p className="text-xs text-white/45">{t(departments ? "erp.messages.reviewScopeDept" : "erp.messages.reviewScopeAll")}</p>
           <Select
             value={person}
             onChange={(v) => {
@@ -61,7 +63,7 @@ export default function MessageReview({ meId }) {
               setActiveId(null);
             }}
             placeholder={t("erp.messages.allPeople")}
-            options={directory.people.map((p) => ({ value: p.id, label: p.name }))}
+            options={directory.people.filter((p) => !departments || departments.includes(p.department)).map((p) => ({ value: p.id, label: p.name }))}
           />
           <ErrorText>{error}</ErrorText>
         </div>

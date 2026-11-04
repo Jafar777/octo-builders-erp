@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
-import { addWorkHours, canMoveTask, finishTime, holdsTime, HOUR, nextWorkMoment, taskSpan } from "@/lib/gantt";
+import { addWorkHours, canMoveTask, holdsTime, HOUR, nextWorkMoment, readyTime, taskSpan } from "@/lib/gantt";
 import { cascadeFrom, findOverlap, getWorkCalendar, leaveClash, personCalendar } from "@/lib/ganttServer";
 import { notify } from "@/lib/notify";
 import { trackDelays } from "@/lib/projectDelay";
@@ -103,7 +103,8 @@ export async function PATCH(request, { params }) {
   if (start && (datesGiven || (changes.dependsOn && !body.cascade))) {
     const ids = changes.dependsOn || task.dependsOn;
     const preds = ids.length ? await Task.find({ _id: { $in: ids }, status: { $ne: "cancelled" } }).lean() : [];
-    const early = preds.filter((p) => finishTime(p) > start.getTime() + 60000);
+    // Finished, plus any external review it went out for.
+    const early = preds.filter((p) => readyTime(p, cal) > start.getTime() + 60000);
     if (early.length) return fail("before_dependency", 409, { numbers: early.map((p) => p.number) });
   }
 

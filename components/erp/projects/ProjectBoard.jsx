@@ -17,12 +17,13 @@ import TaskRow, { StatusBadge } from "@/components/erp/tasks/TaskRow";
 import TaskForm from "@/components/erp/tasks/TaskForm";
 import TaskDrawer from "@/components/erp/tasks/TaskDrawer";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
-import { revisionLabel, STATUS_STYLE, toDateInput, useNow } from "@/components/erp/tasks/taskUi";
+import { revisionLabel, STATUS_STYLE, useNow } from "@/components/erp/tasks/taskUi";
 import { PageSkeleton } from "@/components/erp/ui/Loading";
 import StageRouting, { canRouteStages, FlowBadge } from "@/components/erp/projects/StageRouting";
 import StageFlowEditor from "@/components/erp/projects/StageFlowEditor";
 import ProjectDelivery, { DeliverySummary } from "@/components/erp/projects/ProjectDelivery";
 import { CustomerSelect } from "@/components/erp/projects/ProjectForm";
+import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 
 const TABS = ["board", "tasks", "delivery", "settings"];
 
@@ -62,7 +63,12 @@ function CellModal({ project, cell, canManage, canPlan, lookups, onOpenTask, onN
             #{state.number} · {revisionLabel(state.revision)}
           </span>
         )}
-        {assignee && <span className="text-xs text-white/60">{assignee.name}</span>}
+        {assignee && (
+          <span className="flex items-center gap-1.5 text-xs text-white/60">
+            {assignee.name}
+            <TraineeBadge id={assignee.id} />
+          </span>
+        )}
       </div>
       {state?.override && (
         <p className="rounded-xl bg-white/5 px-3 py-2 text-sm text-white/70">
@@ -124,8 +130,7 @@ function ProjectSettings({ project, lookups, onSaved }) {
     customer: project.customer || "",
     status: project.status,
     priority: project.priority,
-    startDate: toDateInput(project.startDate),
-    dueDate: toDateInput(project.dueDate),
+    // No start / due date here: the Gantt decides them.
     folderLink: project.folderLink,
     participants: project.participants,
   });
@@ -183,8 +188,6 @@ function ProjectSettings({ project, lookups, onSaved }) {
             onChange={set("status")}
             options={["active", "on_hold", "finished", "archived"].map((s) => ({ value: s, label: t(`erp.projects.status.${s}`) }))}
           />
-          <Input type="date" label={t("erp.projects.startDate")} value={form.startDate} onChange={set("startDate")} />
-          <Input type="date" label={t("erp.projects.dueDate")} value={form.dueDate} onChange={set("dueDate")} />
           <Select
             label={t("erp.tasks.priorityLabel")}
             value={form.priority}
@@ -315,6 +318,8 @@ export default function ProjectBoard({ projectId }) {
   const project = data?.project;
   const canManage = data?.access === "manage";
   const { user } = useAuth();
+  // The CEO plans stages (who does them, cancel / restore).
+  const canRoute = canRouteStages(user);
   // Managers of the department doing a stage handle its cells too.
   const canManageStage = (stage) =>
     canManage ||
@@ -340,7 +345,8 @@ export default function ProjectBoard({ projectId }) {
           <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/50">
             {[project.code, dep?.name?.[lang], project.client].filter(Boolean).join(" · ")}
             <span className="flex items-center gap-1">
-              <CalendarDays size={14} /> {formatDate(project.dueDate, lang)}
+              {/* The delivery the Gantt expects now. */}
+              <CalendarDays size={14} /> {formatDate(project.forecastEnd || project.dueDate, lang)}
             </span>
             <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs">{t(`erp.projects.status.${project.status}`)}</span>
             <FlowBadge flow={project.flow} />

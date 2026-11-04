@@ -12,6 +12,7 @@ import { MonthPicker, monthLabel, money } from "@/components/erp/hr/hrUi";
 import { GroupedBarChart, ScoreRing } from "@/components/erp/charts/BarChart";
 import { Skeleton, SkeletonTable } from "@/components/erp/ui/Loading";
 import BonusAlert from "@/components/erp/kpi/BonusAlert";
+import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 
 const UNIT = { "%": "%", h: " h", "×": "" };
 
@@ -180,6 +181,7 @@ export default function KpiView({ initialMonth, meId }) {
                       <span className="flex items-center gap-2">
                         <Avatar name={b.name} src={b.avatarUrl} size={28} />
                         {b.name}
+                        <TraineeBadge id={b.userId} />
                       </span>
                     </td>
                     <td className="px-3 py-2.5">

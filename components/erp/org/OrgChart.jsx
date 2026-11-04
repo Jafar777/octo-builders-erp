@@ -9,12 +9,15 @@ import { api, errorText } from "@/lib/clientApi";
 import Avatar from "@/components/erp/ui/Avatar";
 import { ErrorText, Select } from "@/components/erp/ui/fields";
 import { Skeleton } from "@/components/erp/ui/Loading";
+import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 
 const ZOOMS = [0.6, 0.75, 0.9, 1, 1.15];
 const topRank = (p) => ({ gm: 0, ceo: 1 })[p.role] ?? 2;
 
 // One person on the chart.
-function PersonCard({ person, dept, lang, t, isMe, selected, online, reports, collapsed, onSelect, onToggle, showManual }) {
+// `depts`: their own department first, then any other they manage.
+function PersonCard({ person, depts = [], lang, t, isMe, selected, online, reports, collapsed, onSelect, onToggle, showManual }) {
+  const dept = depts[0] || null;
   const top = !person.managerId;
   return (
     <div
@@ -23,7 +26,12 @@ function PersonCard({ person, dept, lang, t, isMe, selected, online, reports, co
         selected ? "border-brand-orange shadow-[0_0_0_3px_rgba(243,123,32,0.25)]" : isMe ? "border-brand-orange/50" : "border-white/10"
       }`}
     >
-      <span className="absolute inset-x-0 top-0 h-1 rounded-t-2xl" style={{ background: dept?.color || "rgb(255 255 255 / 0.15)" }} />
+      {/* One colour per department they belong to or head. */}
+      <span className="absolute inset-x-0 top-0 flex h-1 overflow-hidden rounded-t-2xl">
+        {(depts.length ? depts : [null]).map((d, i) => (
+          <span key={d?.id || i} className="h-full flex-1" style={{ background: d?.color || "rgb(255 255 255 / 0.15)" }} />
+        ))}
+      </span>
       <button type="button" onClick={() => onSelect(person.id)} className="flex w-full flex-col items-center gap-2 px-3 pb-3 pt-4 text-center">
         <Avatar name={person.name} src={person.avatarUrl} size={top ? 60 : 48} online={online} />
         <span className="w-full">
@@ -31,8 +39,19 @@ function PersonCard({ person, dept, lang, t, isMe, selected, online, reports, co
             {top && <Crown size={13} className="shrink-0 text-amber-300" />}
             <span className="line-clamp-2">{person.name}</span>
           </span>
+          <TraineeBadge id={person.id} className="mt-1" />
           <span className="mt-0.5 block truncate text-xs text-white/55">{person.jobTitle?.[lang] || person.roleName?.[lang]}</span>
           {dept && <span className="mt-0.5 block truncate text-[11px] text-white/35">{dept.name?.[lang]}</span>}
+          {/* A manager heading more than one department. */}
+          {depts.length > 1 && (
+            <span className="mt-1 flex flex-wrap justify-center gap-1">
+              {depts.slice(1).map((d) => (
+                <span key={d.id} className="rounded-full border px-1.5 py-px text-[10px]" style={{ borderColor: `${d.color || "#ffffff"}66`, color: d.color || undefined }} title={t("erp.hierarchy.alsoManages")}>
+                  + {d.name?.[lang]}
+                </span>
+              ))}
+            </span>
+          )}
         </span>
         {(isMe || (showManual && person.source === "manual")) && (
           <span className="flex flex-wrap justify-center gap-1">
@@ -84,7 +103,7 @@ export default function OrgChart() {
     load();
   }, [load]);
 
-  const { byId, childrenOf, roots, deptOf } = useMemo(() => {
+  const { byId, childrenOf, roots, deptOf, deptsOf } = useMemo(() => {
     const people = data?.people || [];
     const map = new Map(people.map((p) => [p.id, p]));
     const kids = {};
@@ -99,6 +118,8 @@ export default function OrgChart() {
       // GM before CEO before anyone else left at the top.
       roots: people.filter((p) => !p.managerId).sort((a, b) => topRank(a) - topRank(b) || order(a, b)),
       deptOf: (p) => (p?.department ? depts[p.department] : null),
+      // Their own department, then the others they head.
+      deptsOf: (p) => [p?.department, ...(p?.managedDepartments || [])].filter(Boolean).map((id) => depts[id]).filter(Boolean),
     };
   }, [data]);
 
@@ -121,9 +142,9 @@ export default function OrgChart() {
     const q = query.trim().toLowerCase();
     if (!q) return [];
     return (data?.people || [])
-      .filter((p) => [p.name, p.jobTitle?.[lang], p.roleName?.[lang], deptOf(p)?.name?.[lang]].filter(Boolean).join(" ").toLowerCase().includes(q))
+      .filter((p) => [p.name, p.jobTitle?.[lang], p.roleName?.[lang], ...deptsOf(p).map((d) => d.name?.[lang])].filter(Boolean).join(" ").toLowerCase().includes(q))
       .slice(0, 8);
-  }, [query, data, lang, deptOf]);
+  }, [query, data, lang, deptsOf]);
 
   function select(id, scroll = false) {
     setSelectedId(id);
@@ -164,7 +185,7 @@ export default function OrgChart() {
     const card = (
       <PersonCard
         person={p}
-        dept={deptOf(p)}
+        depts={deptsOf(p)}
         lang={lang}
         t={t}
         isMe={p.id === meId}
@@ -212,10 +233,11 @@ export default function OrgChart() {
               <div>
                 <p className="text-lg font-semibold">
                   {focus.name}
+                  <TraineeBadge id={focus.id} className="ms-2" />
                   {focus.id === meId && <span className="ms-2 text-xs font-normal text-brand-orange">({t("erp.hierarchy.you")})</span>}
                 </p>
                 <p className="text-sm text-white/55">
-                  {[focus.jobTitle?.[lang] || focus.roleName?.[lang], deptOf(focus)?.name?.[lang]].filter(Boolean).join(" · ")}
+                  {[focus.jobTitle?.[lang] || focus.roleName?.[lang], deptsOf(focus).map((d) => d.name?.[lang]).join(" + ")].filter(Boolean).join(" · ")}
                 </p>
               </div>
             </div>
@@ -327,7 +349,7 @@ export default function OrgChart() {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate">{p.name}</span>
                     <span className="block truncate text-xs text-white/45">
-                      {[p.jobTitle?.[lang] || p.roleName?.[lang], deptOf(p)?.name?.[lang]].filter(Boolean).join(" · ")}
+                      {[p.jobTitle?.[lang] || p.roleName?.[lang], deptsOf(p).map((d) => d.name?.[lang]).join(" + ")].filter(Boolean).join(" · ")}
                     </span>
                   </span>
                 </button>

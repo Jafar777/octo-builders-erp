@@ -16,8 +16,11 @@ import Stars from "@/components/erp/tasks/Stars";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { useNow } from "@/components/erp/tasks/taskUi";
 import { SkeletonList } from "@/components/erp/ui/Loading";
+import TaskLog from "@/components/erp/tasks/TaskLog";
 
 const TABS = ["active", "submitted", "finished"];
+// The employee's own monthly task log (?tab=log), next to the lists above.
+const LOG = "log";
 const FINISHED_DAYS = 45;
 
 export default function MyTasks({ meId }) {
@@ -28,7 +31,7 @@ export default function MyTasks({ meId }) {
   const [tasks, setTasks] = useState([]);
   const [rating, setRating] = useState(null);
   const [loaded, setLoaded] = useState(false);
-  const [tab, setTab] = useState("active");
+  const [tab, setTab] = useState(searchParams.get("tab") === LOG ? LOG : "active");
   const [creating, setCreating] = useState(false);
   const [openId, setOpenId] = useState(searchParams.get("task"));
 
@@ -75,15 +78,22 @@ export default function MyTasks({ meId }) {
           { key: "helpRequests", list: groups.active.filter((x) => x.status === "todo" && x.kind === "help") },
           { key: "ready", list: groups.active.filter((x) => x.status === "todo" && !["revision", "help"].includes(x.kind)) },
         ]
-      : [{ key: tab, list: groups[tab] }];
+      : tab === LOG
+        ? []
+        : [{ key: tab, list: groups[tab] }];
 
   function open(id) {
     setOpenId(id);
     router.replace(id ? `/dashboard/tasks?task=${id}` : "/dashboard/tasks", { scroll: false });
   }
+  function changeTab(key) {
+    setTab(key);
+    setOpenId(null);
+    router.replace(key === LOG ? `/dashboard/tasks?tab=${LOG}` : "/dashboard/tasks", { scroll: false });
+  }
 
   return (
-    <div className="max-w-5xl">
+    <div className={tab === LOG ? "" : "max-w-5xl"}>
       <PageHeader
         title={t("erp.nav.tasks")}
         subtitle={t("erp.tasks.subtitle")}
@@ -117,7 +127,7 @@ export default function MyTasks({ meId }) {
           <button
             key={key}
             type="button"
-            onClick={() => setTab(key)}
+            onClick={() => changeTab(key)}
             className="relative px-4 py-3 text-sm font-medium text-white/60 data-[active=true]:text-white"
             data-active={tab === key}
           >
@@ -125,17 +135,29 @@ export default function MyTasks({ meId }) {
             {tab === key && <motion.span layoutId="mytasks-tab" className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-brand-orange" />}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => changeTab(LOG)}
+          className="relative px-4 py-3 text-sm font-medium text-white/60 data-[active=true]:text-white"
+          data-active={tab === LOG}
+        >
+          {t("erp.tasks.tab.log")}
+          {tab === LOG && <motion.span layoutId="mytasks-tab" className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-brand-orange" />}
+        </button>
       </div>
 
-      {!loaded && <SkeletonList rows={6} avatar={false} />}
-      <div className={`space-y-8 ${loaded ? "animate-fade-up" : "hidden"}`}>
+      {/* The log has its own month, task drawer and data. */}
+      {tab === LOG && <TaskLog mine />}
+
+      {!loaded && tab !== LOG && <SkeletonList rows={6} avatar={false} />}
+      <div className={`space-y-8 ${loaded && tab !== LOG ? "animate-fade-up" : "hidden"}`}>
         {sections.map(({ key, list }) =>
           list.length === 0 && tab === "active" ? null : (
             <section key={key}>
               {tab === "active" && <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/45">{t(`erp.tasks.section.${key}`)}</h2>}
               <div className="space-y-2">
                 {list.map((task) => (
-                  <TaskRow key={task.id} task={task} lookups={lookups} now={now} onOpen={open} />
+                  <TaskRow key={task.id} task={task} lookups={lookups} now={now} onOpen={open} projectFirst />
                 ))}
                 {list.length === 0 && <p className="py-10 text-center text-white/40">{t("erp.tasks.none")}</p>}
               </div>
@@ -159,7 +181,7 @@ export default function MyTasks({ meId }) {
         )}
       </Modal>
 
-      <TaskDrawer taskId={openId} lookups={lookups} onClose={() => open(null)} onChanged={load} onOpenTask={open} />
+      {tab !== LOG && <TaskDrawer taskId={openId} lookups={lookups} onClose={() => open(null)} onChanged={load} onOpenTask={open} />}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import User from "@/models/User";
 
 // Remove a document: HR, or whoever uploaded it.
 export async function DELETE(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   const { id, docId } = await params;
   if (!user || !isObjectId(id) || !isObjectId(docId)) return forbidden();
   const target = await User.findById(id);

@@ -9,6 +9,7 @@ import LeaveRequest from "@/models/LeaveRequest";
 import User from "@/models/User";
 import { departmentManagers, finalApprovers, isFinalApprover, serializeLeaves } from "@/lib/leave";
 import { isDeptManager } from "@/lib/managerKpi";
+import { inDepartments } from "@/lib/scope";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -23,8 +24,8 @@ export async function GET(request) {
   else if (view === "all" && isFinalApprover(user)) query = {};
   else if (view === "all" && isDeptManager(user) && user.department) {
     // Older requests have no department saved; match them by the person's department.
-    const members = await User.find({ department: user.department }, { _id: 1 }).lean();
-    query = { $or: [{ department: user.department }, { department: null, user: { $in: members.map((m) => m._id) } }] };
+    const members = await User.find(inDepartments(user), { _id: 1 }).lean();
+    query = { $or: [inDepartments(user), { department: null, user: { $in: members.map((m) => m._id) } }] };
   } else return forbidden();
 
   const list = await LeaveRequest.find(query).sort({ createdAt: -1 }).limit(300).lean();

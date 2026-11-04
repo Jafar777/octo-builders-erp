@@ -79,7 +79,7 @@ export async function PATCH(request) {
 
   // Tell everyone who is scored this month (and HR) that the bonus is set.
   if (body.announce && update.bonusPool > 0) {
-    const staff = await User.find({ status: "active", role: { $nin: ["user", "gm", "ceo"] } }, { _id: 1 }).lean();
+    const staff = await User.find({ status: "active", role: { $nin: ["user", "gm", "ceo", "coder"] } }, { _id: 1 }).lean();
     const hr = await usersWithPermission("payroll.view");
     await notify({
       type: "kpi.bonus_announced",

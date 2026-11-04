@@ -15,6 +15,8 @@ import {
   logActivity,
   publishTaskChange,
   taskTitle,
+  managesAssignee,
+  managesEmployee,
 } from "@/lib/tasks";
 import { holdsTime } from "@/lib/gantt";
 import { cascadeFrom, findOverlap, getWorkCalendar, leaveClash, personCalendar } from "@/lib/ganttServer";
@@ -25,6 +27,7 @@ import TaskActivity from "@/models/TaskActivity";
 import User from "@/models/User";
 import { NAME_FIELDS, pickName, viewerLang } from "@/lib/personName";
 import { canRouteStages } from "@/lib/projects";
+import { userDepartments } from "@/lib/scope";
 
 const HISTORY_FIELDS = { number: 1, revision: 1, status: 1, assignee: 1, ratings: 1, submittedAt: 1, previousTask: 1, kind: 1 };
 
@@ -83,6 +86,11 @@ export async function GET(request, { params }) {
       review: access,
       canReview: Boolean(access),
       canManage: canManageTask(user, task),
+      // A department manager: start their employee's task for them, and give a
+      // not-started task to another employee of their departments.
+      canStartFor: task.assignee.toString() !== user.id && (await managesAssignee(user, task)),
+      canReassign: task.status === "todo" && (canRouteStages(user) || (await managesAssignee(user, task))),
+      departments: canRouteStages(user) ? null : userDepartments(user),
     },
     activity: activity.map((a) => {
       const review = !involved && ["approved", "rejected"].includes(a.type);
@@ -115,7 +123,10 @@ export async function PATCH(request, { params }) {
   if (!task) return notFound();
 
   const isAssignee = task.assignee.toString() === user.id;
-  const canManage = canManageTask(user, task);
+  // A department manager may also give their employee's not-started task to another
+  // employee of their departments.
+  const managesIt = await managesAssignee(user, task);
+  const canManage = canManageTask(user, task) || managesIt;
   if (!isAssignee && !canManage) return forbidden();
   const body = await readJson(request);
   // A finished task can still have its repeat rule stopped.
@@ -159,9 +170,11 @@ export async function PATCH(request, { params }) {
     if (["normal", "important", "urgent"].includes(body.priority)) changes.priority = body.priority;
     if (typeof body.description === "string") changes.description = body.description.slice(0, 4000);
     if (isObjectId(body.assigneeId) && body.assigneeId !== task.assignee.toString()) {
-      const next = await User.exists({ _id: body.assigneeId, status: "active", role: { $ne: "user" } });
+      const next = await User.findOne({ _id: body.assigneeId, status: "active", role: { $ne: "user" } }, { department: 1 }).lean();
       if (!next) return fail("invalid_assignee");
       if (task.status !== "todo") return fail("reassign_only_todo");
+      // Below the CEO: only their own employees' tasks, only to their own employees.
+      if (!canRouteStages(user) && (!managesIt || !managesEmployee(user, next))) return fail("reassign_own_department", 403);
       reassignedFrom = task.assignee.toString();
       changes.assignee = body.assigneeId;
     }

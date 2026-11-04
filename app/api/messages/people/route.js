@@ -5,15 +5,16 @@ import { DEFAULT_ROLE } from "@/lib/permissions";
 import User from "@/models/User";
 import { pickName, viewerLang } from "@/lib/personName";
 import Department from "@/models/Department";
+import { HIDDEN_ROLES } from "@/lib/permissions";
 
 // Everyone who takes (or took) part in messaging, for names and avatars.
 export async function GET() {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user) return forbidden();
 
   const [people, departments] = await Promise.all([
     User.find(
-      { role: { $ne: DEFAULT_ROLE } },
+      { role: { $nin: [DEFAULT_ROLE, ...HIDDEN_ROLES] } },
       { name: 1, nameAr: 1, email: 1, avatarUrl: 1, department: 1, role: 1, status: 1 }
     )
       .sort({ name: 1 })

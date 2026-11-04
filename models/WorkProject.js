@@ -20,6 +20,8 @@ const WorkProjectSchema = new mongoose.Schema(
     participants: [{ type: ObjectId, ref: "User" }],
     status: { type: String, enum: ["active", "on_hold", "finished", "archived"], default: "active" },
     priority: { type: String, enum: ["normal", "important", "urgent"], default: "normal" },
+    // The CEO's priority order on the Gantt (0 = top, the highest); null = not ranked yet.
+    rank: { type: Number, default: null },
     // Former project scale (no longer used — each task's hours are set when the project is created).
     scale: { type: String, default: "" },
     // How tasks may start: "ordered" (each stage waits for the earlier ones), "random"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -19,7 +19,6 @@ import {
   Building2,
   Settings,
   History,
-  Eye,
   ListChecks,
   ClipboardCheck,
   ClipboardList,
@@ -35,6 +34,8 @@ import {
   UserCheck,
   UsersRound,
   ScrollText,
+  GraduationCap,
+  Timer,
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
@@ -45,6 +46,9 @@ import MessagesButton from "@/components/MessagesButton";
 import Avatar from "@/components/erp/ui/Avatar";
 import TopProgress from "@/components/erp/ui/TopProgress";
 import MiniChat from "@/components/erp/messages/MiniChat";
+import { TraineeProvider } from "@/components/erp/ui/TraineeBadge";
+import NoAccess from "@/components/erp/NoAccess";
+import { isTopRole } from "@/lib/permissions";
 
 // Sidebar entries; `perm` hides an entry from roles without that permission,
 // `staff` hides it from accounts that have no role yet, and `when(user)` is a custom rule.
@@ -60,20 +64,28 @@ const NAV = [
       { href: "/dashboard/task-log", key: "taskLog", icon: ScrollText, when: (u) => u.permissions.includes("projects.manage") && u.scope === "all" },
       { href: "/dashboard/team-tasks", key: "teamTasks", icon: UsersRound, staff: true },
       { href: "/dashboard/projects", key: "projects", icon: FolderKanban, staff: true },
-      // New-project intake forms: the secretary fills them, the GM / CEO price them.
+      // New-project intake forms: the secretary and department managers fill them, the GM / CEO price them, the CEO accepts the project.
       {
         href: "/dashboard/intake",
         key: "intake",
         icon: ClipboardList,
-        when: (u) => u.permissions.includes("projects.intake") || (u.scope === "all" && u.permissions.includes("projects.manage")),
+        when: (u) =>
+          u.permissions.includes("projects.intake") ||
+          (u.scope === "all" && u.permissions.includes("projects.manage")) ||
+          // Department managers ask for projects here.
+          (u.scope === "department" && u.permissions.includes("tasks.review") && u.permissions.includes("projects.manage")),
       },
       // Reviewers, and customers reviewing the tasks marked for them.
       { href: "/dashboard/reviews", key: "reviews", icon: ClipboardCheck, badge: "reviews", show: (u) => (u.isStaff && u.permissions.includes("tasks.review")) || u.isCustomer },
       { href: "/dashboard/attendance", key: "attendance", icon: CalendarClock, staff: true },
+      // Every employee asks; department managers and the CEO decide.
+      { href: "/dashboard/overtime", key: "overtime", icon: Timer, staff: true },
       { href: "/dashboard/kpi", key: "kpi", icon: Gauge, staff: true },
       { href: "/dashboard/bonus", key: "bonus", icon: Gift, staff: true },
       { href: "/dashboard/messages", key: "messages", icon: MessagesSquare, staff: true, badge: "messages", exact: true },
       { href: "/dashboard/notifications", key: "notifications", icon: Bell, show: (u) => u.isStaff || u.isCustomer },
+      // Trainees and the CEO only (lib/training.js canOpenTraining).
+      { href: "/dashboard/training", key: "training", icon: GraduationCap, show: (u) => (u.trainee && !u.limited) || (u.isStaff && isTopRole(u.role)) },
     ],
   },
   {
@@ -95,7 +107,7 @@ const NAV = [
       { href: "/dashboard/roles", key: "roles", icon: ShieldCheck, perm: "roles.manage" },
       // Everyone sees the hierarchy tab; the rest of the page stays with org.manage.
       { href: "/dashboard/organization", key: "organization", icon: Building2, staff: true },
-      { href: "/dashboard/messages/review", key: "messageReview", icon: Eye, perm: "messages.review" },
+      // Message review is a view of the Messages page (CEO and department managers).
       { href: "/dashboard/audit", key: "audit", icon: History, perm: "audit.view" },
       { href: "/dashboard/settings", key: "settings", icon: Settings, perm: "settings.manage" },
       { href: "/dashboard/website", key: "website", icon: Globe2, perm: "website.manage" },
@@ -103,7 +115,13 @@ const NAV = [
   },
 ];
 
-export default function DashboardShell({ user, children }) {
+// The general manager (a limited role) only gets these pages: their profile, their own
+// messages and notifications, and the intake forms.
+const LIMITED_PAGES = ["/dashboard/profile", "/dashboard/messages", "/dashboard/intake", "/dashboard/notifications"];
+const limitedAllows = (path) => LIMITED_PAGES.some((p) => path === p || (path.startsWith(`${p}/`) && p !== "/dashboard/messages"));
+
+export default function DashboardShell({ user, traineeIds = [], children }) {
+  const trainees = useMemo(() => new Set(traineeIds), [traineeIds]);
   const { t, lang } = useLanguage();
   const { logout, refresh } = useAuth();
   const { connected } = useRealtime();
@@ -146,15 +164,13 @@ export default function DashboardShell({ user, children }) {
     router.refresh();
   });
 
-  const groups = NAV.map((g) => ({
-    ...g,
-    items: g.items.filter(
-      (item) =>
-        item.show
-          ? item.show(user)
-          : (!item.staff || user.isStaff) && (!item.perm || user.permissions.includes(item.perm)) && (!item.when || (user.isStaff && item.when(user)))
-    ),
-  })).filter((g) => g.items.length > 0);
+  // The general manager sees only LIMITED_PAGES; everyone else by each entry's rule.
+  const visible = (item) => {
+    if (user.limited && !LIMITED_PAGES.includes(item.href)) return false;
+    if (item.show) return item.show(user);
+    return (!item.staff || user.isStaff) && (!item.perm || user.permissions.includes(item.perm)) && (!item.when || (user.isStaff && item.when(user)));
+  };
+  const groups = NAV.map((g) => ({ ...g, items: g.items.filter(visible) })).filter((g) => g.items.length > 0);
 
   async function handleLogout() {
     await logout();
@@ -256,7 +272,9 @@ export default function DashboardShell({ user, children }) {
           </div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-10">{children}</main>
+        <main className="flex-1 p-4 sm:p-6 lg:p-10">
+          {user.limited && !limitedAllows(pathname) ? <NoAccess /> : <TraineeProvider ids={trainees}>{children}</TraineeProvider>}
+        </main>
       </div>
 
       {user.isStaff && !pathname.startsWith("/dashboard/messages") && (

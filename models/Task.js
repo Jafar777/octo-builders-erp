@@ -33,6 +33,15 @@ const TaskSchema = new mongoose.Schema(
     parentTask: { type: ObjectId, ref: "Task", default: null }, // sub-task of
     // Predecessors: this task can't start until all of them are approved / done.
     dependsOn: [{ type: ObjectId, ref: "Task" }],
+    // External review: once this task is handed in, another office checks it. For
+    // `hours` (working hours, set by the CEO) the tasks waiting for it can't start, but
+    // nobody's time is held: the employees work on other projects meanwhile. Marking
+    // the review received ends the wait (early or late). See lib/gantt.js readyTime().
+    externalReview: {
+      hours: { type: Number, default: 0, min: 0 },
+      receivedAt: { type: Date, default: null },
+      receivedBy: { type: ObjectId, ref: "User", default: null },
+    },
     // Repeating tasks: the root keeps the rule, the daily job creates the copies.
     recurrence: {
       freq: { type: String, enum: ["", "daily", "weekly", "monthly"], default: "" },
@@ -89,6 +98,9 @@ const TaskSchema = new mongoose.Schema(
       gm: { type: Boolean, default: false },
       customer: { type: Boolean, default: false },
     },
+    // The department manager approved it "if the CEO accepts": it now also waits for the
+    // CEO's review (lib/reviewFlow.js). Not carried over to a redo.
+    ceoApproval: { type: Boolean, default: false },
     // While handed in: the level whose review it waits for ("" on older tasks = manager).
     reviewLevel: { type: String, enum: ["", "manager", "gm", "customer"], default: "" },
     // Every review it got. The summary above (status, stars, ratings, reviewedBy…) is set
@@ -108,6 +120,8 @@ const TaskSchema = new mongoose.Schema(
           rejectCause: { type: String, default: "" },
           // The GM / CEO reviewing in the customer's place.
           onBehalf: { type: Boolean, default: false },
+          // The department manager's "accept if the CEO accepts".
+          escalated: { type: Boolean, default: false },
         },
         { _id: false }
       ),

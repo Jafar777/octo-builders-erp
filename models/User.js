@@ -14,6 +14,9 @@ const UserSchema = new mongoose.Schema(
     // Key of a Role document. New signups are "user" until the GM assigns a role.
     role: { type: String, default: "user" },
     department: { type: ObjectId, ref: "Department", default: null },
+    // A department manager can head more departments than their own: these too (set by
+    // the CEO). Everything a manager sees and decides covers all of them (lib/scope.js).
+    managedDepartments: [{ type: ObjectId, ref: "Department" }],
     branch: { type: ObjectId, ref: "Branch", default: null },
     jobTitle: { type: ObjectId, ref: "JobTitle", default: null },
     // Set by the GM to override the role-based hierarchy (lib/hierarchy.js); null = automatic.
@@ -73,6 +76,9 @@ const UserSchema = new mongoose.Schema(
     },
     annualLeaveDays: { type: Number, default: 21 },
     kpiExcluded: { type: Boolean, default: false },
+    // A trainee: gets the Training Program page (lib/training.js) and a "Trainee" badge
+    // on the GM / CEO's screens. Set by the GM / CEO.
+    trainee: { type: Boolean, default: false },
     // Department heads' hybrid KPI: how much of it is management (0–100) versus their own
     // design work; null = the company default (Settings → managerKpi.managementShare).
     managementShare: { type: Number, min: 0, max: 100, default: null },

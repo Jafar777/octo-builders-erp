@@ -69,6 +69,14 @@ const ProjectIntakeSchema = new mongoose.Schema(
     },
 
     createdBy: { type: ObjectId, ref: "User", required: true },
+    // The project set-up a department manager (or the CEO) asks for: template, stages,
+    // hours, employees, reviews (the POST /api/work-projects body, never money). The
+    // project only starts when the CEO accepts it.
+    proposal: {
+      body: { type: mongoose.Schema.Types.Mixed, default: null },
+      by: { type: ObjectId, ref: "User", default: null },
+      at: { type: Date, default: null },
+    },
     workProject: { type: ObjectId, ref: "WorkProject", default: null }, // once converted
     convertedBy: { type: ObjectId, ref: "User", default: null },
     convertedAt: { type: Date, default: null },

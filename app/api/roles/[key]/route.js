@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/currentUser";
 import { fail, forbidden, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
-import { DEFAULT_ROLE, PERMISSION_KEYS } from "@/lib/permissions";
+import { CODER_ROLE, DEFAULT_ROLE, GM_PERMISSIONS, PERMISSION_KEYS, TOP_ROLE } from "@/lib/permissions";
 import { publish, userChannel } from "@/lib/realtime/server";
 import { isBilingualComplete } from "@/lib/validateBilingual";
 import { cleanRoleBody, serializeRole } from "@/lib/roles";
@@ -29,10 +29,17 @@ export async function PATCH(request, { params }) {
   const data = cleanRoleBody(await readJson(request));
   if (!isBilingualComplete(data.name)) return fail("bilingual_required");
 
-  // The GM role always keeps everything; the no-access role never gets anything.
-  if (key === "gm") {
+  // The CEO role always keeps everything, the GM only the intake forms, and the
+  // no-access role never gets anything.
+  // Only a coder may touch the hidden coder role.
+  if (key === CODER_ROLE && actor.role !== CODER_ROLE) return notFound();
+  if (key === TOP_ROLE || key === CODER_ROLE) {
     data.permissions = PERMISSION_KEYS;
     data.scope = "all";
+  }
+  if (key === "gm") {
+    data.permissions = GM_PERMISSIONS;
+    data.scope = "self";
   }
   if (key === DEFAULT_ROLE) data.permissions = [];
 

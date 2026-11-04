@@ -14,6 +14,7 @@ import StaffEditor from "@/components/erp/staff/StaffEditor";
 import EmployeeFile from "@/components/erp/staff/EmployeeFile";
 import KpiRing from "@/components/erp/staff/KpiRing";
 import { SkillRequestsPanel } from "@/components/erp/hr/SkillRequests";
+import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 
 const FILTERS = ["all", "pending", "active", "inactive"];
 
@@ -129,7 +130,10 @@ export default function StaffManager({ initialStaff, roles, org, canManage, canF
                   <div className="flex items-center gap-3">
                     <Avatar name={p.name || p.email} src={p.avatarUrl} size={36} online={online.size ? online.has(p.id) : undefined} />
                     <div className="min-w-0">
-                      <p className="truncate font-medium">{p.name || "—"}</p>
+                      <p className="flex items-center gap-1.5 truncate font-medium">
+                        <span className="truncate">{p.name || "—"}</span>
+                        <TraineeBadge id={p.id} />
+                      </p>
                       <p className="truncate text-xs text-white/45" dir="ltr">
                         {p.email}
                       </p>

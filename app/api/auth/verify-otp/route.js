@@ -53,7 +53,7 @@ export async function POST(request) {
         user = await User.create({
           email,
           name: otp.name || "",
-          role: isFirstUser ? "gm" : "user",
+          role: isFirstUser ? "ceo" : "user",
         });
         await audit(user._id, "user.signed_up", {
           entityType: "user",

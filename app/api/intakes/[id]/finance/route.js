@@ -15,7 +15,7 @@ import ProjectIntake from "@/models/ProjectIntake";
 // project; the amounts become finance entries then (POST /api/work-projects).
 // Body: { contractValue, currency, rate, budget, branch, client, advancePaid, advanceDate, paymentTerms, notes }
 export async function PUT(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user || !canSeeIntakeFinance(user)) return forbidden();
   const { id } = await params;
   const intake = isObjectId(id) ? await ProjectIntake.findById(id) : null;

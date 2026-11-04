@@ -13,7 +13,8 @@ import NewChatModal from "@/components/erp/messages/NewChatModal";
 import { useConversationLabel, useDirectory } from "@/components/erp/messages/useDirectory";
 import { SkeletonList } from "@/components/erp/ui/Loading";
 
-export default function MessagesApp({ meId, canAnnounce }) {
+// `switcher`: the "my chats / review" toggle of the Messages page (reviewers only).
+export default function MessagesApp({ meId, canAnnounce, switcher = null }) {
   const { t, lang } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -102,6 +103,7 @@ export default function MessagesApp({ meId, canAnnounce }) {
       <aside
         className={`flex w-full shrink-0 flex-col border-e border-white/10 md:w-80 ${active ? "hidden md:flex" : "flex"}`}
       >
+        {switcher}
         <div className="flex items-center gap-2 border-b border-white/10 p-3">
           <div className="relative flex-1">
             <Search size={15} className="absolute start-3 top-1/2 -translate-y-1/2 text-white/40" />

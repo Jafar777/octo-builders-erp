@@ -8,7 +8,7 @@ import Conversation from "@/models/Conversation";
 import User from "@/models/User";
 
 export async function GET() {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user) return forbidden();
 
   const conversations = await Conversation.find({ members: user.id })
@@ -25,7 +25,7 @@ export async function GET() {
 // { type: "direct", userId } opens (or reuses) a one-to-one chat.
 // { type: "group", name, memberIds } creates a group; the creator is its admin.
 export async function POST(request) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user) return forbidden();
 
   const body = await readJson(request);

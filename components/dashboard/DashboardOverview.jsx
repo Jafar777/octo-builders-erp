@@ -28,6 +28,7 @@ import CheckInCard from "@/components/erp/hr/CheckInCard";
 import { hm, money, StatTile } from "@/components/erp/hr/hrUi";
 import { StatusBadge, taskHeading } from "@/components/erp/tasks/TaskRow";
 import { Skeleton, SkeletonCards, SkeletonList } from "@/components/erp/ui/Loading";
+import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 
 // Risk levels: status colours always come with an icon and a label.
 const LEVEL = {
@@ -287,7 +288,7 @@ export default function DashboardOverview({ user }) {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate">{taskHeading(task, lang)}</span>
                         <span className="block text-xs text-white/45">
-                          {task.assignee?.name} · {formatRelative(task.submittedAt, lang)}
+                          {task.assignee?.name} {task.assignee && <TraineeBadge id={task.assignee.id} />} · {formatRelative(task.submittedAt, lang)}
                         </span>
                       </span>
                       {task.late && <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] text-red-300">{t("erp.tasks.late")}</span>}

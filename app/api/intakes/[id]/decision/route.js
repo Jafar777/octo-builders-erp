@@ -6,10 +6,10 @@ import { intakeNames, isIntakePlanner, serializeIntake } from "@/lib/intake";
 import { notify } from "@/lib/notify";
 import ProjectIntake from "@/models/ProjectIntake";
 
-// GM / CEO: { action: "decline", reason } — they won't take the project — or
+// The CEO alone: { action: "decline", reason } — the project is rejected — or
 // { action: "reopen" } to look at a declined form again. Its author is told.
 export async function POST(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user || !isIntakePlanner(user)) return forbidden();
   const { id } = await params;
   const intake = isObjectId(id) ? await ProjectIntake.findById(id) : null;
@@ -33,10 +33,12 @@ export async function POST(request, { params }) {
   }
   await intake.save();
   await audit(user, `project.intake_${body.action === "decline" ? "declined" : "reopened"}`, { entityType: "intake", entityId: intake._id, summary: `#${intake.number}` });
-  if (intake.createdBy.toString() !== user.id) {
+  // The form's author and the department manager who asked for the project.
+  const told = [intake.createdBy.toString(), intake.proposal?.by?.toString()].filter((x, i, a) => x && x !== user.id && a.indexOf(x) === i);
+  if (told.length) {
     await notify({
       type: body.action === "decline" ? "project.intake_declined" : "project.intake_reopened",
-      recipients: [intake.createdBy.toString()],
+      recipients: told,
       actor: user,
       params: { number: intake.number, project: intake.project.name, reason: intake.declineReason },
       link: `/dashboard/intake?intake=${intake._id}`,

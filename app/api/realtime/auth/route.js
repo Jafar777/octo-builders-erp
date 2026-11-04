@@ -7,6 +7,8 @@ import { COMPANY_TASKS_CHANNEL } from "@/lib/tasks";
 import { fail, forbidden, isObjectId } from "@/lib/apiUtils";
 import Conversation from "@/models/Conversation";
 import WorkProject from "@/models/WorkProject";
+import { isHiddenRole } from "@/lib/permissions";
+import { userDepartments } from "@/lib/scope";
 
 // Pusher calls this (form-encoded) before joining a private or presence channel.
 export async function POST(request) {
@@ -24,14 +26,15 @@ export async function POST(request) {
   if (channel === `private-user-${user.id}`) {
     allowed = true;
   } else if (channel === PRESENCE_CHANNEL) {
-    allowed = user.isStaff;
+    // The hidden coder never shows as online.
+    allowed = user.isStaff && !isHiddenRole(user.role);
     presence = { user_id: user.id, user_info: { name: user.displayName || user.email, avatarUrl: user.avatarUrl } };
   } else if (channel === COMPANY_TASKS_CHANNEL) {
-    allowed = user.isStaff;
+    allowed = user.isStaff && !user.limited;
   } else if (channel.startsWith("private-department-")) {
     // Task and board updates of a department.
     const id = channel.slice("private-department-".length);
-    allowed = user.isStaff && (user.scope === "all" || user.department === id);
+    allowed = user.isStaff && !user.limited && (user.scope === "all" || userDepartments(user).includes(id));
   } else if (channel.startsWith("private-project-")) {
     // Board updates of one project, for everyone who can open it.
     const id = channel.slice("private-project-".length);

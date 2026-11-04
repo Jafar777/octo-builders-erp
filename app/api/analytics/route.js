@@ -12,6 +12,7 @@ import LeaveRequest from "@/models/LeaveRequest";
 import RawPunch from "@/models/RawPunch";
 import Task from "@/models/Task";
 import WorkProject from "@/models/WorkProject";
+import { inDepartments } from "@/lib/scope";
 
 const OPEN = ["todo", "in_progress", "on_hold", "help"];
 const idStr = (v) => (v ? v.toString() : null);
@@ -30,10 +31,10 @@ export async function GET() {
   const today = todayIn(tz);
   const month = today.slice(0, 7);
   const now = Date.now();
-  const deptFilter = user.scope === "all" ? {} : { department: user.department };
+  const deptFilter = user.scope === "all" ? {} : inDepartments(user);
 
   // A department head also follows the projects where their department does a stage.
-  const projectFilter = user.scope === "all" ? {} : { $or: [{ department: user.department }, { "stages.department": user.department }] };
+  const projectFilter = user.scope === "all" ? {} : { $or: [inDepartments(user), inDepartments(user, "stages.department")] };
   const TASK_FIELDS = {
     status: 1, kind: 1, type: 1, dueAt: 1, submittedAt: 1, reviewedAt: 1, assignee: 1, project: 1, item: 1,
     stage: 1, revision: 1, createdAt: 1, estimatedHours: 1, maxHours: 1, title: 1, department: 1, number: 1, activeMs: 1,
@@ -41,7 +42,7 @@ export async function GET() {
   const [tasks, projects, staff] = await Promise.all([
     Task.find(deptFilter, TASK_FIELDS).lean(),
     WorkProject.find({ ...projectFilter, status: { $in: ["active", "on_hold", "finished"] } }).lean(),
-    hrStaff({ status: "active", ...(user.scope === "all" ? {} : { department: user.department }) }),
+    hrStaff({ status: "active", ...(user.scope === "all" ? {} : inDepartments(user)) }),
   ]);
   // Project KPIs need every task of the project, whichever department did it.
   const projectTasks = await Task.find({ project: { $in: projects.map((p) => p._id) } }, TASK_FIELDS).lean();

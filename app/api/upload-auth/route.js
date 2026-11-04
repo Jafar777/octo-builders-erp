@@ -6,7 +6,7 @@ import { getUploadAuthParams } from "@/lib/imagekit";
 // may upload (chat attachments, HR documents, task files); what the file is then
 // attached to is checked by that feature's own route.
 export async function GET() {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const { token, expire, signature } = getUploadAuthParams();

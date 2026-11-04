@@ -9,6 +9,7 @@ import { Button, Card, ErrorText, Input, Label, PageHeader, Select, Toggle } fro
 import { MonthPicker, money } from "@/components/erp/hr/hrUi";
 import { SkeletonCards } from "@/components/erp/ui/Loading";
 import BonusAlert from "@/components/erp/kpi/BonusAlert";
+import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 
 const MEDAL = ["text-amber-300", "text-slate-200", "text-orange-300"];
 
@@ -203,6 +204,7 @@ export default function BonusPage({ initialMonth }) {
                       <td className="px-4 py-2.5">
                         <span className="flex items-center gap-2">
                           <Avatar name={r.name} src={r.avatarUrl} size={24} /> {r.name}
+                          <TraineeBadge id={r.userId} />
                         </span>
                       </td>
                       <td className="px-4 py-2.5 tabular-nums">{r.score}</td>

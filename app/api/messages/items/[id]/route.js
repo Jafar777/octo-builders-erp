@@ -16,7 +16,7 @@ async function loadOwn(params, user) {
 
 // Edit own message text within the edit window.
 export async function PATCH(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user) return forbidden();
   const { message, error } = await loadOwn(params, user);
   if (error) return error;
@@ -36,7 +36,7 @@ export async function PATCH(request, { params }) {
 
 // Delete own message: hidden from members, kept for management review.
 export async function DELETE(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user) return forbidden();
   const { message, error } = await loadOwn(params, user);
   if (error) return error;

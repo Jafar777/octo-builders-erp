@@ -7,6 +7,7 @@ import { AlertTriangle, CalendarDays, ChartNoAxesGantt, LayoutGrid, LayoutTempla
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { formatDate } from "@/lib/formatTime";
+import { canSeeGantt } from "@/lib/gantt";
 import Modal from "@/components/erp/ui/Modal";
 import { Button, PageHeader, Select } from "@/components/erp/ui/fields";
 import ProjectForm from "@/components/erp/projects/ProjectForm";
@@ -25,9 +26,12 @@ export default function ProjectsList() {
   const lookups = useTaskLookups();
   const [status, setStatus] = useState("active");
   const [department, setDepartment] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [view, setView] = useState("timeline");
+  // The Gantt timeline is the GM / CEO's; everyone else gets the project cards.
+  const gantt = canSeeGantt(user);
+  const [picked, setView] = useState("timeline");
+  const view = gantt ? picked : "cards";
   const canManage = user?.permissions?.includes("projects.manage");
+  const isDeptManager = user?.scope === "department" && user?.permissions?.includes("tasks.review");
 
   const visible = useMemo(
     () => lookups.projects.filter((p) => (!status || p.status === status) && (!department || p.department === department)),
@@ -47,11 +51,13 @@ export default function ProjectsList() {
                   <LayoutTemplate size={16} /> {t("erp.projects.templates")}
                 </Button>
               </Link>
-              {/* A new project's hours and employees are the GM / CEO's to set. */}
-              {canRouteStages(user) && (
-                <Button onClick={() => setCreating(true)}>
-                  <Plus size={16} /> {t("erp.projects.new")}
-                </Button>
+              {/* Every project starts from an intake form; the CEO accepts it there. */}
+              {(canRouteStages(user) || isDeptManager) && (
+                <Link href="/dashboard/intake">
+                  <Button>
+                    <Plus size={16} /> {t("erp.projects.new")}
+                  </Button>
+                </Link>
               )}
             </>
           )
@@ -59,6 +65,7 @@ export default function ProjectsList() {
       />
 
       <div className="mb-6 flex flex-wrap gap-3">
+        {gantt && (
         <div className="flex gap-1 rounded-xl border border-white/10 p-1">
           {[
             ["timeline", ChartNoAxesGantt],
@@ -74,6 +81,7 @@ export default function ProjectsList() {
             </button>
           ))}
         </div>
+        )}
         <div className="flex flex-wrap gap-1 rounded-xl border border-white/10 p-1">
           {STATUSES.map((s) => (
             <button
@@ -137,7 +145,8 @@ export default function ProjectsList() {
 
               <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/55">
                 <span className="flex items-center gap-1">
-                  <CalendarDays size={13} /> {formatDate(p.dueDate, lang)}
+                  {/* The delivery the Gantt expects now. */}
+                  <CalendarDays size={13} /> {formatDate(p.forecastEnd || p.dueDate, lang)}
                 </span>
                 <span className="flex items-center gap-1">
                   <ListChecks size={13} /> {t("erp.projects.openTasks", { count: p.openTasks })}
@@ -155,18 +164,6 @@ export default function ProjectsList() {
 
       <ProjectsSummary />
 
-      <Modal open={creating} onClose={() => setCreating(false)} title={t("erp.projects.new")} wide>
-        {creating && (
-          <ProjectForm
-            lookups={lookups}
-            onCancel={() => setCreating(false)}
-            onCreated={(project) => {
-              setCreating(false);
-              router.push(`/dashboard/projects/${project.id}`);
-            }}
-          />
-        )}
-      </Modal>
     </div>
   );
 }

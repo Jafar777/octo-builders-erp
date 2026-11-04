@@ -3,7 +3,7 @@ import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
 import { buildHierarchy, wouldLoop } from "@/lib/hierarchy";
-import { DEFAULT_ROLE } from "@/lib/permissions";
+import { DEFAULT_ROLE, HIDDEN_ROLES, LIMITED_ROLES } from "@/lib/permissions";
 import { pickName, viewerLang } from "@/lib/personName";
 import Department from "@/models/Department";
 import JobTitle from "@/models/JobTitle";
@@ -15,8 +15,9 @@ const idStr = (v) => (v ? v.toString() : null);
 async function loadPeople() {
   const [users, roles] = await Promise.all([
     User.find(
-      { role: { $ne: DEFAULT_ROLE }, status: "active" },
-      { name: 1, nameAr: 1, email: 1, avatarUrl: 1, role: 1, department: 1, jobTitle: 1, reportsTo: 1 }
+      // The general manager (a limited role) isn't part of the organization.
+      { role: { $nin: [DEFAULT_ROLE, ...LIMITED_ROLES, ...HIDDEN_ROLES] }, status: "active" },
+      { name: 1, nameAr: 1, email: 1, avatarUrl: 1, role: 1, department: 1, managedDepartments: 1, jobTitle: 1, reportsTo: 1 }
     )
       .sort({ name: 1 })
       .lean(),
@@ -27,6 +28,7 @@ async function loadPeople() {
     id: u._id.toString(),
     role: u.role,
     department: idStr(u.department),
+    managedDepartments: (u.managedDepartments || []).map(idStr),
     reportsTo: idStr(u.reportsTo),
   }));
   return { users, roleMap, people };
@@ -57,6 +59,8 @@ export async function GET() {
         role: u.role,
         roleName: roleMap[u.role]?.name || { ar: u.role, en: u.role },
         department: idStr(u.department),
+        // Other departments this manager heads too.
+        managedDepartments: (u.managedDepartments || []).map(idStr).filter((d) => d !== idStr(u.department)),
         jobTitle: titles[idStr(u.jobTitle)] || null,
         managerId: tree[id].managerId,
         source: tree[id].source,

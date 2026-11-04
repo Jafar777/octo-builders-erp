@@ -6,6 +6,7 @@ import { taskSpan } from "@/lib/gantt";
 import { projectEnd, projectStart } from "@/lib/projectDelay";
 import { canRouteStages } from "@/lib/projects";
 import Task from "@/models/Task";
+import { getWorkCalendar } from "@/lib/ganttServer";
 import WorkProject from "@/models/WorkProject";
 
 // "Save baseline": remembers every task's current dates (and milestone dates) so the
@@ -29,7 +30,8 @@ export async function POST(request, { params }) {
   }
   for (const m of project.milestones) m.baselineDate = m.date;
   project.taskBaselineAt = new Date();
-  const end = projectEnd(tasks);
+  // Including any external review its last work goes out for.
+  const end = projectEnd(tasks, await getWorkCalendar());
   if (end) {
     const n = Math.max(0, ...project.baselines.map((b) => b.n)) + 1;
     const start = projectStart(tasks);

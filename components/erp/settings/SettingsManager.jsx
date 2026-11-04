@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { GripVertical, Plus, Trash2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
 import BilingualField from "@/components/dashboard/BilingualField";
@@ -340,6 +340,52 @@ function CurrencySettings({ initial }) {
 const KINDS = ["neutral", "excellent", "error", "contribution"];
 const SKILLS = ["", "design", "functional", "shop_drawings", "autocad", "max", "render", "project", "management"];
 
+// A list whose rows are dragged up and down by their handle (the inputs stay usable:
+// a row is only draggable while its handle is held). `onReorder(from, to)`.
+function ReorderList({ items, onReorder, className, renderRow, t }) {
+  const [armed, setArmed] = useState(null); // row whose handle is pressed
+  const [from, setFrom] = useState(null);
+  const [over, setOver] = useState(null);
+  const end = () => {
+    setArmed(null);
+    setFrom(null);
+    setOver(null);
+  };
+  return items.map((item, i) => (
+    <div
+      key={i}
+      draggable={armed === i}
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", String(i));
+        setFrom(i);
+      }}
+      onDragOver={(e) => {
+        if (from === null) return;
+        e.preventDefault();
+        if (over !== i) setOver(i);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        if (from !== null && over !== null && from !== over) onReorder(from, over);
+        end();
+      }}
+      onDragEnd={end}
+      className={`relative flex items-stretch gap-2 rounded-xl border p-3 ${from === i ? "border-white/10 opacity-40" : over === i && from !== null ? "border-brand-orange" : "border-white/10"}`}
+    >
+      <span
+        onPointerDown={() => setArmed(i)}
+        onPointerUp={() => setArmed(null)}
+        className="flex shrink-0 cursor-grab items-center text-white/30 hover:text-white/70 active:cursor-grabbing"
+        title={t("erp.settings.dragToOrder")}
+      >
+        <GripVertical size={16} />
+      </span>
+      <div className={`min-w-0 flex-1 ${className}`}>{renderRow(item, i)}</div>
+    </div>
+  ));
+}
+
 function TasksSettings({ initial }) {
   const { t } = useLanguage();
   const [value, setValue] = useState(initial);
@@ -347,6 +393,14 @@ function TasksSettings({ initial }) {
   const setList = (list, i, patch) =>
     setValue((v) => ({ ...v, [list]: v[list].map((x, j) => (j === i ? { ...x, ...patch } : x)) }));
   const removeFrom = (list, i) => setValue((v) => ({ ...v, [list]: v[list].filter((_, j) => j !== i) }));
+  // Dragged up or down: the order is kept as it's saved (task type lists, review tags).
+  const move = (list) => (from, to) =>
+    setValue((v) => {
+      const next = [...v[list]];
+      const [row] = next.splice(from, 1);
+      next.splice(to, 0, row);
+      return { ...v, [list]: next };
+    });
 
   return (
     <Card className="space-y-6">
@@ -356,15 +410,21 @@ function TasksSettings({ initial }) {
         <p className="mb-1 text-sm font-medium text-white/70">{t("erp.settings.taskTypes")}</p>
         <p className="mb-3 text-xs text-white/40">{t("erp.settings.keyHint")}</p>
         <div className="space-y-2">
-          {value.taskTypes.map((tt, i) => (
-            <div key={i} className="grid items-end gap-2 rounded-xl border border-white/10 p-3 sm:grid-cols-[140px_1fr_auto]">
-              <Input label={t("erp.settings.code")} value={tt.key} dir="ltr" onChange={(key) => setList("taskTypes", i, { key })} />
-              <BilingualField label={t("erp.org.name")} value={tt.name} onChange={(name) => setList("taskTypes", i, { name })} />
-              <button type="button" onClick={() => removeFrom("taskTypes", i)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-red-500/30 text-red-400" aria-label={t("common.delete")}>
-                <Trash2 size={15} />
-              </button>
-            </div>
-          ))}
+          <ReorderList
+            items={value.taskTypes}
+            onReorder={move("taskTypes")}
+            t={t}
+            className="grid items-end gap-2 sm:grid-cols-[140px_1fr_auto]"
+            renderRow={(tt, i) => (
+              <>
+                <Input label={t("erp.settings.code")} value={tt.key} dir="ltr" onChange={(key) => setList("taskTypes", i, { key })} />
+                <BilingualField label={t("erp.org.name")} value={tt.name} onChange={(name) => setList("taskTypes", i, { name })} />
+                <button type="button" onClick={() => removeFrom("taskTypes", i)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-red-500/30 text-red-400" aria-label={t("common.delete")}>
+                  <Trash2 size={15} />
+                </button>
+              </>
+            )}
+          />
           <Button variant="ghost" onClick={() => setValue((v) => ({ ...v, taskTypes: [...v.taskTypes, { key: "", name: { ar: "", en: "" } }] }))}>
             <Plus size={16} /> {t("erp.settings.addTaskType")}
           </Button>
@@ -375,8 +435,13 @@ function TasksSettings({ initial }) {
         <p className="mb-1 text-sm font-medium text-white/70">{t("erp.settings.ratingTags")}</p>
         <p className="mb-3 text-xs text-white/40">{t("erp.settings.ratingHint")}</p>
         <div className="space-y-2">
-          {value.ratingTags.map((r, i) => (
-            <div key={i} className="grid items-end gap-2 rounded-xl border border-white/10 p-3 lg:grid-cols-[120px_1fr_140px_150px_auto]">
+          <ReorderList
+            items={value.ratingTags}
+            onReorder={move("ratingTags")}
+            t={t}
+            className="grid items-end gap-2 lg:grid-cols-[120px_1fr_140px_150px_auto]"
+            renderRow={(r, i) => (
+              <>
               <Input label={t("erp.settings.code")} value={r.key} dir="ltr" onChange={(key) => setList("ratingTags", i, { key })} />
               <BilingualField label={t("erp.org.name")} value={r.name} onChange={(name) => setList("ratingTags", i, { name })} />
               <Select
@@ -394,8 +459,9 @@ function TasksSettings({ initial }) {
               <button type="button" onClick={() => removeFrom("ratingTags", i)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-red-500/30 text-red-400" aria-label={t("common.delete")}>
                 <Trash2 size={15} />
               </button>
-            </div>
-          ))}
+              </>
+            )}
+          />
           <Button
             variant="ghost"
             onClick={() => setValue((v) => ({ ...v, ratingTags: [...v.ratingTags, { key: "", name: { ar: "", en: "" }, kind: "neutral", skill: "" }] }))}

@@ -29,15 +29,25 @@ export function DependencyPicker({ value, onChange, projectId, excludeId }) {
     <div>
       <Label>{t("erp.tasks.dependsOn")}</Label>
       {chosen.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-1.5">
+        // Each task waited for, by name: "#81 · <task name>", its engineer and its state.
+        <div className="mb-2 space-y-1.5">
           {chosen.map((c) => (
-            <span key={c.id} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 py-0.5 pe-1 ps-2.5 text-xs">
-              <span dir="ltr">#{c.number}</span>
+            <div key={c.id} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm">
+              <Link2 size={14} className="shrink-0 text-white/40" />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1.5">
+                  <span className="shrink-0 text-xs text-white/45" dir="ltr">
+                    #{c.number}
+                  </span>
+                  <span className="truncate font-medium text-white">{c.status ? taskHeading(c, lang) : "…"}</span>
+                </span>
+                {c.assignee && <span className="block truncate text-xs text-white/45">{c.assignee.name}</span>}
+              </span>
               {c.status && <StatusBadge status={c.status} />}
-              <button type="button" onClick={() => onChange(value.filter((id) => id !== c.id))} className="rounded-full p-0.5 text-white/50 hover:text-white" aria-label={t("common.delete")}>
-                <X size={12} />
+              <button type="button" onClick={() => onChange(value.filter((id) => id !== c.id))} className="shrink-0 rounded-full p-1 text-white/50 hover:bg-white/10 hover:text-white" aria-label={t("common.delete")}>
+                <X size={14} />
               </button>
-            </span>
+            </div>
           ))}
         </div>
       )}

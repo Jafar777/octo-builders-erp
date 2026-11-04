@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/currentUser";
 import { forbidden } from "@/lib/apiUtils";
-import { HOLDING_STATUSES, makeCalendar } from "@/lib/gantt";
+import { canSeeGantt, HOLDING_STATUSES, isGanttDeptManager, makeCalendar } from "@/lib/gantt";
 import { freeTime, serializeMilestone } from "@/lib/ganttServer";
 import { markOverrunsSoon } from "@/lib/projectDelay";
 import { pickName, viewerLang } from "@/lib/personName";
@@ -11,6 +11,7 @@ import { enrichTasks } from "@/lib/tasks";
 import Task from "@/models/Task";
 import User from "@/models/User";
 import WorkProject from "@/models/WorkProject";
+import { inDepartments } from "@/lib/scope";
 
 const STATUSES = ["active", "on_hold", "finished", "archived"];
 const idStr = (v) => (v ? v.toString() : null);
@@ -20,7 +21,7 @@ const idStr = (v) => (v ? v.toString() : null);
 // ?status=active   (project status, default active)
 export async function GET(request) {
   const user = await requireStaff();
-  if (!user) return forbidden();
+  if (!canSeeGantt(user)) return forbidden();
 
   // Work running late pushes the plan before it's shown.
   await markOverrunsSoon();
@@ -29,11 +30,18 @@ export async function GET(request) {
   if (STATUSES.includes(status)) query.status = status;
 
   const [projects, settings] = await Promise.all([
-    WorkProject.find(query, { milestones: 1, taskBaselineAt: 1, baselines: 1, forecastStart: 1, forecastEnd: 1 }).lean(),
+    WorkProject.find(query, { milestones: 1, taskBaselineAt: 1, baselines: 1, forecastStart: 1, forecastEnd: 1, rank: 1 }).lean(),
     getSettings(),
   ]);
+  // A department manager sees (read-only) the work of their own department's employees.
+  const departmentOnly = isGanttDeptManager(user);
+  const taskQuery = { project: { $in: projects.map((p) => p._id) } };
+  if (departmentOnly) {
+    const team = user.department ? await User.find(inDepartments(user), { _id: 1 }).lean() : [];
+    taskQuery.assignee = { $in: [user.id, ...team.map((u) => u._id.toString())] };
+  }
   // Cancelled tasks stay on the chart, greyed out (like inactive tasks in MS Project).
-  const tasks = await Task.find({ project: { $in: projects.map((p) => p._id) } })
+  const tasks = await Task.find(taskQuery)
     .sort({ plannedStart: 1, createdAt: 1 })
     .limit(3000)
     .lean();
@@ -74,9 +82,12 @@ export async function GET(request) {
       baselines: (p.baselines || []).map((b) => ({ n: b.n, start: b.start || null, end: b.end, at: b.at })),
       forecastStart: p.forecastStart || null,
       forecastEnd: p.forecastEnd || null,
+      rank: Number.isFinite(p.rank) ? p.rank : null,
     })),
     // Changing the schedule is for company-wide managers (GM / CEO).
     canSchedule,
+    // Only the viewer's department's tasks were sent: projects without any are hidden.
+    departmentOnly,
     // …who also see who has free time to give work to.
     freeTime: canSchedule ? await freeTime(calendar) : [],
   });

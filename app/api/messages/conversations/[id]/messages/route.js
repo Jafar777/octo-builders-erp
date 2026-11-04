@@ -20,7 +20,7 @@ const PAGE_SIZE = 40;
 // around one (search results, pinned). Returned oldest → newest. The first page also
 // carries the pinned messages.
 export async function GET(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user) return forbidden();
   const { id } = await params;
   if (!isObjectId(id)) return notFound();
@@ -90,7 +90,7 @@ function cleanAttachments(list) {
 }
 
 export async function POST(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user) return forbidden();
   const { id } = await params;
   if (!isObjectId(id)) return notFound();

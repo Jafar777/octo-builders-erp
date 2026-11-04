@@ -13,10 +13,12 @@ import Department from "@/models/Department";
 import Branch from "@/models/Branch";
 import JobTitle from "@/models/JobTitle";
 import Task from "@/models/Task";
-import { DEFAULT_ROLE } from "@/lib/permissions";
+import { DEFAULT_ROLE, isHiddenRole } from "@/lib/permissions";
 import { usersWithPermissionFor } from "@/lib/scope";
 import { ACTIVE_STATUSES } from "@/lib/tasks";
+import { isTrainingAdmin } from "@/lib/training";
 
+const idStr = (v) => (v ? v.toString() : null);
 const REF_FIELDS = { department: Department, branch: Branch, jobTitle: JobTitle };
 
 // Assign role / department / branch / job title / status / phone / badge ID.
@@ -30,6 +32,8 @@ export async function PATCH(request, { params }) {
   if (!target) return notFound();
 
   const body = await readJson(request);
+  // The hidden coder accounts and role are a coder's alone.
+  if ((isHiddenRole(target.role) || isHiddenRole(body.role)) && !isHiddenRole(actor.role)) return notFound();
   const before = serializeStaff(target.toObject());
   const changes = {};
 
@@ -38,9 +42,9 @@ export async function PATCH(request, { params }) {
     if (id === actor.id) return fail("cannot_change_own_role", 403);
     const role = await Role.findOne({ key: body.role }).lean();
     if (!role) return fail("invalid_role");
-    if (before.role === "gm") {
-      const gms = await User.countDocuments({ role: { $in: ["gm", "admin"] }, status: "active" });
-      if (gms <= 1) return fail("last_gm", 409);
+    if (before.role === "ceo") {
+      const ceos = await User.countDocuments({ role: "ceo", status: "active" });
+      if (ceos <= 1) return fail("last_gm", 409);
     }
     changes.role = body.role;
   }
@@ -53,12 +57,25 @@ export async function PATCH(request, { params }) {
     else return fail(`invalid_${field}`);
   }
 
+  // Other departments a department manager heads too (lib/scope.js userDepartments).
+  if (Array.isArray(body.managedDepartments)) {
+    const own = idStr(changes.department !== undefined ? changes.department : target.department);
+    const ids = [...new Set(body.managedDepartments.filter(isObjectId))].filter((d) => d !== own);
+    if ((await Department.countDocuments({ _id: { $in: ids } })) !== ids.length) return fail("invalid_department");
+    changes.managedDepartments = ids;
+  }
+
   if (body.status === "active" || body.status === "inactive") {
     if (id === actor.id && body.status === "inactive") return fail("cannot_deactivate_self", 403);
     changes.status = body.status;
   }
   if (typeof body.phone === "string") changes.phone = body.phone.trim().slice(0, 30);
   if (typeof body.badgeId === "string") changes.badgeId = body.badgeId.trim().slice(0, 20);
+  // Only the GM / CEO decide who is a trainee.
+  if (typeof body.trainee === "boolean" && body.trainee !== before.trainee) {
+    if (!isTrainingAdmin(actor)) return forbidden();
+    changes.trainee = body.trainee;
+  }
   if (body.firstName !== undefined || body.lastName !== undefined) {
     const names = cleanNameParts(body.firstName, body.lastName);
     if (names.error) return fail(names.error);
@@ -111,7 +128,7 @@ export async function PATCH(request, { params }) {
   // The user's open tabs reload their permissions and navigation.
   await publish(userChannel(id), "user:updated", { userId: id });
 
-  if ("role" in changes || "department" in changes || "status" in changes) {
+  if ("role" in changes || "department" in changes || "status" in changes || "managedDepartments" in changes) {
     await syncStaffChannels();
   }
 

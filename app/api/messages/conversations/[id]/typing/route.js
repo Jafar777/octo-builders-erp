@@ -6,7 +6,7 @@ import Conversation from "@/models/Conversation";
 
 // The client calls this at most every few seconds while the user is typing.
 export async function POST(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user) return forbidden();
   const { id } = await params;
   if (!isObjectId(id)) return notFound();

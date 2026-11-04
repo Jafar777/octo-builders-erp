@@ -17,6 +17,7 @@ import PersonMonth from "@/components/erp/hr/PersonMonth";
 import LeaveList from "@/components/erp/hr/LeaveList";
 import SalaryUnlock from "@/components/erp/hr/SalaryUnlock";
 import { SkeletonList, SkeletonTable } from "@/components/erp/ui/Loading";
+import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 
 // Efficiency colour: actual (task) hours against fingerprint hours.
 const effTone = (e) => (e === null || e === undefined ? "text-white/35" : e >= 0.8 ? "text-emerald-300" : e >= 0.6 ? "text-amber-200" : "text-red-300");
@@ -56,7 +57,10 @@ function Overview({ data, lookups, onOpen, payroll }) {
                   <span className="flex items-center gap-2.5">
                     <Avatar name={r.staff.name} src={r.staff.avatarUrl} size={32} />
                     <span className="min-w-0">
-                      <span className="block truncate font-medium">{r.staff.name}</span>
+                      <span className="flex items-center gap-1.5 truncate font-medium">
+                        <span className="truncate">{r.staff.name}</span>
+                        <TraineeBadge id={r.staff.id} />
+                      </span>
                       <span className="block truncate text-xs text-white/40">
                         {lookups.dep(r.staff.department)}
                         {!r.staff.badgeId && !exempt && <span className="ms-1 text-amber-300">· {t("erp.hr.noBadge")}</span>}
@@ -182,7 +186,9 @@ function PayrollPanel({ data, month, onChanged, settings }) {
               const c = p?.currency || "USD";
               return (
                 <tr key={r.staff.id} className="border-t border-white/5">
-                  <td className="px-3 py-2.5 font-medium">{r.staff.name}</td>
+                  <td className="px-3 py-2.5 font-medium">
+                    {r.staff.name} <TraineeBadge id={r.staff.id} />
+                  </td>
                   {p?.hasSalary ? (
                     <>
                       <td className="px-3 py-2.5 tabular-nums">{money(p.base, c, lang)}</td>

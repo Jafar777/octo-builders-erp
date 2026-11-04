@@ -13,7 +13,7 @@ async function load(params) {
 }
 
 export async function GET(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user) return forbidden();
   const conversation = await load(params);
   if (!conversation) return notFound();
@@ -29,7 +29,7 @@ export async function GET(request, { params }) {
 // Group management: { name }, { addMemberIds }, { removeMemberId } (admins; anyone may
 // remove themselves = leave). Any member: { muted }.
 export async function PATCH(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user) return forbidden();
   const conversation = await load(params);
   if (!conversation) return notFound();

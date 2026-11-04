@@ -6,7 +6,8 @@ import Client from "@/models/Client";
 import { serializeClient } from "@/lib/financeEntries";
 
 export async function GET() {
-  const user = await requirePermission("finance.view");
+  // The general manager (intake.finance) picks an intake's client from this list too.
+  const user = (await requirePermission("finance.view")) || (await requirePermission("intake.finance"));
   if (!user) return forbidden();
   const clients = await Client.find().sort({ name: 1 }).lean();
   return NextResponse.json({ clients: clients.map(serializeClient) });

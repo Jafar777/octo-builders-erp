@@ -11,7 +11,7 @@ import ProjectIntake, { INTAKE_STATUSES } from "@/models/ProjectIntake";
 
 // New-project intake forms (lib/intake). ?status=new|ready|converted|declined
 export async function GET(request) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user || !canUseIntake(user)) return forbidden();
   const status = new URL(request.url).searchParams.get("status");
   const query = INTAKE_STATUSES.includes(status) ? { status: status === "ready" ? { $in: ["ready", "converting"] } : status } : {};
@@ -25,7 +25,7 @@ export async function GET(request) {
 
 // The secretary (or the GM / CEO) hands in a filled form; the GM / CEO are told.
 export async function POST(request) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user || !canUseIntake(user)) return forbidden();
   const { value, error } = cleanIntake(await readJson(request));
   if (error) return fail(error);

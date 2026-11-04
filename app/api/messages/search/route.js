@@ -10,7 +10,7 @@ const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 // Search my own conversations (members only — management review has its own screen).
 // ?q=<text>  &c=<conversationId> to search inside one conversation.
 export async function GET(request) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user) return forbidden();
   const params = new URL(request.url).searchParams;
   const q = (params.get("q") || "").trim().slice(0, 100);

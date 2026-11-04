@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Mail, Pencil, Phone, Plus, Trash2, X } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
@@ -17,6 +18,7 @@ import { DocumentsCard, EmergencyContactCard } from "@/components/erp/hr/HrFile"
 import StaffEditor from "@/components/erp/staff/StaffEditor";
 import KpiRing from "@/components/erp/staff/KpiRing";
 import { PendingSkills } from "@/components/erp/hr/SkillRequests";
+import { isTopRole } from "@/lib/permissions";
 
 const TABS = ["overview", "attendance", "contract", "salary", "documents"];
 
@@ -59,6 +61,38 @@ function usePatch(userId, onDone) {
   return { patch, saving, saved, error };
 }
 
+// CEO: turn the Training Program on or off for this person (lib/training.js).
+function TraineeSwitch({ person, onStaffSaved }) {
+  const { t } = useLanguage();
+  const { user: viewer } = useAuth();
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  if (!isTopRole(viewer?.role)) return null;
+
+  async function change(trainee) {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const { staff } = await api(`/api/staff/${person.id}`, { method: "PATCH", body: { trainee } });
+      onStaffSaved(staff);
+      router.refresh(); // the "Trainee" badges come from the dashboard layout
+    } catch (err) {
+      setError(errorText(t, err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-sky-400/20 bg-sky-400/[0.05] px-4 py-3">
+      <Toggle checked={Boolean(person.trainee)} onChange={change} label={t("erp.staff.trainee")} />
+      <ErrorText>{error}</ErrorText>
+    </div>
+  );
+}
+
 function EmploymentCard({ person, profile, roles, org, canManage, meId, onStaffSaved }) {
   const { t, lang } = useLanguage();
   const [editing, setEditing] = useState(false);
@@ -89,7 +123,9 @@ function EmploymentCard({ person, profile, roles, org, canManage, meId, onStaffS
           }}
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <>
+          {canManage && <TraineeSwitch person={person} onStaffSaved={onStaffSaved} />}
+          <div className="grid gap-4 sm:grid-cols-2">
           <Field label={t("erp.org.department")}>{nameOf(org.departments, person.department)}</Field>
           <Field label={t("erp.org.jobTitle")}>{nameOf(org.jobTitles, person.jobTitle)}</Field>
           <Field label={t("erp.org.branch")}>{nameOf(org.branches, person.branch)}</Field>
@@ -104,7 +140,8 @@ function EmploymentCard({ person, profile, roles, org, canManage, meId, onStaffS
           <Field label={t("erp.hr.contractEnd")}>{profile.contractEnd && <span dir="ltr">{profile.contractEnd}</span>}</Field>
           <Field label={t("erp.staff.badgeId")}>{profile.badgeId && <span dir="ltr">{profile.badgeId}</span>}</Field>
           <Field label={t("erp.staffFile.lastLogin")}>{person.lastLoginAt && formatDateTime(person.lastLoginAt, lang)}</Field>
-        </div>
+          </div>
+        </>
       )}
     </Card>
   );

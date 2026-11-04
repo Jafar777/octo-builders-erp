@@ -7,6 +7,7 @@ import Avatar from "@/components/erp/ui/Avatar";
 import { formatDuration, liveActiveMs, PRIORITY_STYLE, revisionLabel, STATUS_STYLE } from "@/components/erp/tasks/taskUi";
 import { PlanningBadges } from "@/components/erp/tasks/TaskPlanning";
 import Stars from "@/components/erp/tasks/Stars";
+import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 
 export function StatusBadge({ status }) {
   const { t } = useLanguage();
@@ -22,9 +23,12 @@ export function taskHeading(task, lang) {
   return [task.title, task.stage?.name?.[lang]].filter(Boolean).join(" · ") || "—";
 }
 
-export default function TaskRow({ task, lookups, now, onOpen, showAssignee = false }) {
+// `projectFirst` (My Tasks): the project's name on top, bigger than the task's.
+export default function TaskRow({ task, lookups, now, onOpen, showAssignee = false, projectFirst = false }) {
   const { t, lang } = useLanguage();
   const running = task.status === "in_progress";
+  const projectName = task.project?.name?.[lang];
+  const onTop = projectFirst && projectName;
 
   return (
     <button
@@ -36,8 +40,9 @@ export default function TaskRow({ task, lookups, now, onOpen, showAssignee = fal
         #{task.number}
       </span>
       <span className="min-w-0 flex-1 basis-64">
+        {onTop && <span className="mb-0.5 block truncate text-base font-bold text-white">{projectName}</span>}
         <span className="flex flex-wrap items-center gap-2">
-          <span className="truncate font-medium">{taskHeading(task, lang)}</span>
+          <span className={`truncate ${onTop ? "text-sm text-white/80" : "font-medium"}`}>{taskHeading(task, lang)}</span>
           {task.kind !== "task" && (
             <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-white/70">{t(`erp.tasks.kind.${task.kind}`)}</span>
           )}
@@ -59,7 +64,7 @@ export default function TaskRow({ task, lookups, now, onOpen, showAssignee = fal
           <PlanningBadges task={task} />
         </span>
         <span className="mt-0.5 block truncate text-xs text-white/45">
-          {[task.project?.name?.[lang], lookups.typeName(task.type)].filter(Boolean).join(" · ")}
+          {[!onTop && projectName, lookups.typeName(task.type)].filter(Boolean).join(" · ")}
         </span>
       </span>
 
@@ -67,6 +72,7 @@ export default function TaskRow({ task, lookups, now, onOpen, showAssignee = fal
         <span className="flex items-center gap-2 text-xs text-white/70">
           <Avatar name={task.assignee.name} src={task.assignee.avatarUrl} size={24} />
           {task.assignee.name}
+          <TraineeBadge id={task.assignee.id} />
         </span>
       )}
 

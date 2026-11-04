@@ -8,7 +8,7 @@ import User from "@/models/User";
 // Add a document (already uploaded to ImageKit) to an HR file.
 // HR, or the employee for their own file. Body: { name, url, fileId, mime, size }
 export async function POST(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   const { id } = await params;
   if (!user || !isObjectId(id)) return forbidden();
   const isHr = hasPermission(user, "attendance.manage") && (await canSeePerson(user, id, "attendance.manage"));

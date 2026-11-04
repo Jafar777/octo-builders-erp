@@ -13,6 +13,7 @@ import {
   Plus,
   Repeat,
   Send,
+  ShieldCheck,
   XCircle,
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
@@ -40,6 +41,8 @@ import {
   toLocalInput,
   useNow,
 } from "@/components/erp/tasks/taskUi";
+import TraineeBadge from "@/components/erp/ui/TraineeBadge";
+import { ExternalReviewBox } from "@/components/erp/tasks/ExternalReview";
 
 const TAG_KINDS = ["neutral", "excellent", "contribution", "error"];
 
@@ -59,7 +62,12 @@ function ReviewForm({ task, lookups, access, onDone }) {
   const originalHours = task.maxHours || task.estimatedHours || "";
   // The GM / CEO reviewing in the customer's place: stars and notes, like the customer.
   const forCustomer = access?.level === "customer";
+  // The department manager may accept it only if the CEO accepts too (it then waits for
+  // the CEO). Not when the task goes to the CEO already, nor for the CEO themselves.
+  const canAskCeo = access?.level === "manager" && !access.covers?.includes("gm");
+  const decisions = canAskCeo ? ["approve_ceo", "approve", "reject"] : ["approve", "reject"];
   const { t, lang } = useLanguage();
+  // Plain "accept" is always the default.
   const [decision, setDecision] = useState("approve");
   const [ratings, setRatings] = useState([]);
   const [stars, setStars] = useState(0);
@@ -101,25 +109,28 @@ function ReviewForm({ task, lookups, access, onDone }) {
         <p className="font-semibold">{t("erp.tasks.reviewTitle")}</p>
         {access?.level && <LevelBadge level={access.level} onBehalf={access.onBehalf} />}
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        {["approve", "reject"].map((d) => (
+      <div className={`grid gap-2 ${decisions.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+        {decisions.map((d) => (
           <button
             key={d}
             type="button"
             onClick={() => setDecision(d)}
-            className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-semibold ${
+            className={`flex items-center justify-center gap-2 rounded-xl border px-2 py-2.5 text-center text-sm font-semibold leading-tight ${
               decision === d
                 ? d === "approve"
                   ? "border-emerald-400 bg-emerald-500/20 text-emerald-200"
-                  : "border-red-400 bg-red-500/20 text-red-200"
+                  : d === "approve_ceo"
+                    ? "border-sky-400 bg-sky-500/20 text-sky-200"
+                    : "border-red-400 bg-red-500/20 text-red-200"
                 : "border-white/10 text-white/60"
             }`}
           >
-            {d === "approve" ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
+            {d === "approve" ? <CheckCircle2 size={16} className="shrink-0" /> : d === "approve_ceo" ? <ShieldCheck size={16} className="shrink-0" /> : <XCircle size={16} className="shrink-0" />}
             {t(`erp.tasks.${d}`)}
           </button>
         ))}
       </div>
+      {decision === "approve_ceo" && <p className="-mt-2 text-xs text-sky-200/80">{t("erp.tasks.approveCeoHint")}</p>}
 
       <div>
         <Label>{t("erp.tasks.stars")}</Label>
@@ -195,7 +206,7 @@ function ReviewForm({ task, lookups, access, onDone }) {
       <ErrorText>{error}</ErrorText>
       <Button
         onClick={submit}
-        disabled={busy || (decision === "approve" && !stars) || (decision === "reject" && pickHours && redoHours !== "" && !(Number(redoHours) >= 0.5 && Number(redoHours) <= 200))}
+        disabled={busy || (decision !== "reject" && !stars) || (decision === "reject" && pickHours && redoHours !== "" && !(Number(redoHours) >= 0.5 && Number(redoHours) <= 200))}
         className="w-full"
       >
         {busy && <Loader2 size={16} className="animate-spin" />}
@@ -316,7 +327,7 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
   const s = task?.status;
 
   return (
-    <Modal open={Boolean(taskId)} onClose={onClose} title={task ? `#${task.number} · ${taskHeading(task, lang)}` : "…"} wide>
+    <Modal open={Boolean(taskId)} onClose={onClose} title={task ? `#${task.number} · ${task.project?.name?.[lang] || taskHeading(task, lang)}` : "…"} wide>
       {!task ? (
         error ? (
           <ErrorText>{error}</ErrorText>
@@ -359,12 +370,15 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
 
           <div className="grid gap-4 sm:grid-cols-3">
             <Detail label={t("erp.tasks.project")}>{task.project?.name?.[lang]}</Detail>
+            {/* The header shows the project's name; the task's own name is here. */}
+            {task.project && <Detail label={t("erp.tasks.taskName")}>{taskHeading(task, lang)}</Detail>}
             <Detail label={t("erp.tasks.type")}>{lookups.typeName(task.type)}</Detail>
             <Detail label={t("erp.tasks.assignee")}>
               {task.assignee && (
                 <span className="flex items-center gap-2">
                   <Avatar name={task.assignee.name} src={task.assignee.avatarUrl} size={22} />
                   {task.assignee.name}
+                  <TraineeBadge id={task.assignee.id} />
                 </span>
               )}
             </Detail>
@@ -410,7 +424,8 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
               <span>
                 {t("erp.tasks.blockedBy")}{" "}
                 {task.dependsOn
-                  .filter((d) => !["submitted", "approved", "done", "cancelled"].includes(d.status))
+                  // Not handed in yet, or out for an external review that isn't back.
+                  .filter((d) => !["submitted", "approved", "done", "cancelled"].includes(d.status) || d.awaitingReview)
                   .map((d) => (
                     <button key={d.id} type="button" onClick={() => onOpenTask?.(d.id)} className="me-1 underline" dir="ltr">
                       #{d.number}
@@ -419,6 +434,15 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
               </span>
             </div>
           )}
+
+          {/* Out for an external review after delivery (another office checks it). */}
+          <ExternalReviewBox
+            task={task}
+            onChanged={() => {
+              load();
+              onChanged?.();
+            }}
+          />
 
           {/* Planning: parent, predecessors, repeat rule, sub-tasks */}
           <div className="space-y-3 rounded-2xl border border-white/10 p-4">
@@ -584,6 +608,16 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
             </div>
           )}
 
+          {/* A department manager starts (or resumes) the work for their employee. */}
+          {p.canStartFor && ["todo", "on_hold"].includes(s) && (
+            <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-sky-400/30 bg-sky-400/[0.06] p-3">
+              <Button onClick={() => act(s === "todo" ? "start" : "resume")} disabled={busy || task.blocked}>
+                <Play size={16} /> {t("erp.tasks.startFor", { name: task.assignee?.name || "" })}
+              </Button>
+              <span className="text-xs text-white/50">{t("erp.tasks.startForHint")}</span>
+            </div>
+          )}
+
           {/* Assignee actions */}
           {p.isAssignee && (
             <div className="space-y-3">
@@ -683,32 +717,23 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
           {/* Head review */}
           {p.canReview && s === "submitted" && <ReviewForm task={task} lookups={lookups} access={p.review} onDone={() => { load(); onChanged?.(); }} />}
 
-          {/* Manager tools */}
-          {p.canManage && s === "todo" && !p.isAssignee && (
-            <div className="grid items-end gap-3 rounded-2xl border border-white/10 p-4 sm:grid-cols-[1fr_1fr_auto]">
+          {/* Give a not-started task to another employee: the CEO to anyone, a department
+              manager among their departments' employees. The Gantt places it in the new
+              employee's schedule — nobody sets a delivery date by hand. */}
+          {p.canReassign && s === "todo" && !p.isAssignee && (
+            <div className="grid items-end gap-3 rounded-2xl border border-white/10 p-4 sm:grid-cols-[1fr_auto]">
               <Select
                 label={t("erp.tasks.assignee")}
                 value={manage.assigneeId}
                 onChange={(v) => setManage((m) => ({ ...m, assigneeId: v }))}
-                options={lookups.people.map((x) => ({ value: x.id, label: x.name }))}
+                options={lookups.people
+                  .filter((x) => !p.departments || p.departments.includes(x.department))
+                  .map((x) => ({ value: x.id, label: x.name }))}
               />
-              {(task.maxHours > 0 || task.project) && !canRouteStages(user) ? (
-                <p className="text-xs text-sky-200">{t("erp.scale.lockedHint")}</p>
-              ) : (
-                <Input type="datetime-local" label={t("erp.tasks.dueAt")} value={manage.dueAt} onChange={(v) => setManage((m) => ({ ...m, dueAt: v }))} />
-              )}
-              <Button
-                variant="ghost"
-                onClick={() =>
-                  patch(
-                    (task.maxHours > 0 || task.project) && !canRouteStages(user)
-                      ? { assigneeId: manage.assigneeId }
-                      : { assigneeId: manage.assigneeId, dueAt: manage.dueAt ? new Date(manage.dueAt).toISOString() : null }
-                  )
-                }
-              >
+              <Button variant="ghost" onClick={() => patch({ assigneeId: manage.assigneeId })} disabled={!manage.assigneeId || manage.assigneeId === task.assignee?.id}>
                 {t("common.save")}
               </Button>
+              <p className="text-[11px] text-white/45 sm:col-span-2">{t("erp.tasks.reassignHint")}</p>
             </div>
           )}
 

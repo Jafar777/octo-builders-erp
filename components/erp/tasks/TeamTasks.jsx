@@ -15,6 +15,7 @@ import TaskDrawer from "@/components/erp/tasks/TaskDrawer";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { formatDuration, liveActiveMs, useNow } from "@/components/erp/tasks/taskUi";
 import { SkeletonList } from "@/components/erp/ui/Loading";
+import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 
 const MODES = ["person", "project"];
 // Working first, then what's paused, then the queue, then what's waiting for the head.
@@ -61,6 +62,7 @@ function PersonCard({ person, tasks, meId, online, departmentName, now, onOpen }
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold">
             {person.name}
+            <TraineeBadge id={person.id} className="ms-2" />
             {person.id === meId && <span className="ms-2 text-xs font-normal text-brand-orange">({t("erp.team.you")})</span>}
           </p>
           <p className="truncate text-xs text-white/45">

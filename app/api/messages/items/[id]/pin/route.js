@@ -10,7 +10,7 @@ const MAX_PINS = 20;
 
 // Pin / unpin a message for everyone in the conversation. Body: { pin: true|false }
 export async function POST(request, { params }) {
-  const user = await requireStaff();
+  const user = await requireStaff({ limited: true });
   if (!user) return forbidden();
   const { id } = await params;
   const message = isObjectId(id) ? await Message.findById(id) : null;

@@ -9,7 +9,7 @@ import Task from "@/models/Task";
 // Body: { decision: approve|reject, stars, ratings[], notes, rejectCause, redoHours }
 export async function POST(request, { params }) {
   const user = await getCurrentUser();
-  if (!user || !(user.isStaff || user.isCustomer)) return forbidden();
+  if (!user || user.limited || !(user.isStaff || user.isCustomer)) return forbidden();
   const { id } = await params;
   if (!isObjectId(id)) return notFound();
   const task = await Task.findById(id);
