@@ -105,4 +105,8 @@ if (process.env.NODE_ENV !== "production" && mongoose.models.User) {
   delete mongoose.models.User;
 }
 
+// In development a hot reload keeps the old compiled model, which silently drops any
+// field added to the schema since: rebuild it so new fields are saved straight away.
+if (process.env.NODE_ENV !== "production" && mongoose.models.User) mongoose.deleteModel("User");
+
 export default mongoose.models.User || mongoose.model("User", UserSchema);

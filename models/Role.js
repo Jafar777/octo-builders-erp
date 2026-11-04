@@ -19,4 +19,8 @@ const RoleSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// In development a hot reload keeps the old compiled model, which silently drops any
+// field added to the schema since: rebuild it so new fields are saved straight away.
+if (process.env.NODE_ENV !== "production" && mongoose.models.Role) mongoose.deleteModel("Role");
+
 export default mongoose.models.Role || mongoose.model("Role", RoleSchema);

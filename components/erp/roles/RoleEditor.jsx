@@ -142,6 +142,12 @@ export default function RoleEditor({
         { ...out, userCount: out.userCount ?? role?.userCount ?? 0 },
         !role,
       );
+      // Show what was really stored; say so if the server kept something different.
+      const stored = formOf(out);
+      if (changeCount(stored, { ...form, permissions: form.limited ? stored.permissions : form.permissions }) > 0) {
+        setError(t("erp.access.notStored"));
+      }
+      setForm(stored);
       setFlash(true);
       setTimeout(() => setFlash(false), 1800);
     } catch (err) {
