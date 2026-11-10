@@ -48,7 +48,7 @@ for (const d of devices) {
 
 // ----- punches per day -----
 const since = new Date(Date.now() - days * 86400000);
-const punches = await RawPunch.find({ time: { $gte: since } }, { badgeId: 1, time: 1, source: 1, device: 1, createdAt: 1 }).lean();
+const punches = await RawPunch.find({ time: { $gte: since }, deleted: { $ne: true } }, { badgeId: 1, time: 1, source: 1, device: 1, createdAt: 1 }).lean();
 log(`\n=== Punches per day (last ${days} days) ===`);
 const perDay = {};
 for (const p of punches) {
@@ -92,7 +92,7 @@ if (noBadge.length) {
   log("\n=== Active staff without a fingerprint ID ===");
   log(`  ${noBadge.map((u) => u.nameAr || u.name).join(", ")}`);
 }
-const future = await RawPunch.countDocuments({ time: { $gt: new Date(Date.now() + 10 * 60000) } });
+const future = await RawPunch.countDocuments({ time: { $gt: new Date(Date.now() + 10 * 60000) }, deleted: { $ne: true } });
 if (future) problems.push(`${future} punches are dated in the future: the device clock is (or was) wrong.`);
 // A wrong time zone shows as punches in the middle of the night.
 const device = punches.filter((p) => p.source === "device");

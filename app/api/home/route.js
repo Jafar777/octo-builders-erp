@@ -13,7 +13,7 @@ import { queueQuery } from "@/lib/taskReview";
 import AttendanceDevice from "@/models/AttendanceDevice";
 import LeaveRequest from "@/models/LeaveRequest";
 import Notification from "@/models/Notification";
-import RawPunch from "@/models/RawPunch";
+import RawPunch, { ACTIVE_PUNCH } from "@/models/RawPunch";
 import Task from "@/models/Task";
 import User from "@/models/User";
 import WorkProject from "@/models/WorkProject";
@@ -106,7 +106,7 @@ export async function GET() {
     jobs.push(
       (async () => {
         const staff = await hrStaff({ status: "active", ...(user.scope === "all" ? {} : inDepartments(user)) });
-        const punches = await RawPunch.find({ time: { $gte: new Date(now - 36 * 3600000) } }, { badgeId: 1, time: 1 }).lean();
+        const punches = await RawPunch.find({ time: { $gte: new Date(now - 36 * 3600000) }, ...ACTIVE_PUNCH }, { badgeId: 1, time: 1 }).lean();
         const inToday = new Set(punches.filter((p) => localParts(p.time, tz).date === today).map((p) => p.badgeId));
         const onLeave = await LeaveRequest.countDocuments({ status: "approved", from: { $lte: today }, to: { $gte: today }, user: { $in: staff.map((s) => s.id) } });
         const working = await Task.distinct("assignee", { status: "in_progress", assignee: { $in: staff.map((s) => s.id) } });

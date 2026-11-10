@@ -74,7 +74,24 @@ export async function POST(request) {
   }
   device.agentVersion = String(body.agent || "").slice(0, 20);
   device.lastError = String(body.error || "").slice(0, 500);
+  // HR's remote settings and commands (the agent v2 applies them). A command is handed
+  // over once; the agent reports anything that failed in `error` on its next sync.
+  const commands = (device.commands || []).map((c) => c.type);
+  if (commands.length && body.agent) {
+    device.lastCommand = commands.join(", ");
+    device.lastCommandAt = new Date(now);
+    device.commands = [];
+  }
   await device.save();
 
-  return NextResponse.json({ ok: true, received: docs.length, inserted, duplicates: docs.length - inserted, invalid, future });
+  return NextResponse.json({
+    ok: true,
+    received: docs.length,
+    inserted,
+    duplicates: docs.length - inserted,
+    invalid,
+    future,
+    config: { syncClock: Boolean(device.syncClock) },
+    commands: body.agent ? commands : [],
+  });
 }

@@ -32,7 +32,7 @@ function DayEditor({ day, userId, onSaved, onClose }) {
   async function addPunch() {
     setError("");
     try {
-      await api("/api/hr/punches", { method: "POST", body: { userId, time: new Date(`${day.date}T${punch}`).toISOString() } });
+      await api("/api/hr/punches", { method: "POST", body: { userId, date: day.date, time: punch } }); // office time, whatever the browser's zone
       setPunch("");
       onSaved(false);
     } catch (err) {

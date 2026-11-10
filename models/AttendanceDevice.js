@@ -27,6 +27,19 @@ const AttendanceDeviceSchema = new mongoose.Schema(
     totalInserted: { type: Number, default: 0 },
     newestPunch: { type: Date, default: null },
     agentVersion: { type: String, default: "" },
+    // Remote control, set in HR → Fingerprint and picked up by the agent (v2) with its
+    // next sync (every 30 s): keep the device clock on the office PC's time, and one-off
+    // commands — "set_clock" (now), "resend_all" (send every punch the device holds
+    // again; the ones already here are ignored).
+    syncClock: { type: Boolean, default: false },
+    commands: [
+      new mongoose.Schema(
+        { type: { type: String, enum: ["set_clock", "resend_all"], required: true }, at: { type: Date, default: Date.now }, by: { type: mongoose.Schema.Types.ObjectId, ref: "User" } },
+        { _id: false }
+      ),
+    ],
+    lastCommand: { type: String, default: "" }, // the last one delivered, and when
+    lastCommandAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

@@ -36,8 +36,9 @@ DEVICE_KEY = CONFIG["device_key"]
 TZ_OFFSET = CONFIG.get("tz_offset", "+03:00")
 INTERVAL = int(CONFIG.get("interval_seconds", 30))
 # Set the device clock from this PC's clock (kept right by Windows) when they differ by
-# more than a minute. Off by default: turn it on only if this PC's time is reliable.
-SYNC_CLOCK = bool(CONFIG.get("sync_device_clock", False))
+# more than a minute. Off by default; HR can switch it on from the dashboard
+# (HR → Fingerprint), which wins over this file.
+STATE = {"sync_clock": bool(CONFIG.get("sync_device_clock", False)), "set_clock_now": False}
 BATCH = 500
 VERSION = "2"
 
@@ -77,10 +78,11 @@ def read_device():
         records = conn.get_attendance()
         try:
             clock = conn.get_time()
-            if SYNC_CLOCK and abs((clock - office_now()).total_seconds()) > 60:
+            if STATE["set_clock_now"] or (STATE["sync_clock"] and abs((clock - office_now()).total_seconds()) > 60):
                 conn.set_time(office_now())
                 log(f"device clock was {clock:%Y-%m-%d %H:%M:%S}: set to this PC's time")
                 clock = conn.get_time()
+                STATE["set_clock_now"] = False
             device_time = clock.strftime("%Y-%m-%dT%H:%M:%S") + TZ_OFFSET
         except Exception as e:
             log(f"could not read the device clock: {e}")
@@ -120,7 +122,24 @@ def send_pending(error="", device_time=None):
     if rows and result.get("ok"):
         DB.executemany("UPDATE punches SET sent = 1 WHERE badge = ? AND time = ?", rows)
         DB.commit()
+    apply_remote(result)
     return len(rows), result
+
+
+def apply_remote(result):
+    """Settings and one-off commands HR sent from the dashboard (HR → Fingerprint)."""
+    config = result.get("config") or {}
+    if "syncClock" in config and bool(config["syncClock"]) != STATE["sync_clock"]:
+        STATE["sync_clock"] = bool(config["syncClock"])
+        log(f"dashboard: keep the device clock synced = {STATE['sync_clock']}")
+    for command in result.get("commands") or []:
+        if command == "set_clock":
+            STATE["set_clock_now"] = True  # done at the next device read
+            log("dashboard: set the device clock now")
+        elif command == "resend_all":
+            DB.execute("UPDATE punches SET sent = 0")
+            DB.commit()
+            log("dashboard: sending every punch again (the ones already in the system are ignored)")
 
 
 def main():

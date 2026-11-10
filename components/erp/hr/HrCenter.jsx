@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { Copy, Gift, Lock, LockOpen, Plus, Trash2 } from "lucide-react";
+import { Gift, Lock, LockOpen, Plus, Trash2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { api, errorText } from "@/lib/clientApi";
@@ -14,6 +14,7 @@ import Modal from "@/components/erp/ui/Modal";
 import { Button, Card, ErrorText, Input, PageHeader, Select, Toggle } from "@/components/erp/ui/fields";
 import { hm, money, MonthPicker } from "@/components/erp/hr/hrUi";
 import PersonMonth from "@/components/erp/hr/PersonMonth";
+import FingerprintCenter from "@/components/erp/hr/FingerprintCenter";
 import LeaveList from "@/components/erp/hr/LeaveList";
 import SalaryUnlock from "@/components/erp/hr/SalaryUnlock";
 import { SkeletonList, SkeletonTable } from "@/components/erp/ui/Loading";
@@ -214,147 +215,6 @@ function PayrollPanel({ data, month, onChanged, settings }) {
   );
 }
 
-function Devices() {
-  const { t, lang } = useLanguage();
-  const confirm = useConfirm();
-  const [devices, setDevices] = useState(null);
-  const [unknownBadges, setUnknownBadges] = useState([]);
-  const [name, setName] = useState("");
-  const [newKey, setNewKey] = useState(null);
-  const [error, setError] = useState("");
-  // Time of the last refresh, used to judge "online" (heartbeat within 10 minutes).
-  const [checkedAt, setCheckedAt] = useState(0);
-  const load = useCallback(
-    () =>
-      api("/api/hr/devices")
-        .then((d) => {
-          setDevices(d.devices);
-          setUnknownBadges(d.unknownBadges || []);
-          setCheckedAt(Date.now());
-        })
-        .catch(() => {}),
-    []
-  );
-  // The agent reports every 30 s: refresh as often, so HR sees punches arrive.
-  useEffect(() => {
-    load();
-    const timer = setInterval(load, 30000);
-    return () => clearInterval(timer);
-  }, [load]);
-
-  async function create() {
-    setError("");
-    try {
-      const d = await api("/api/hr/devices", { method: "POST", body: { name } });
-      setNewKey(d.key);
-      setName("");
-      load();
-    } catch (err) {
-      setError(errorText(t, err));
-    }
-  }
-
-  const online = (d) => d.lastSeenAt && checkedAt - new Date(d.lastSeenAt).getTime() < 10 * 60000;
-
-  return (
-    <div className="max-w-3xl space-y-5">
-      <p className="text-sm text-white/60">{t("erp.hr.devicesHint")}</p>
-      <div className="flex items-end gap-2">
-        <div className="flex-1">
-          <Input label={t("erp.hr.deviceName")} value={name} onChange={setName} placeholder="ZKTeco — Damascus office" />
-        </div>
-        <Button onClick={create} disabled={!name.trim()}>
-          <Plus size={16} /> {t("common.add")}
-        </Button>
-      </div>
-      {newKey && (
-        <div className="space-y-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.06] p-4">
-          <p className="text-sm font-medium">{t("erp.hr.keyOnce")}</p>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 break-all rounded-lg bg-black/30 px-3 py-2 text-xs" dir="ltr">{newKey}</code>
-            <Button variant="ghost" onClick={() => navigator.clipboard?.writeText(newKey)}>
-              <Copy size={15} />
-            </Button>
-          </div>
-        </div>
-      )}
-      <ErrorText>{error}</ErrorText>
-      {!devices && <SkeletonList rows={2} />}
-      {(devices || []).map((d) => (
-        <Card key={d.id} className="flex flex-wrap items-center gap-4">
-          <span className={`flex items-center gap-2 text-sm ${online(d) ? "text-emerald-300" : "text-amber-300"}`}>
-            <span className={`h-2.5 w-2.5 rounded-full ${online(d) ? "bg-emerald-400" : "bg-amber-400"}`} />
-            {online(d) ? t("erp.hr.deviceOnline") : t("erp.hr.deviceOffline")}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="font-medium">{d.name}</p>
-            <p className="text-xs text-white/60">
-              …{d.keyHint} · {t("erp.hr.lastSeen")}: {d.lastSeenAt ? formatDateTime(d.lastSeenAt, lang) : "—"}
-              {d.lastError && <span className="text-red-300"> · {d.lastError}</span>}
-            </p>
-            <DeviceHealth device={d} online={online(d)} />
-          </div>
-          <Toggle checked={d.active} onChange={(active) => api(`/api/hr/devices/${d.id}`, { method: "PATCH", body: { active } }).then(load)} label={t("erp.org.active")} />
-          <button
-            type="button"
-            onClick={async () => (await confirm({ text: t("common.confirmDelete"), kind: "delete" })) && api(`/api/hr/devices/${d.id}`, { method: "DELETE" }).then(load)}
-            className="text-red-400"
-            aria-label={t("common.delete")}
-          >
-            <Trash2 size={16} />
-          </button>
-        </Card>
-      ))}
-      {unknownBadges.length > 0 && (
-        <Card className="space-y-2 border-amber-400/30">
-          <p className="font-medium text-amber-200">{t("erp.hr.unknownBadgesTitle")}</p>
-          <p className="text-xs text-white/60">{t("erp.hr.unknownBadgesHint")}</p>
-          <ul className="space-y-1 text-sm">
-            {unknownBadges.map((b) => (
-              <li key={b.badgeId} className="tabular-nums">
-                {t("erp.hr.unknownBadge", { id: b.badgeId, count: b.count, last: formatDateTime(b.last, lang) })}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// Is the device really delivering? Punches received, its clock, the last batch.
-function DeviceHealth({ device: d, online }) {
-  const { t, lang } = useLanguage();
-  const skew = d.clockSkewSec;
-  const clockOff = skew !== null && Math.abs(skew) > 120;
-  const line = "mt-1 block text-xs";
-  return (
-    <div className="mt-1">
-      <span className={`${line} text-white/60`}>
-        {t("erp.hr.devLastPunch")}: {d.lastPunchAt ? formatDateTime(d.lastPunchAt, lang) : "—"} · {t("erp.hr.devLast24h", { n: d.last24h || 0 })} ·{" "}
-        {t("erp.hr.devTotal", { n: d.totalInserted || 0 })}
-      </span>
-      {d.lastBatch?.at && (
-        <span className={`${line} text-white/45`}>
-          {t("erp.hr.devLastBatch", { received: d.lastBatch.received, inserted: d.lastBatch.inserted })} · {formatDateTime(d.lastBatch.at, lang)}
-          {d.agentVersion && ` · ${t("erp.hr.devAgent")} ${d.agentVersion}`}
-        </span>
-      )}
-      {skew === null ? (
-        d.lastSeenAt && <span className={`${line} text-amber-300`}>{t("erp.hr.devClockUnknown")}</span>
-      ) : clockOff ? (
-        <span className={`${line} font-medium text-red-300`}>
-          {t("erp.hr.devClockOff", { min: Math.round(Math.abs(skew) / 60), dir: t(skew > 0 ? "erp.hr.devClockAhead" : "erp.hr.devClockBehind") })}
-        </span>
-      ) : (
-        <span className={`${line} text-emerald-300/80`}>{t("erp.hr.devClockOk")}</span>
-      )}
-      {d.lastBatch?.future > 0 && <span className={`${line} text-red-300`}>{t("erp.hr.devFuture", { n: d.lastBatch.future })}</span>}
-      {online && !d.last24h && <span className={`${line} text-amber-300`}>{t("erp.hr.devNoPunchToday")}</span>}
-    </div>
-  );
-}
-
 function Rules({ settings, onSaved }) {
   const { t } = useLanguage();
   const [value, setValue] = useState(settings.hr);
@@ -516,7 +376,7 @@ export default function HrCenter({ initialMonth }) {
         ) : (
           <PayrollPanel data={data} month={month} settings={settings} onChanged={load} />
         ))}
-      {tab === "devices" && <Devices />}
+      {tab === "devices" && <FingerprintCenter />}
       {tab === "rules" && settings && <Rules settings={settings} onSaved={() => { loadSettings(); load(); }} />}
 
       <Modal open={Boolean(viewing)} onClose={() => setViewing(null)} title={viewing?.name || ""} wide>

@@ -5,7 +5,7 @@ import { audit } from "@/lib/audit";
 import { localParts } from "@/lib/attendance";
 import { todayIn } from "@/lib/hr";
 import { getSettings } from "@/lib/settings";
-import RawPunch from "@/models/RawPunch";
+import RawPunch, { ACTIVE_PUNCH } from "@/models/RawPunch";
 import User from "@/models/User";
 
 const MIN_GAP_MS = 5 * 60 * 1000;
@@ -19,7 +19,7 @@ export async function GET() {
   const tz = settings.hr.timezone;
   const today = todayIn(tz);
   const punches = me?.badgeId
-    ? (await RawPunch.find({ badgeId: me.badgeId, time: { $gte: new Date(Date.now() - 36 * 3600000) } }).sort({ time: 1 }).lean()).filter(
+    ? (await RawPunch.find({ badgeId: me.badgeId, time: { $gte: new Date(Date.now() - 36 * 3600000) }, ...ACTIVE_PUNCH }).sort({ time: 1 }).lean()).filter(
         (p) => localParts(p.time, tz).date === today
       )
     : [];
@@ -39,7 +39,7 @@ export async function POST(request) {
   if (!settings.hr.webCheckIn) return fail("web_checkin_disabled", 403);
   const me = await User.findById(user.id, { badgeId: 1 }).lean();
   if (!me?.badgeId) return fail("no_badge");
-  if (await RawPunch.exists({ badgeId: me.badgeId, time: { $gt: new Date(Date.now() - MIN_GAP_MS) } })) return fail("punch_too_soon", 429);
+  if (await RawPunch.exists({ badgeId: me.badgeId, time: { $gt: new Date(Date.now() - MIN_GAP_MS) }, ...ACTIVE_PUNCH })) return fail("punch_too_soon", 429);
 
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "";
   const punch = await RawPunch.create({ badgeId: me.badgeId, time: new Date(), source: "web", createdBy: user.id, note: ip ? `IP ${ip}` : "" });

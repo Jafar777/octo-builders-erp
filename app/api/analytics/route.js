@@ -9,7 +9,7 @@ import { lateTaskCount, projectRisk, projectScore, rejectionCount } from "@/lib/
 import { getSettings } from "@/lib/settings";
 import { loadFinance } from "@/lib/finance";
 import LeaveRequest from "@/models/LeaveRequest";
-import RawPunch from "@/models/RawPunch";
+import RawPunch, { ACTIVE_PUNCH } from "@/models/RawPunch";
 import Task from "@/models/Task";
 import WorkProject from "@/models/WorkProject";
 import { inDepartments } from "@/lib/scope";
@@ -125,7 +125,7 @@ export async function GET() {
 
   // Live team board
   const [todayPunches, leavesToday] = await Promise.all([
-    RawPunch.find({ time: { $gte: new Date(now - 36 * 3600000) } }, { badgeId: 1, time: 1 }).lean(),
+    RawPunch.find({ time: { $gte: new Date(now - 36 * 3600000) }, ...ACTIVE_PUNCH }, { badgeId: 1, time: 1 }).lean(),
     LeaveRequest.find({ status: "approved", from: { $lte: today }, to: { $gte: today } }, { user: 1, type: 1 }).lean(),
   ]);
   const punchedToday = new Set(todayPunches.filter((p) => localParts(p.time, tz).date === today).map((p) => p.badgeId));

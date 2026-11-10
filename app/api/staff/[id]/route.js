@@ -73,6 +73,9 @@ export async function PATCH(request, { params }) {
   }
   if (typeof body.phone === "string") changes.phone = body.phone.trim().slice(0, 30);
   if (typeof body.badgeId === "string") changes.badgeId = body.badgeId.trim().slice(0, 20);
+  // One fingerprint ID per person: two people with the same ID would share their punches
+  // (HR → Fingerprint moves an ID from one person to another).
+  if (changes.badgeId && (await User.exists({ badgeId: changes.badgeId, _id: { $ne: id } }))) return fail("badge_in_use", 409);
   // Only the GM / CEO decide who is a trainee.
   if (typeof body.trainee === "boolean" && body.trainee !== before.trainee) {
     if (!isTrainingAdmin(actor)) return forbidden();

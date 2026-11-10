@@ -48,6 +48,24 @@ Version 2:
   `"sync_device_clock": true` to `config.json` (only if the PC's own time is right),
 - keeps its log file small (`octo_sync_log.txt`, then `octo_sync_log.old.txt`).
 
+## Managing it from the dashboard (no office visit)
+
+**HR → Fingerprint** (the CEO / company-wide HR):
+
+- **Punches**: every punch, by day and person. Correct the time, move punches to another
+  fingerprint ID, delete or restore them, add missing ones. Deleting or editing never
+  loses anything (the original stays, hidden), and the device sending a punch again
+  doesn't bring a deleted one back.
+- **Fingerprint IDs**: which ID belongs to whom; change it, link a new ID, see IDs that
+  belong to nobody.
+- **Devices → Remote control** (agent v2): keep the device clock on the PC's time, set
+  the clock now, or send every punch from the device again. The agent picks these up
+  with its next sync (30 s). `sync_device_clock` in `config.json` is only the starting
+  value; the dashboard setting wins.
+
+What still needs the office PC: installing / updating this agent itself (once — remote
+desktop such as AnyDesk is enough) and enrolling a new finger on the device.
+
 ## Checking that punches arrive
 
 - **HR → Devices**: online, last punch, punches in the last 24 hours, the clock check,
