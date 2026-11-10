@@ -118,6 +118,8 @@ const WorkProjectSchema = new mongoose.Schema(
     createdBy: { type: ObjectId, ref: "User" },
     // The new-project intake form it was created from (models/ProjectIntake).
     intake: { type: ObjectId, ref: "ProjectIntake", default: null },
+    // Imported from the old Excel / Access program (scripts/legacy): its name there.
+    legacyKey: { type: String, default: undefined },
   },
   { timestamps: true }
 );

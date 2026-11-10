@@ -16,6 +16,10 @@ const KpiResultSchema = new mongoose.Schema(
     of: { type: Number, default: 0 },
     indicators: { type: mongoose.Schema.Types.Mixed, default: [] },
     bonus: { type: Number, default: 0 },
+    // Scored by the old Excel program (its tbl_KPI_Archive, scripts/legacy): kept as the
+    // month's official KPI, and never recalculated or deleted when the month is closed
+    // or reopened (lib/hr.js).
+    legacy: { type: Boolean, default: false },
   },
   { timestamps: true, minimize: false }
 );

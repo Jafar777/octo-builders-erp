@@ -162,6 +162,13 @@ const TaskSchema = new mongoose.Schema(
 
     dueReminderSent: { type: Boolean, default: false },
     overdueNotified: { type: Boolean, default: false },
+
+    // Imported from the old Excel / Access program (scripts/legacy): the row it came
+    // from, so the import can run again without duplicates. Null on tasks made here.
+    legacy: {
+      type: new mongoose.Schema({ source: String, id: Number }, { _id: false }),
+      default: undefined,
+    },
   },
   { timestamps: true }
 );
@@ -174,5 +181,6 @@ TaskSchema.index({ dependsOn: 1 });
 TaskSchema.index({ "recurrence.nextAt": 1 });
 TaskSchema.index({ status: 1, reviewLevel: 1 });
 TaskSchema.index({ "reviews.by": 1 });
+TaskSchema.index({ "legacy.source": 1, "legacy.id": 1 }, { sparse: true });
 
 export default mongoose.models.Task || mongoose.model("Task", TaskSchema);
