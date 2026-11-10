@@ -4,5 +4,6 @@
   "device_ip": "192.168.1.200",
   "device_port": 4370,
   "tz_offset": "+03:00",
-  "interval_seconds": 30
+  "interval_seconds": 30,
+  "sync_device_clock": false
 }

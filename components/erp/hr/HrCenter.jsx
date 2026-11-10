@@ -218,6 +218,7 @@ function Devices() {
   const { t, lang } = useLanguage();
   const confirm = useConfirm();
   const [devices, setDevices] = useState(null);
+  const [unknownBadges, setUnknownBadges] = useState([]);
   const [name, setName] = useState("");
   const [newKey, setNewKey] = useState(null);
   const [error, setError] = useState("");
@@ -228,13 +229,17 @@ function Devices() {
       api("/api/hr/devices")
         .then((d) => {
           setDevices(d.devices);
+          setUnknownBadges(d.unknownBadges || []);
           setCheckedAt(Date.now());
         })
         .catch(() => {}),
     []
   );
+  // The agent reports every 30 s: refresh as often, so HR sees punches arrive.
   useEffect(() => {
     load();
+    const timer = setInterval(load, 30000);
+    return () => clearInterval(timer);
   }, [load]);
 
   async function create() {
@@ -287,6 +292,7 @@ function Devices() {
               …{d.keyHint} · {t("erp.hr.lastSeen")}: {d.lastSeenAt ? formatDateTime(d.lastSeenAt, lang) : "—"}
               {d.lastError && <span className="text-red-300"> · {d.lastError}</span>}
             </p>
+            <DeviceHealth device={d} online={online(d)} />
           </div>
           <Toggle checked={d.active} onChange={(active) => api(`/api/hr/devices/${d.id}`, { method: "PATCH", body: { active } }).then(load)} label={t("erp.org.active")} />
           <button
@@ -299,6 +305,52 @@ function Devices() {
           </button>
         </Card>
       ))}
+      {unknownBadges.length > 0 && (
+        <Card className="space-y-2 border-amber-400/30">
+          <p className="font-medium text-amber-200">{t("erp.hr.unknownBadgesTitle")}</p>
+          <p className="text-xs text-white/60">{t("erp.hr.unknownBadgesHint")}</p>
+          <ul className="space-y-1 text-sm">
+            {unknownBadges.map((b) => (
+              <li key={b.badgeId} className="tabular-nums">
+                {t("erp.hr.unknownBadge", { id: b.badgeId, count: b.count, last: formatDateTime(b.last, lang) })}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// Is the device really delivering? Punches received, its clock, the last batch.
+function DeviceHealth({ device: d, online }) {
+  const { t, lang } = useLanguage();
+  const skew = d.clockSkewSec;
+  const clockOff = skew !== null && Math.abs(skew) > 120;
+  const line = "mt-1 block text-xs";
+  return (
+    <div className="mt-1">
+      <span className={`${line} text-white/60`}>
+        {t("erp.hr.devLastPunch")}: {d.lastPunchAt ? formatDateTime(d.lastPunchAt, lang) : "—"} · {t("erp.hr.devLast24h", { n: d.last24h || 0 })} ·{" "}
+        {t("erp.hr.devTotal", { n: d.totalInserted || 0 })}
+      </span>
+      {d.lastBatch?.at && (
+        <span className={`${line} text-white/45`}>
+          {t("erp.hr.devLastBatch", { received: d.lastBatch.received, inserted: d.lastBatch.inserted })} · {formatDateTime(d.lastBatch.at, lang)}
+          {d.agentVersion && ` · ${t("erp.hr.devAgent")} ${d.agentVersion}`}
+        </span>
+      )}
+      {skew === null ? (
+        d.lastSeenAt && <span className={`${line} text-amber-300`}>{t("erp.hr.devClockUnknown")}</span>
+      ) : clockOff ? (
+        <span className={`${line} font-medium text-red-300`}>
+          {t("erp.hr.devClockOff", { min: Math.round(Math.abs(skew) / 60), dir: t(skew > 0 ? "erp.hr.devClockAhead" : "erp.hr.devClockBehind") })}
+        </span>
+      ) : (
+        <span className={`${line} text-emerald-300/80`}>{t("erp.hr.devClockOk")}</span>
+      )}
+      {d.lastBatch?.future > 0 && <span className={`${line} text-red-300`}>{t("erp.hr.devFuture", { n: d.lastBatch.future })}</span>}
+      {online && !d.last24h && <span className={`${line} text-amber-300`}>{t("erp.hr.devNoPunchToday")}</span>}
     </div>
   );
 }

@@ -13,6 +13,20 @@ const AttendanceDeviceSchema = new mongoose.Schema(
     lastPunchAt: { type: Date, default: null },
     lastError: { type: String, default: "" },
     offlineNotified: { type: Boolean, default: false }, // reset when it syncs again
+    // Health, from what the sync agent sends (app/api/attendance/ingest):
+    // the device clock minus the server clock (seconds; null = not reported yet),
+    // the last batch, and the newest punch time the device holds.
+    clockSkewSec: { type: Number, default: null },
+    lastBatch: {
+      at: { type: Date, default: null },
+      received: { type: Number, default: 0 },
+      inserted: { type: Number, default: 0 },
+      duplicates: { type: Number, default: 0 },
+      future: { type: Number, default: 0 }, // punches dated ahead of the server's clock
+    },
+    totalInserted: { type: Number, default: 0 },
+    newestPunch: { type: Date, default: null },
+    agentVersion: { type: String, default: "" },
   },
   { timestamps: true }
 );

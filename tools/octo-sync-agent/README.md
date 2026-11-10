@@ -34,3 +34,24 @@ The dashboard shows the device as online while heartbeats arrive (every 30 s).
 
 Each employee's **fingerprint ID** (the number enrolled on the device) goes in
 **Staff → edit** or **HR → employee → HR profile → Fingerprint ID**.
+
+## Updating the agent (version 2)
+
+Copy the new `octo_sync.py` over the old one on the office PC and restart it (end the
+task in Task Scheduler and run it again). `config.json` and `queue.sqlite3` stay.
+Version 2:
+
+- marks punches as sent only once the server confirms it stored them (before, a server
+  error could lose them),
+- reports the device clock: **HR → Devices** warns when it is more than 2 minutes off.
+  To have the agent correct the device clock from the PC's clock automatically, add
+  `"sync_device_clock": true` to `config.json` (only if the PC's own time is right),
+- keeps its log file small (`octo_sync_log.txt`, then `octo_sync_log.old.txt`).
+
+## Checking that punches arrive
+
+- **HR → Devices**: online, last punch, punches in the last 24 hours, the clock check,
+  and fingerprint IDs that are set on nobody (refreshes every 30 s).
+- From the project folder: `npm run attendance:check` prints the same plus today's
+  punches per person and a check of the punch hours (a wrong time zone shows as
+  punches at night).
