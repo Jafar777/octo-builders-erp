@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Ban, Building2, ChevronDown, Diamond, GripVertical, ChevronsDownUp, ChevronsUpDown, Crosshair, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Plus, Sparkles, UserCheck } from "lucide-react";
+import { AlertTriangle, Ban, Building2, ChevronDown, Diamond, GripVertical, ChevronsDownUp, ChevronsUpDown, Crosshair, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Plus, SlidersHorizontal, Sparkles, UserCheck } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
 import { locale } from "@/lib/formatTime";
@@ -109,7 +109,7 @@ function scaleTicks(zoom, from, to, lang) {
   return [top, bottom];
 }
 
-export default function ProjectsTimeline({ projects, status }) {
+export default function ProjectsTimeline({ projects, status, leading = null }) {
   const { t, lang } = useLanguage();
   const [data, setData] = useState(null);
   const [zoom, setZoom] = useState("day");
@@ -121,6 +121,8 @@ export default function ProjectsTimeline({ projects, status }) {
   // The project whose milestones (and billing) are open.
   const [milestonesFor, setMilestonesFor] = useState(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [showCancels, setShowCancels] = useState(false);
   const [assignFor, setAssignFor] = useState(null); // an employee with free time
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -660,16 +662,55 @@ export default function ProjectsTimeline({ projects, status }) {
 
   const allCollapsed = groups.length > 0 && groups.every((g) => collapsed[g.id]);
   const nowFmt = new Intl.DateTimeFormat(locale(lang), { weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", ...(cal?.tz ? { timeZone: cal.tz } : {}) });
+  // How many options behind "Filters" differ from their defaults — shown as a badge.
+  const hiddenChanges = (groupBy !== "project") + (zoom !== "day") + !opts.workdays + (canSchedule && !opts.autoShift) + !opts.critical + !opts.cancelled;
   const hourLabel = (n) => t("erp.gantt.hours", { n: Math.round(n * 10) / 10 });
 
   if (!data) {
-    return error ? <ErrorText>{error}</ErrorText> : <SkeletonList rows={6} />;
+    return (
+      <div>
+        {leading && <div className="mb-3 flex flex-wrap items-center gap-2">{leading}</div>}
+        {error ? <ErrorText>{error}</ErrorText> : <SkeletonList rows={6} />}
+      </div>
+    );
   }
 
   return (
     <div>
-      {/* Toolbar */}
+      {/* Toolbar: one line; everything else sits behind "Filters" so the chart gets the room. */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
+        {leading}
+        <Button variant="ghost" onClick={scrollToToday}>
+          <Crosshair size={15} /> {t("erp.gantt.today")}
+        </Button>
+        <Button variant="ghost" onClick={() => setShowFilters((o) => !o)}>
+          <SlidersHorizontal size={15} />
+          {t(showFilters ? "erp.gantt.hideFilters" : "erp.gantt.moreFilters")}
+          {hiddenChanges > 0 && (
+            <span className="rounded-full bg-brand-orange px-1.5 text-[11px] leading-4 text-white">{hiddenChanges}</span>
+          )}
+          <ChevronDown size={14} className={`transition-transform ${showFilters ? "rotate-180" : ""}`} />
+        </Button>
+        <div className="relative ms-auto">
+          <Button variant="ghost" onClick={() => setExportOpen((o) => !o)}>
+            <Download size={15} /> {t("erp.gantt.export")}
+          </Button>
+          {exportOpen && (
+            <div className="absolute end-0 z-30 mt-1 w-48 overflow-hidden rounded-xl border border-white/10 bg-brand-navy shadow-xl">
+              <button type="button" onClick={() => exportAs("excel")} className="flex w-full items-center gap-2 px-4 py-2.5 text-start text-sm hover:bg-white/10">
+                <FileSpreadsheet size={15} className="text-emerald-300" /> {t("erp.gantt.exportExcel")}
+              </button>
+              <button type="button" onClick={() => exportAs("pdf")} className="flex w-full items-center gap-2 px-4 py-2.5 text-start text-sm hover:bg-white/10">
+                <FileText size={15} className="text-red-300" /> {t("erp.gantt.exportPdf")}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {showFilters && (
+      <div className="mb-3 space-y-2.5 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="flex gap-1 rounded-xl border border-white/10 p-1">
           {["project", "person"].map((g) => (
             <button
@@ -694,9 +735,6 @@ export default function ProjectsTimeline({ projects, status }) {
             </button>
           ))}
         </div>
-        <Button variant="ghost" onClick={scrollToToday}>
-          <Crosshair size={15} /> {t("erp.gantt.today")}
-        </Button>
         <Button variant="ghost" onClick={() => setCollapsed(allCollapsed ? {} : Object.fromEntries(groups.map((g) => [g.id, true])))}>
           {allCollapsed ? <ChevronsUpDown size={15} /> : <ChevronsDownUp size={15} />}
           {t(allCollapsed ? "erp.gantt.expandAll" : "erp.gantt.collapseAll")}
@@ -706,36 +744,29 @@ export default function ProjectsTimeline({ projects, status }) {
             <Sparkles size={15} /> {t("erp.gantt.fillFreeTime")}
           </Button>
         )}
-        <div className="relative ms-auto">
-          <Button variant="ghost" onClick={() => setExportOpen((o) => !o)}>
-            <Download size={15} /> {t("erp.gantt.export")}
-          </Button>
-          {exportOpen && (
-            <div className="absolute end-0 z-30 mt-1 w-48 overflow-hidden rounded-xl border border-white/10 bg-brand-navy shadow-xl">
-              <button type="button" onClick={() => exportAs("excel")} className="flex w-full items-center gap-2 px-4 py-2.5 text-start text-sm hover:bg-white/10">
-                <FileSpreadsheet size={15} className="text-emerald-300" /> {t("erp.gantt.exportExcel")}
-              </button>
-              <button type="button" onClick={() => exportAs("pdf")} className="flex w-full items-center gap-2 px-4 py-2.5 text-start text-sm hover:bg-white/10">
-                <FileText size={15} className="text-red-300" /> {t("erp.gantt.exportPdf")}
-              </button>
-            </div>
-          )}
-        </div>
       </div>
 
-      <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2.5 text-sm">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-sm">
         <Toggle checked={opts.workdays} onChange={setOpt("workdays")} label={t("erp.gantt.workdays")} />
         {canSchedule && <Toggle checked={opts.autoShift} onChange={setOpt("autoShift")} label={t("erp.gantt.autoShift")} />}
         <Toggle checked={opts.critical} onChange={setOpt("critical")} label={t("erp.gantt.critical")} />
         <Toggle checked={opts.cancelled} onChange={setOpt("cancelled")} label={t("erp.gantt.showCancelled")} />
       </div>
 
+      <p className="px-1 text-xs text-white/45">
+        {t(canSchedule ? "erp.gantt.editHint" : "erp.gantt.readOnlyHint")}
+      </p>
+      </div>
+      )}
+
       {canSchedule && cancelRequests.length > 0 && (
-        <div className="mb-3 rounded-xl border border-amber-400/40 bg-amber-500/[0.07] px-4 py-2.5">
-          <p className="flex items-center gap-2 text-sm font-semibold text-amber-100">
+        <div className="mb-3 rounded-xl border border-amber-400/40 bg-amber-500/[0.07]">
+          <button type="button" onClick={() => setShowCancels((o) => !o)} className="flex w-full items-center gap-2 px-4 py-2.5 text-start text-sm font-semibold text-amber-100">
             <Ban size={15} /> {t("erp.gantt.cancelRequests", { n: cancelRequests.length })}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+            <ChevronDown size={14} className={`ms-auto text-white/50 transition-transform ${showCancels ? "" : "-rotate-90"}`} />
+          </button>
+          {showCancels && (
+          <div className="flex flex-wrap gap-1.5 px-4 pb-2.5">
             {cancelRequests.map((task) => (
               <button
                 key={task.id}
@@ -749,6 +780,7 @@ export default function ProjectsTimeline({ projects, status }) {
               </button>
             ))}
           </div>
+          )}
         </div>
       )}
 
@@ -756,9 +788,6 @@ export default function ProjectsTimeline({ projects, status }) {
         <FreeTimePanel people={data.freeTime} now={now} cal={cal} lang={lang} t={t} onAssign={setAssignFor} onShow={scrollTo} />
       )}
 
-      <p className="mb-3 text-xs text-white/45">
-        {t(canSchedule ? "erp.gantt.editHint" : "erp.gantt.readOnlyHint")}
-      </p>
       {notice && <p className="mb-3 rounded-xl bg-sky-500/10 px-4 py-2 text-sm text-sky-200">{notice}</p>}
       {error && (
         <div className="mb-3">
@@ -1290,7 +1319,7 @@ function Legend({ t, free }) {
 // Who has free time in the coming two weeks (GM / CEO): free now first, then the most
 // free. Each gap jumps the chart to it; "Assign a task" opens a new task for them.
 function FreeTimePanel({ people, now, cal, lang, t, onAssign, onShow }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const fmt = new Intl.DateTimeFormat(locale(lang), { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", ...(cal?.tz ? { timeZone: cal.tz } : {}) });
   const hours = (ms) => t("erp.gantt.hours", { n: Math.round((ms / HOUR) * 10) / 10 });
   const freeNow = (p) => p.gaps[0].start <= now + 15 * 60000;

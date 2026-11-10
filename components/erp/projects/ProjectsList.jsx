@@ -39,6 +39,52 @@ export default function ProjectsList() {
     [lookups.projects, status, department]
   );
 
+  const inTimeline = view === "timeline" && lookups.projectsLoaded;
+  const filters = (
+    <>
+      {gantt && (
+        <div className="flex gap-1 rounded-xl border border-white/10 p-1">
+          {[
+            ["timeline", ChartNoAxesGantt],
+            ["cards", LayoutGrid],
+          ].map(([v, Icon]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              title={t(`erp.gantt.${v}`)}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm ${view === v ? "bg-white/15 text-white" : "text-white/60 hover:text-white"}`}
+            >
+              <Icon size={15} /> <span className="hidden xl:inline">{t(`erp.gantt.${v}`)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-1 rounded-xl border border-white/10 p-1">
+        {STATUSES.map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setStatus(s)}
+            className={`rounded-lg px-3 py-1.5 text-sm ${status === s ? "bg-brand-orange text-white" : "text-white/60 hover:text-white"}`}
+          >
+            {t(`erp.projects.status.${s}`)}
+          </button>
+        ))}
+      </div>
+      {lookups.departments.length > 1 && (
+        <div className="w-48">
+          <Select
+            value={department}
+            onChange={setDepartment}
+            placeholder={t("erp.projects.allDepartments")}
+            options={lookups.departments.map((d) => ({ value: d.id, label: d.name?.[lang] }))}
+          />
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div>
       <PageHeader
@@ -65,53 +111,14 @@ export default function ProjectsList() {
         }
       />
 
-      <div className="mb-6 flex flex-wrap gap-3">
-        {gantt && (
-        <div className="flex gap-1 rounded-xl border border-white/10 p-1">
-          {[
-            ["timeline", ChartNoAxesGantt],
-            ["cards", LayoutGrid],
-          ].map(([v, Icon]) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setView(v)}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm ${view === v ? "bg-white/15 text-white" : "text-white/60 hover:text-white"}`}
-            >
-              <Icon size={15} /> {t(`erp.gantt.${v}`)}
-            </button>
-          ))}
-        </div>
-        )}
-        <div className="flex flex-wrap gap-1 rounded-xl border border-white/10 p-1">
-          {STATUSES.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setStatus(s)}
-              className={`rounded-lg px-3 py-1.5 text-sm ${status === s ? "bg-brand-orange text-white" : "text-white/60 hover:text-white"}`}
-            >
-              {t(`erp.projects.status.${s}`)}
-            </button>
-          ))}
-        </div>
-        {lookups.departments.length > 1 && (
-          <div className="w-56">
-            <Select
-              value={department}
-              onChange={setDepartment}
-              placeholder={t("erp.projects.allDepartments")}
-              options={lookups.departments.map((d) => ({ value: d.id, label: d.name?.[lang] }))}
-            />
-          </div>
-        )}
-      </div>
-
-      {view === "timeline" && lookups.projectsLoaded && (
+      {/* With the Gantt, these filters share its one-line toolbar; otherwise they stand alone. */}
+      {inTimeline ? (
         // keep-dark: the Gantt looks the same in the light theme.
         <div className="keep-dark">
-          <ProjectsTimeline projects={visible} status={status} />
+          <ProjectsTimeline projects={visible} status={status} leading={filters} />
         </div>
+      ) : (
+        <div className="mb-4 flex flex-wrap items-center gap-2">{filters}</div>
       )}
 
       <div className={`grid gap-4 md:grid-cols-2 xl:grid-cols-3 ${view === "cards" ? "" : "hidden"}`}>
