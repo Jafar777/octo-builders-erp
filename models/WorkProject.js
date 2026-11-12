@@ -31,6 +31,9 @@ const WorkProjectSchema = new mongoose.Schema(
     dueDate: { type: Date, required: true }, // mandatory — most Excel projects had none
     baselineDueDate: { type: Date, default: null },
     folderLink: { type: String, default: "" },
+    // The project's folder on the company file server ({ vol, path }; empty = the
+    // default one, see lib/fileServerPaths.js projectFolder).
+    serverFolder: { vol: { type: String, default: "" }, path: { type: String, default: "" } },
     notes: { type: String, default: "" },
     // Board: one row of stages. (`items` = former board rows, no longer used; kept so old data survives.)
     stages: [StageSchema],

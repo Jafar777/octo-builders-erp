@@ -1,0 +1,14 @@
+{
+  "secret": "paste the key from Dashboard → Files → Connection",
+  "volumes": {
+    "ttd": "\\192.168.1.100\files submitted (ttd)"
+  },
+  "host": "127.0.0.1",
+  "port": 8765,
+  "allowed_origins": ["https://your-site.vercel.app"],
+  "max_file_gb": 50,
+  "zip_max_gb": 20,
+  "recycle_days": 30,
+  "tls_cert": "",
+  "tls_key": ""
+}

@@ -9,7 +9,9 @@ const MessageSchema = new mongoose.Schema(
     text: { type: String, default: "" },
     attachments: [
       new mongoose.Schema(
-        { url: String, name: String, mime: String, size: Number },
+        // An uploaded file (url, deleted with the message after 24 h), or a file / folder
+        // shared from the company file server (vol + path: stays on the server).
+        { url: String, name: String, mime: String, size: Number, vol: String, path: String, dir: Boolean },
         { _id: false }
       ),
     ],

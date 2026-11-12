@@ -15,7 +15,7 @@ export async function GET() {
 
 // Who may change each settings group (default: settings.manage). KPI has its own
 // versioned route (/api/kpi/config).
-const KEY_PERMISSION = { hr: "payroll.manage", finance: "finance.manage", pricing: "finance.manage", managerKpi: "kpi.manage" };
+const KEY_PERMISSION = { hr: "payroll.manage", finance: "finance.manage", pricing: "finance.manage", managerKpi: "kpi.manage", fileServer: "files.manage" };
 
 // Body: { key: "calendar" | "workHours" | "currencies" | "tasks" | "hr" | "finance" | "pricing", value: {...} }
 export async function PUT(request) {

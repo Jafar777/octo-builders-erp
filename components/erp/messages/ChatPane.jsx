@@ -10,6 +10,7 @@ import {
   Download,
   Eye,
   FileText,
+  HardDrive,
   Info,
   Loader2,
   Paperclip,
@@ -35,6 +36,8 @@ import ConversationInfo from "@/components/erp/messages/ConversationInfo";
 import { Skeleton } from "@/components/erp/ui/Loading";
 import { useConfirm } from "@/components/erp/ui/Feedback";
 import { EmptyState } from "@/components/erp/ui/DataTools";
+import { ServerPicker, ServerRefList } from "@/components/erp/files/ServerRefs";
+import { useFileServer } from "@/components/erp/files/useFileServer";
 
 const EDIT_WINDOW_MS = 15 * 60 * 1000;
 const TYPING_SEND_EVERY_MS = 3000;
@@ -46,7 +49,13 @@ function mergeMessages(prev, incoming) {
   return [...map.values()].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 }
 
-function Attachment({ file }) {
+// A file or folder shared from the company server: opened with this message's token.
+function ServerAttachment({ file, messageId }) {
+  return <ServerRefList refs={[{ vol: file.vol, path: file.path, name: file.name, dir: Boolean(file.dir), size: file.size }]} ctx={{ for: "message", id: messageId }} />;
+}
+
+function Attachment({ file, messageId }) {
+  if (file.path) return <ServerAttachment file={file} messageId={messageId} />;
   if (file.mime?.startsWith("image/")) {
     return (
       <a href={file.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-xl">
@@ -111,6 +120,9 @@ export default function ChatPane({
   const [now, setNow] = useState(() => Date.now());
   const scrollRef = useRef(null);
   const fileRef = useRef(null);
+  const fileServer = useFileServer();
+  const [attachMenu, setAttachMenu] = useState(false);
+  const [serverPick, setServerPick] = useState(false);
   const inputRef = useRef(null);
   const lastTypingSent = useRef(0);
   const stickToBottom = useRef(true);
@@ -594,7 +606,7 @@ export default function ChatPane({
                         {m.attachments.length > 0 && (
                           <div className="mb-1 space-y-1.5">
                             {m.attachments.map((f, j) => (
-                              <Attachment key={j} file={f} />
+                              <Attachment key={j} file={f} messageId={m.id} />
                             ))}
                           </div>
                         )}
@@ -733,7 +745,7 @@ export default function ChatPane({
             <div className="mb-2 flex flex-wrap gap-2">
               {attachments.map((f, i) => (
                 <span key={i} className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1 text-xs">
-                  <Paperclip size={12} />
+                  {f.path ? <HardDrive size={12} className="text-emerald-300" /> : <Paperclip size={12} />}
                   <span className="max-w-40 truncate">{f.name}</span>
                   <button type="button" onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}>
                     <X size={12} />
@@ -751,14 +763,44 @@ export default function ChatPane({
 
           <div className="flex items-end gap-2">
             {!editing && (
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white/60 hover:bg-white/10 hover:text-white"
-                aria-label={t("erp.messages.attach")}
-              >
-                <Paperclip size={18} />
-              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => (fileServer?.enabled ? setAttachMenu((v) => !v) : fileRef.current?.click())}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white/60 hover:bg-white/10 hover:text-white"
+                  aria-label={t("erp.messages.attach")}
+                  aria-expanded={fileServer?.enabled ? attachMenu : undefined}
+                >
+                  <Paperclip size={18} />
+                </button>
+                {/* With the company server: upload a file (kept 24 h), or share one from the server (stays there). */}
+                {attachMenu && (
+                  <div className="absolute bottom-12 start-0 z-30 w-64 overflow-hidden rounded-xl border border-white/10 bg-brand-navy py-1 text-sm shadow-2xl">
+                    <button type="button" onClick={() => { setAttachMenu(false); fileRef.current?.click(); }} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-start hover:bg-white/5">
+                      <Paperclip size={15} className="text-white/60" />
+                      <span>
+                        {t("erp.files.chat.upload")}
+                        <span className="block text-[11px] text-white/45">{t("erp.files.chat.uploadHint")}</span>
+                      </span>
+                    </button>
+                    <button type="button" onClick={() => { setAttachMenu(false); setServerPick(true); }} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-start hover:bg-white/5">
+                      <HardDrive size={15} className="text-emerald-300" />
+                      <span>
+                        {t("erp.files.chat.server")}
+                        <span className="block text-[11px] text-white/45">{t("erp.files.chat.serverHint")}</span>
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            {fileServer?.enabled && (
+              <ServerPicker
+                open={serverPick}
+                onClose={() => setServerPick(false)}
+                pickLabel={t("erp.files.chat.share")}
+                onPick={(refs) => setAttachments((prev) => [...prev, ...refs.map((r) => ({ vol: r.vol, path: r.path, name: r.name, dir: r.dir, size: r.size }))].slice(0, 10))}
+              />
             )}
             <input ref={fileRef} type="file" multiple className="hidden" onChange={handleFiles} />
             <textarea

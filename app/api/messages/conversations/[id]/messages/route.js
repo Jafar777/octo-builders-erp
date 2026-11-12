@@ -13,6 +13,8 @@ import { notify } from "@/lib/notify";
 import { conversationChannel, publish, userChannel } from "@/lib/realtime/server";
 import Conversation from "@/models/Conversation";
 import Message from "@/models/Message";
+import { browseGrants, fileServerReady, gatewaySecret, getFileServer, refsAllowed } from "@/lib/fileServer";
+import { cleanRef } from "@/lib/fileServerPaths";
 
 const PAGE_SIZE = 40;
 
@@ -76,17 +78,27 @@ export async function GET(request, { params }) {
   });
 }
 
-function cleanAttachments(list) {
+// Uploaded files (url), and files / folders shared from the company file server
+// (vol + path): only ones the sender can open themselves. → list, or null if not allowed.
+async function cleanAttachments(list, user) {
   if (!Array.isArray(list)) return [];
-  return list
-    .filter((a) => typeof a?.url === "string" && /^https?:\/\//.test(a.url))
-    .slice(0, 10)
-    .map((a) => ({
-      url: a.url,
-      name: String(a.name || "").slice(0, 200),
-      mime: String(a.mime || "").slice(0, 100),
-      size: Number(a.size) || 0,
-    }));
+  const out = [];
+  const server = [];
+  for (const a of list.slice(0, 10)) {
+    if (a?.path) {
+      const ref = cleanRef(a);
+      if (!ref) continue;
+      server.push(ref);
+      out.push({ url: "", name: ref.name, mime: "", size: ref.size, vol: ref.vol, path: ref.path, dir: ref.dir });
+    } else if (typeof a?.url === "string" && /^https?:\/\//.test(a.url)) {
+      out.push({ url: a.url, name: String(a.name || "").slice(0, 200), mime: String(a.mime || "").slice(0, 100), size: Number(a.size) || 0 });
+    }
+  }
+  if (server.length) {
+    const fs = await getFileServer();
+    if (!fileServerReady(fs, await gatewaySecret()) || !refsAllowed(server, browseGrants(user, fs))) return null;
+  }
+  return out;
 }
 
 export async function POST(request, { params }) {
@@ -100,7 +112,8 @@ export async function POST(request, { params }) {
 
   const body = await readJson(request);
   const text = String(body.text || "").trim().slice(0, MESSAGE_MAX_LENGTH);
-  const attachments = cleanAttachments(body.attachments);
+  const attachments = await cleanAttachments(body.attachments, user);
+  if (attachments === null) return fail("file_not_allowed");
   if (!text && attachments.length === 0) return fail("empty_message");
 
   const memberIds = conversation.members.map(String);

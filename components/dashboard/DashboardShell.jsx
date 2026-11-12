@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutGrid,
+  HardDrive,
   Globe2,
   LogOut,
   ArrowLeft,
@@ -106,6 +107,8 @@ const NAV = [
       { href: "/dashboard/kpi", key: "kpi", icon: Gauge, staff: true },
       { href: "/dashboard/bonus", key: "bonus", icon: Gift, staff: true },
       { href: "/dashboard/messages", key: "messages", icon: MessagesSquare, staff: true, badge: "messages", exact: true },
+      // The company file server (office share through the file gateway).
+      { href: "/dashboard/files", key: "files", icon: HardDrive, staff: true },
       { href: "/dashboard/notifications", key: "notifications", icon: Bell, show: (u) => u.isStaff || u.isCustomer },
       // Trainees and the CEO only (lib/training.js canOpenTraining).
       { href: "/dashboard/training", key: "training", icon: GraduationCap, show: (u) => (u.trainee && !u.limited) || (u.isStaff && u.permissions.includes("training.manage")) },

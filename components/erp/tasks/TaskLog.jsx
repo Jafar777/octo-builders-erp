@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, ArrowDown, ArrowUp, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, FileSpreadsheet, Loader2 } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, CalendarDays, ChevronLeft, ChevronRight, FileSpreadsheet, Loader2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api } from "@/lib/clientApi";
 import { formatDateTime, locale } from "@/lib/formatTime";
@@ -15,6 +15,9 @@ import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { formatDuration, PRIORITY_STYLE, revisionLabel, useNow, liveActiveMs } from "@/components/erp/tasks/taskUi";
 import { Skeleton } from "@/components/erp/ui/Loading";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
+import { LinkOrPath, ServerRefList } from "@/components/erp/files/ServerRefs";
+import { useFileServer } from "@/components/erp/files/useFileServer";
+import { toWindowsPath } from "@/lib/fileServerPaths";
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const pad = (n) => String(n).padStart(2, "0");
@@ -84,6 +87,7 @@ export default function TaskLog({ mine = false }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const lookups = useTaskLookups();
+  const fileServer = useFileServer();
   const initialMonth = MONTH_RE.test(searchParams.get("month") || "") ? searchParams.get("month") : thisMonth();
   const [month, setMonth] = useState(initialMonth);
   const [data, setData] = useState(null); // { month, tasks }
@@ -237,24 +241,20 @@ export default function TaskLog({ mine = false }) {
       },
       {
         key: "deliveryLink",
-        sort: (x) => (x.deliveryLink ? 1 : 0),
-        excel: (x) => x.deliveryLink || "",
+        sort: (x) => (x.deliveryFiles?.length || x.deliveryLink ? 1 : 0),
+        // Excel: the server files as Windows paths (they open from any office PC).
+        excel: (x) => [...(x.deliveryFiles || []).map((f) => toWindowsPath(f, fileServer?.volumes) || f.path), x.deliveryLink].filter(Boolean).join(" | "),
         width: 40,
         cell: (x) =>
-          x.deliveryLink && (
-            <a
-              href={x.deliveryLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 text-brand-orange hover:underline"
-            >
-              {t("erp.tasks.openLink")} <ExternalLink size={12} />
-            </a>
+          (x.deliveryFiles?.length > 0 || x.deliveryLink) && (
+            <span onClick={(e) => e.stopPropagation()} className="flex flex-col items-start gap-1">
+              <ServerRefList refs={x.deliveryFiles} ctx={{ for: "task", id: x.id }} />
+              <LinkOrPath text={x.deliveryLink} ctx={{ for: "task", id: x.id }} />
+            </span>
           ),
       },
     ].filter(Boolean);
-  }, [lookups, lang, t, now, mine]);
+  }, [lookups, lang, t, now, mine, fileServer]);
 
   // Columns marked `excelOnly` go to the Excel file but not the table.
   const tableColumns = useMemo(() => columns.filter((c) => !c.excelOnly), [columns]);

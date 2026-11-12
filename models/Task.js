@@ -65,7 +65,10 @@ const TaskSchema = new mongoose.Schema(
     // Work still going after its due time: when it's now expected to finish. The due
     // date itself stays (lateness counts against it); the plan uses this instead.
     expectedEnd: { type: Date, default: null },
-    deliveryLink: { type: String, default: "" },
+    deliveryLink: { type: String, default: "" }, // an outside link (or an old pasted path)
+    // The delivery on the company file server: files / folders ({ vol, path } on the
+    // office share, see lib/fileServerPaths.js). Usually the task's own folder.
+    deliveryFiles: [new mongoose.Schema({ vol: String, path: String, name: String, dir: Boolean, size: Number }, { _id: false })],
     attachments: [
       new mongoose.Schema({ url: String, name: String, mime: String, size: Number }, { _id: false }),
     ],

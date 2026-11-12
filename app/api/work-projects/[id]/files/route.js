@@ -6,13 +6,15 @@ import { projectAccess } from "@/lib/projects";
 import { peopleNames } from "@/lib/sales";
 import ProjectFile from "@/models/ProjectFile";
 import WorkProject from "@/models/WorkProject";
+import { browseGrants, fileServerReady, gatewaySecret, getFileServer, refsAllowed } from "@/lib/fileServer";
+import { cleanRef, projectFolder } from "@/lib/fileServerPaths";
 
 const idStr = (v) => (v ? v.toString() : null);
 
 async function load(user, params) {
   const { id } = await params;
   if (!isObjectId(id)) return { error: notFound() };
-  const project = await WorkProject.findById(id, { department: 1, stages: 1 }).lean();
+  const project = await WorkProject.findById(id, { department: 1, stages: 1, code: 1, name: 1, serverFolder: 1 }).lean();
   const access = projectAccess(user, project);
   if (!access) return { error: forbidden() };
   return { project, access };
@@ -32,21 +34,32 @@ export async function GET(request, { params }) {
       stage: f.stage,
       name: f.name,
       updatedAt: f.updatedAt,
-      versions: [...f.versions].sort((a, b) => b.n - a.n).map((v) => ({ n: v.n, url: v.url, fileName: v.fileName, size: v.size, note: v.note, by: names[idStr(v.by)] || "", at: v.at })),
+      versions: [...f.versions].sort((a, b) => b.n - a.n).map((v) => ({ n: v.n, url: v.url || "", server: v.server?.path ? { vol: v.server.vol, path: v.server.path } : null, fileName: v.fileName, size: v.size, note: v.note, by: names[idStr(v.by)] || "", at: v.at })),
     })),
   });
 }
 
-// A new file, or a new version of one: { fileId? (ours), name, stage, url, imagekitId, fileName, size, note }.
-// Anyone who can open the project uploads; files are never overwritten.
+// A new file, or a new version of one: { fileId? (ours), name, stage, fileName, size, note }
+// with either { url, imagekitId } (ImageKit) or { server: { vol, path } } (a file on the
+// company file server). Anyone who can open the project uploads; files are never overwritten.
 export async function POST(request, { params }) {
   const user = await requireStaff();
   const { project, error } = await load(user, params);
   if (error) return error;
   const b = await readJson(request);
-  const url = String(b.url || "");
-  if (!/^https:\/\/ik\.imagekit\.io\//.test(url)) return fail("invalid_request");
-  const version = { url, fileId: String(b.imagekitId || "").slice(0, 100), fileName: String(b.fileName || "").slice(0, 200), size: Math.max(0, Number(b.size) || 0), note: String(b.note || "").trim().slice(0, 300), by: user.id };
+  let url = String(b.url || "");
+  let server = { vol: "", path: "" };
+  if (b.server) {
+    // On the company server: a file the uploader can open, or anything in the project's folder.
+    const ref = cleanRef(b.server);
+    const fs = await getFileServer();
+    if (!ref || !fileServerReady(fs, await gatewaySecret())) return fail("invalid_request");
+    const folder = projectFolder(project, fs);
+    if (!refsAllowed([ref], [...browseGrants(user, fs), ...(folder ? [[folder.vol, folder.path, "r"]] : [])])) return fail("file_not_allowed");
+    server = { vol: ref.vol, path: ref.path };
+    url = "";
+  } else if (!/^https:\/\/ik\.imagekit\.io\//.test(url)) return fail("invalid_request");
+  const version = { url, server, fileId: String(b.imagekitId || "").slice(0, 100), fileName: String(b.fileName || "").slice(0, 200), size: Math.max(0, Number(b.size) || 0), note: String(b.note || "").trim().slice(0, 300), by: user.id };
   let file = isObjectId(b.fileId) ? await ProjectFile.findOne({ _id: b.fileId, project: project._id }) : null;
   if (file) {
     file.versions.push({ ...version, n: Math.max(0, ...file.versions.map((v) => v.n)) + 1 });

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   CheckCircle2,
-  ExternalLink,
   HandHelping,
   Link2,
   Loader2,
@@ -16,6 +15,8 @@ import {
   ShieldCheck,
   XCircle,
 } from "lucide-react";
+import DeliveryEditor from "@/components/erp/files/DeliveryEditor";
+import { LinkOrPath, ServerRefList } from "@/components/erp/files/ServerRefs";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { COMPANY_TASKS_CHANNEL, useRealtimeEvent } from "@/context/RealtimeContext";
@@ -256,7 +257,8 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
   const [note, setNote] = useState("");
   const [helpHours, setHelpHours] = useState("1");
   const [hoursLeft, setHoursLeft] = useState("");
-  const [link, setLink] = useState("");
+  // The delivery: files on the company server and / or an outside link.
+  const [delivery, setDelivery] = useState({ deliveryLink: "", deliveryFiles: [] });
   const [comment, setComment] = useState("");
   const [manage, setManage] = useState({ assigneeId: "", dueAt: "" });
   const [subtasks, setSubtasks] = useState([]);
@@ -272,7 +274,7 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
       ]);
       setSubtasks(subs.tasks);
       setData(d);
-      setLink(d.task.deliveryLink || "");
+      setDelivery({ deliveryLink: d.task.deliveryLink || "", deliveryFiles: d.task.deliveryFiles || [] });
       setManage({ assigneeId: d.task.assignee?.id || "", dueAt: toLocalInput(d.task.dueAt) });
     } catch (err) {
       setError(errorText(t, err));
@@ -409,12 +411,13 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
             </Detail>
             <Detail label={t("erp.tasks.createdBy")}>{task.createdBy?.name}</Detail>
             <Detail label={t("erp.tasks.submittedAt")}>{formatDateTime(task.submittedAt, lang)}</Detail>
-            <Detail label={t("erp.tasks.deliveryLink")}>
-              {task.deliveryLink ? (
-                <a href={task.deliveryLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-brand-orange hover:underline">
-                  {t("erp.tasks.openLink")} <ExternalLink size={13} />
-                </a>
-              ) : null}
+            <Detail label={t("erp.files.delivery.title")}>
+              {(task.deliveryFiles?.length > 0 || task.deliveryLink) && (
+                <span className="flex flex-col items-start gap-1.5">
+                  <ServerRefList refs={task.deliveryFiles} ctx={{ for: "task", id: task.id }} />
+                  <LinkOrPath text={task.deliveryLink} ctx={{ for: "task", id: task.id }} />
+                </span>
+              )}
             </Detail>
           </div>
 
@@ -688,22 +691,28 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
 
               {panel === "submit" && (
                 <div className="space-y-3 rounded-2xl border border-brand-orange/30 bg-brand-orange/[0.06] p-4">
-                  <Input label={t("erp.tasks.deliveryLink")} value={link} onChange={setLink} dir="ltr" placeholder="https://..." />
+                  <DeliveryEditor task={task} value={delivery} onChange={setDelivery} />
                   <Input label={t("erp.tasks.employeeNotes")} value={note} onChange={setNote} />
-                  <Button onClick={() => act("submit", { deliveryLink: link, employeeNotes: note })} disabled={busy}>
+                  <Button onClick={() => act("submit", { ...delivery, employeeNotes: note })} disabled={busy}>
                     {t("erp.tasks.confirmSubmit")}
                   </Button>
                 </div>
               )}
 
+              {/* The delivery can be prepared while working, and saved before handing in. */}
               {["todo", "in_progress", "on_hold", "help"].includes(s) && panel !== "submit" && (
-                <div className="flex items-end gap-2">
-                  <div className="flex-1">
-                    <Input label={t("erp.tasks.deliveryLink")} value={link} onChange={setLink} dir="ltr" placeholder="https://..." />
+                <div className="space-y-2 rounded-2xl border border-white/10 p-4">
+                  <p className="text-sm font-medium text-white/70">{t("erp.files.delivery.title")}</p>
+                  <DeliveryEditor task={task} value={delivery} onChange={setDelivery} />
+                  <div className="flex justify-end">
+                    <Button
+                      variant="ghost"
+                      onClick={() => patch(delivery)}
+                      disabled={delivery.deliveryLink === (task.deliveryLink || "") && JSON.stringify(delivery.deliveryFiles) === JSON.stringify(task.deliveryFiles || [])}
+                    >
+                      {t("common.save")}
+                    </Button>
                   </div>
-                  <Button variant="ghost" onClick={() => patch({ deliveryLink: link })} disabled={link === (task.deliveryLink || "")}>
-                    {t("common.save")}
-                  </Button>
                 </div>
               )}
             </div>

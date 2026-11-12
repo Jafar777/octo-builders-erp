@@ -23,6 +23,7 @@ import { cascadeFrom, findOverlap, getWorkCalendar, leaveClash, personCalendar }
 import { trackDelays } from "@/lib/projectDelay";
 import { hoursFields, placeForAssignee } from "@/lib/taskSchedule";
 import Task from "@/models/Task";
+import { cleanDelivery } from "@/lib/fileServer";
 import TaskActivity from "@/models/TaskActivity";
 import User from "@/models/User";
 import { NAME_FIELDS, pickName, viewerLang } from "@/lib/personName";
@@ -115,7 +116,7 @@ export async function GET(request, { params }) {
   });
 }
 
-// Edit details. Assignee: delivery link, notes, estimate. Managers: also due date,
+// Edit details. Assignee: delivery (link / server files), notes, estimate. Managers: also due date,
 // priority, description, reassignment.
 export async function PATCH(request, { params }) {
   const user = await requireStaff();
@@ -137,6 +138,11 @@ export async function PATCH(request, { params }) {
   const changes = {};
   if (typeof body.deliveryLink === "string") changes.deliveryLink = body.deliveryLink.trim().slice(0, 1000);
   if (typeof body.employeeNotes === "string") changes.employeeNotes = body.employeeNotes.slice(0, 2000);
+  if (body.deliveryFiles !== undefined) {
+    const d = await cleanDelivery(user, task, body.deliveryFiles);
+    if (d.error) return fail(d.error);
+    changes.deliveryFiles = d.refs;
+  }
   // Project work: its hours (and so its due time) are set by the GM / CEO only.
   const scaleLocked = (task.maxHours > 0 || Boolean(task.project)) && !canRouteStages(user);
   if (body.estimatedHours !== undefined && !scaleLocked) changes.estimatedHours = Math.max(0, Math.min(1000, Number(body.estimatedHours) || 0));

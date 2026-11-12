@@ -5,7 +5,10 @@ import ProjectFiles from "@/components/erp/projects/ProjectFiles";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeft, CalendarDays, ExternalLink, Lock, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarDays, Lock, Plus, Trash2 } from "lucide-react";
+import ServerFolderField from "@/components/erp/files/ServerFolderField";
+import { LinkOrPath, ServerFolderButton } from "@/components/erp/files/ServerRefs";
+import { useFileServer } from "@/components/erp/files/useFileServer";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import ProjectScore from "@/components/erp/projects/ProjectScore";
@@ -137,6 +140,7 @@ function ProjectSettings({ project, lookups, onSaved }) {
     priority: project.priority,
     // No start / due date here: the Gantt decides them.
     folderLink: project.folderLink,
+    serverFolder: project.serverFolder || null,
     participants: project.participants,
   });
   const [stages, setStages] = useState(project.stages);
@@ -200,6 +204,7 @@ function ProjectSettings({ project, lookups, onSaved }) {
             options={["normal", "important", "urgent"].map((p) => ({ value: p, label: t(`erp.tasks.priority.${p}`) }))}
           />
         </div>
+        <ServerFolderField value={form.serverFolder} onChange={set("serverFolder")} ctx={{ for: "project", id: project.id }} />
         <Input label={t("erp.projects.folderLink")} value={form.folderLink} onChange={set("folderLink")} dir="ltr" />
         <div>
           <Label>{t("erp.projects.participants")}</Label>
@@ -287,6 +292,7 @@ function ProjectSettings({ project, lookups, onSaved }) {
 export default function ProjectBoard({ projectId }) {
   const { t, lang } = useLanguage();
   const lookups = useTaskLookups();
+  const fileServer = useFileServer();
   const [data, setData] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [tab, setTab] = useState("board");
@@ -355,11 +361,9 @@ export default function ProjectBoard({ projectId }) {
             </span>
             <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs">{t(`erp.projects.status.${project.status}`)}</span>
             <FlowBadge flow={project.flow} />
-            {project.folderLink && (
-              <a href={project.folderLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-brand-orange hover:underline">
-                {t("erp.projects.folder")} <ExternalLink size={13} />
-              </a>
-            )}
+            {/* The project's folder on the company server; an older link / pasted path too. */}
+            {fileServer?.enabled && <ServerFolderButton ctx={{ for: "project", id: project.id }} label={t("erp.files.projectFolder")} />}
+            {project.folderLink && <LinkOrPath text={project.folderLink} ctx={{ for: "project", id: project.id }} label={t("erp.projects.folder")} />}
           </p>
           <div className="mt-2">
             <DeliverySummary project={project} />

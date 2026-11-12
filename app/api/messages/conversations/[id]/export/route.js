@@ -37,7 +37,8 @@ export async function GET(request, { params }) {
       at.slice(11, 19),
       m.system ? "system" : names[m.sender?.toString()] || "—",
       m.text,
-      (m.attachments || []).map((a) => a.url).join(" "),
+      // Files shared from the company server: their place on the server.
+      (m.attachments || []).map((a) => a.url || (a.path ? `[${a.vol}]${a.path}` : "")).join(" "),
       m.editedAt ? "yes" : "",
       m.deletedAt ? "yes" : "",
     ]);

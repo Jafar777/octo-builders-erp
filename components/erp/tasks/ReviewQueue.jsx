@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CheckCircle2, ExternalLink, Loader2, Paperclip, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, Paperclip, XCircle } from "lucide-react";
+import { LinkOrPath, ServerRefList } from "@/components/erp/files/ServerRefs";
 import { useLanguage } from "@/context/LanguageContext";
 import { usePollingFallback, useRealtimeEvent, userChannelName } from "@/context/RealtimeContext";
 import { api, errorText } from "@/lib/clientApi";
@@ -179,10 +180,14 @@ function CustomerReview({ task, onClose, onDone }) {
               <span dir="ltr">{revisionLabel(task.revision)}</span>
             </Info>
           </div>
-          {task.deliveryLink && (
-            <a href={task.deliveryLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm hover:bg-white/15">
-              <ExternalLink size={15} /> {t("erp.reviews.openDelivery")}
-            </a>
+          {/* The delivered work: on the company server (opened straight from the office)
+              and / or a link. */}
+          {(task.deliveryFiles?.length > 0 || task.deliveryLink) && (
+            <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-white/50">{t("erp.reviews.openDelivery")}</p>
+              <ServerRefList refs={task.deliveryFiles} ctx={{ for: "task", id: task.id }} />
+              {task.deliveryLink && <LinkOrPath text={task.deliveryLink} ctx={{ for: "task", id: task.id }} />}
+            </div>
           )}
           {task.attachments?.length > 0 && (
             <div className="flex flex-wrap gap-2">

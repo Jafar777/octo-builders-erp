@@ -24,6 +24,7 @@ import {
 } from "@/lib/tasks";
 import { nextNumber } from "@/models/Counter";
 import Task from "@/models/Task";
+import { cleanDelivery, serverDeliveryRequired } from "@/lib/fileServer";
 import User from "@/models/User";
 
 const ASSIGNEE_ACTIONS = ["start", "undo_start", "pause", "resume", "help", "submit", "hours_left"];
@@ -39,7 +40,9 @@ const ASSIGNEE_ACTIONS = ["start", "undo_start", "pause", "resume", "help", "sub
 //   restore                                    → a cancelled task comes back (GM / CEO)
 //   help    { helperId, note, hours }          → creates a help task for the colleague,
 //                                                planned in their schedule (default 1 h)
-//   submit  { deliveryLink, employeeNotes }    → to the head (or done for meetings)
+//   submit  { deliveryLink, deliveryFiles[], employeeNotes }  → to the head (or done for
+//                                                meetings); deliveryFiles = files / folders on
+//                                                the company file server
 //   hours_left { hours }                       → work still going: when it's expected to finish
 //   review  { decision: approve|reject, stars, ratings[], notes, rejectCause, redoHours }
 export async function POST(request, { params }) {
@@ -84,8 +87,17 @@ export async function POST(request, { params }) {
   if (action === "submit") {
     if (typeof body.deliveryLink === "string") task.deliveryLink = body.deliveryLink.trim().slice(0, 1000);
     if (typeof body.employeeNotes === "string") task.employeeNotes = body.employeeNotes.slice(0, 2000);
-    // The Excel always carried a delivery-folder link for drawing tasks.
-    if (["task", "revision"].includes(task.kind) && !task.deliveryLink) return fail("delivery_link_required");
+    if (body.deliveryFiles !== undefined) {
+      const d = await cleanDelivery(user, task, body.deliveryFiles);
+      if (d.error) return fail(d.error);
+      task.deliveryFiles = d.refs;
+    }
+    // The Excel always carried a delivery-folder link for drawing tasks: now the files on
+    // the company server, or a link (unless the company takes server deliveries only).
+    if (["task", "revision"].includes(task.kind)) {
+      if (!task.deliveryFiles?.length && (await serverDeliveryRequired())) return fail("delivery_files_required");
+      if (!task.deliveryLink && !task.deliveryFiles?.length) return fail("delivery_link_required");
+    }
   }
 
   if (action === "start") {
