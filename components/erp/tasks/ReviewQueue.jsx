@@ -1,5 +1,7 @@
 "use client";
 
+import PageLinks from "@/components/dashboard/PageLinks";
+import { TASK_PAGES } from "@/components/erp/tasks/taskPages";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Loader2, Paperclip, XCircle } from "lucide-react";
@@ -42,7 +44,11 @@ export default function ReviewQueue({ meId, customer = false }) {
 
   return (
     <div className="max-w-6xl">
-      <PageHeader title={t("erp.nav.reviews")} subtitle={t(customer ? "erp.reviews.customerSubtitle" : "erp.reviews.subtitle")} />
+      <PageHeader
+        title={t("erp.nav.reviews")}
+        subtitle={t(customer ? "erp.reviews.customerSubtitle" : "erp.reviews.subtitle")}
+        actions={<PageLinks pages={TASK_PAGES} current="reviews" />}
+      />
       {tabs.length > 1 && (
         <div className="mb-5 flex flex-wrap gap-1 rounded-xl border border-white/10 p-1">
           {tabs.map((x) => (

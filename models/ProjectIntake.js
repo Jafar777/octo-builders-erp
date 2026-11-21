@@ -63,6 +63,9 @@ const ProjectIntakeSchema = new mongoose.Schema(
       advancePaid: { type: Number, default: 0 },
       advanceDate: text,
       paymentTerms: text,
+      // Payment stages: each a share of the contract (%). They become the project's
+      // billed milestones; the task that opens each one is picked on the project.
+      payments: [{ type: Number }],
       notes: text,
       by: { type: ObjectId, ref: "User", default: null },
       at: { type: Date, default: null },

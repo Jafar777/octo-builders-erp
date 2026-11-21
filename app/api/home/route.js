@@ -18,7 +18,16 @@ import Task from "@/models/Task";
 import User from "@/models/User";
 import WorkProject from "@/models/WorkProject";
 import { NAME_FIELDS, pickName, viewerLang } from "@/lib/personName";
-import { inDepartments } from "@/lib/scope";
+import { inDepartments, userDepartments } from "@/lib/scope";
+import { homePersona } from "@/lib/homePersona";
+import { canDecideAny, isOvertimeAdmin } from "@/lib/overtime";
+import { canSeeIntakeFinance, isIntakePlanner } from "@/lib/intake";
+import Invoice from "@/models/Invoice";
+import Lead from "@/models/Lead";
+import OvertimeRequest from "@/models/OvertimeRequest";
+import ProjectIntake from "@/models/ProjectIntake";
+import PurchaseRequest from "@/models/PurchaseRequest";
+import Quotation from "@/models/Quotation";
 
 const idStr = (v) => (v ? v.toString() : null);
 
@@ -166,6 +175,48 @@ export async function GET() {
         // Customers linked to a project have no role on purpose: they're not waiting for one.
         const customers = await WorkProject.distinct("customer", { customer: { $ne: null } });
         out.pendingSignups = await User.countDocuments({ role: "user", status: "active", _id: { $nin: customers } });
+      })()
+    );
+  }
+
+  // --- "Needs you": every queue this person can act on, with its count and where to act.
+  out.persona = homePersona(user);
+  jobs.push(
+    (async () => {
+      const deps = userDepartments(user);
+      const q = [];
+      const add = (key, href, promise) => q.push(Promise.resolve(promise).then((count) => ({ key, href, count })).catch(() => ({ key, href, count: 0 })));
+      if (canDecideAny(user)) {
+        add("overtime", "/dashboard/overtime?tab=queue", OvertimeRequest.countDocuments({ status: "pending", user: { $ne: user.id }, ...(isOvertimeAdmin(user) ? {} : { department: { $in: deps } }) }));
+      }
+      // Leave at the department manager's step (their departments), or at HR / GM's.
+      if (user.scope === "department" && can("leave.approve")) add("leaveManager", "/dashboard/hr?tab=leave", LeaveRequest.countDocuments({ status: "pending", stage: "manager", department: { $in: deps }, user: { $ne: user.id } }));
+      if (user.scope === "all" && can("leave.approve")) add("leave", "/dashboard/hr?tab=leave", LeaveRequest.countDocuments({ status: "pending", stage: { $ne: "manager" } }));
+      if (can("purchasing.approve")) {
+        add("purchases", "/dashboard/purchasing", PurchaseRequest.countDocuments({ status: "pending", requestedBy: { $ne: user.id }, ...(user.scope === "all" ? {} : { department: { $in: deps } }) }));
+      }
+      if (canSeeIntakeFinance(user)) add("intakePricing", "/dashboard/intake", ProjectIntake.countDocuments({ status: "new" }));
+      if (isIntakePlanner(user)) add("intakeAccept", "/dashboard/intake", ProjectIntake.countDocuments({ status: "ready", "proposal.at": { $ne: null } }));
+      if (can("invoices.manage")) add("invoices", "/dashboard/finance?tab=invoices", Invoice.countDocuments({ status: "draft" }));
+      if (can("sales.manage")) add("staleLeads", "/dashboard/sales", Lead.countDocuments({ stage: { $in: ["new", "contacted", "meeting", "proposal"] }, updatedAt: { $lt: new Date(now - 7 * 86400000) } }));
+      if (can("users.manage")) add("skills", "/dashboard/staff", User.countDocuments({ status: { $ne: "inactive" }, skillRequests: { $elemMatch: { status: "pending" } } }));
+      // Late work in the departments (or company) they run.
+      if (["department", "projects", "executive"].includes(out.persona)) {
+        add("lateTasks", "/dashboard/team-tasks", Task.countDocuments({ ...(user.scope === "all" ? {} : { department: { $in: deps } }), status: { $in: ACTIVE_STATUSES }, dueAt: { $lt: new Date(now) } }));
+      }
+      out.needs = (await Promise.all(q)).filter((x) => x.count > 0);
+    })()
+  );
+  // Office: intake forms and the sales pipeline at a glance.
+  if (can("sales.manage") || can("projects.intake")) {
+    jobs.push(
+      (async () => {
+        const [intakesNew, leadsOpen, quotesSent] = await Promise.all([
+          ProjectIntake.countDocuments({ status: { $in: ["new", "ready"] } }),
+          can("sales.manage") ? Lead.countDocuments({ stage: { $in: ["new", "contacted", "meeting", "proposal"] } }) : null,
+          can("sales.manage") ? Quotation.countDocuments({ status: "sent" }) : null,
+        ]);
+        out.office = { intakesNew, leadsOpen, quotesSent };
       })()
     );
   }

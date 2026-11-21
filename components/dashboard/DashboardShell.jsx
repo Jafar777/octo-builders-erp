@@ -20,10 +20,8 @@ import {
   Settings,
   History,
   ListChecks,
-  ClipboardCheck,
   ClipboardList,
   FolderKanban,
-  CalendarClock,
   Gauge,
   BriefcaseBusiness,
   BarChart3,
@@ -32,8 +30,6 @@ import {
   UserRound,
   Gift,
   UserCheck,
-  UsersRound,
-  ScrollText,
   GraduationCap,
   Activity,
   FileSpreadsheet,
@@ -62,6 +58,9 @@ import SearchPalette from "@/components/erp/search/SearchPalette";
 import { FeedbackProvider } from "@/components/erp/ui/Feedback";
 import { ShortcutsButton, ShortcutsHelp, ThemeButton, useShortcuts, WelcomeGuide } from "@/components/dashboard/ShellExtras";
 import { api } from "@/lib/clientApi";
+import { TASK_PAGES } from "@/components/erp/tasks/taskPages";
+import { PROFILE_PAGES } from "@/components/erp/profile/profilePages";
+import { ViewAsBanner, ViewAsButton } from "@/components/dashboard/ViewAs";
 
 
 // Sidebar entries; `perm` hides an entry from roles without that permission,
@@ -72,26 +71,27 @@ const NAV = [
     group: "main",
     items: [
       { href: "/dashboard", key: "overview", icon: LayoutGrid, exact: true },
-      { href: "/dashboard/profile", key: "profile", icon: UserRound },
-      { href: "/dashboard/tasks", key: "tasks", icon: ListChecks, staff: true },
-      // GM / CEO: every task of a month.
-      { href: "/dashboard/task-log", key: "taskLog", icon: ScrollText, when: (u) => u.permissions.includes("projects.manage") && u.scope === "all" },
-      { href: "/dashboard/team-tasks", key: "teamTasks", icon: UsersRound, staff: true },
-      { href: "/dashboard/projects", key: "projects", icon: FolderKanban, staff: true },
+      // Profile, and attendance & salary as a button in its header (PageLinks).
+      { folder: "profile", icon: UserRound, children: PROFILE_PAGES },
+      // One "Tasks" link for all the task pages: it opens the first one the person may see,
+      // stays lit on all of them, and each page's header links to the others (PageLinks).
+      // A single visible page shows as itself.
+      { folder: "taskMenu", icon: ListChecks, children: TASK_PAGES },
+      // The intake forms open from a button on the Projects page, so it stays lit there too.
+      { href: "/dashboard/projects", key: "projects", icon: FolderKanban, staff: true, also: ["/dashboard/intake"] },
       // New-project intake forms: the secretary and department managers fill them, the GM / CEO price them, the CEO accepts the project.
+      // Opened from the Projects page; their own sidebar entry only for those who can't open Projects (the restricted GM).
       {
         href: "/dashboard/intake",
         key: "intake",
         icon: ClipboardList,
         when: (u) =>
-          u.permissions.includes("projects.intake") ||
+          !pageAllowed(u, "projects") &&
+          (u.permissions.includes("projects.intake") ||
           (u.scope === "all" && u.permissions.includes("projects.manage")) ||
           // Department managers ask for projects here.
-          (u.scope === "department" && u.permissions.includes("tasks.review") && u.permissions.includes("projects.manage")),
+          (u.scope === "department" && u.permissions.includes("tasks.review") && u.permissions.includes("projects.manage"))),
       },
-      // Reviewers, and customers reviewing the tasks marked for them.
-      { href: "/dashboard/reviews", key: "reviews", icon: ClipboardCheck, badge: "reviews", show: (u) => (u.isStaff && u.permissions.includes("tasks.review")) || u.isCustomer },
-      { href: "/dashboard/attendance", key: "attendance", icon: CalendarClock, staff: true },
       // Every employee asks; department managers and the CEO decide.
       { href: "/dashboard/overtime", key: "overtime", icon: Timer, staff: true },
       { href: "/dashboard/kpi", key: "kpi", icon: Gauge, staff: true },
@@ -156,12 +156,26 @@ export function pageAllowed(user, key) {
 // Is a sidebar entry shown to `user`? (Also the Roles page's "what they see" preview.)
 export function navItemVisible(item, user) {
   if (!pageAllowed(user, item.key)) return false;
+  // The CEO viewing as someone doesn't open their chats.
+  if (item.key === "messages" && user.actingAs) return false;
   if (item.show) return item.show(user);
   return (!item.staff || user.isStaff) && (!item.perm || user.permissions.includes(item.perm)) && (!item.when || (user.isStaff && item.when(user)));
 }
 
+// A group's entries for `user`: a folder becomes one link to its first visible page,
+// lit on all of them (or that page itself when it's the only one).
+function visibleEntries(items, user) {
+  return items.flatMap((i) => {
+    if (!i.children) return navItemVisible(i, user) ? [i] : [];
+    const kids = i.children.filter((c) => navItemVisible(c, user));
+    if (kids.length < 2) return kids;
+    return [{ key: i.folder, icon: i.icon, href: kids[0].href, also: kids.slice(1).map((k) => k.href), badge: kids.find((k) => k.badge)?.badge, children: kids }];
+  });
+}
+const pagesOf = (entries) => entries.flatMap((i) => i.children || [i]);
+
 // The sidebar keys `user` sees, in order.
-export const visibleNavKeys = (user) => NAV.flatMap((g) => g.items.filter((i) => navItemVisible(i, user)).map((i) => i.key));
+export const visibleNavKeys = (user) => NAV.flatMap((g) => pagesOf(visibleEntries(g.items, user)).map((i) => i.key));
 
 export default function DashboardShell({ user, traineeIds = [], children }) {
   const trainees = useMemo(() => new Set(traineeIds), [traineeIds]);
@@ -173,15 +187,17 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [pendingReviews, setPendingReviews] = useState(0);
+  // Unread notifications per page address, shown on the sidebar link that page belongs to.
+  const [pageCounts, setPageCounts] = useState({});
   const canReview = (user.isStaff && user.permissions.includes("tasks.review")) || user.isCustomer;
 
   const loadUnread = useCallback(() => {
-    if (!user.isStaff) return;
+    if (!user.isStaff || user.actingAs) return;
     fetch("/api/messages/unread", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => setUnreadMessages(data.unread || 0))
       .catch(() => {});
-  }, [user.isStaff]);
+  }, [user.isStaff, user.actingAs]);
 
   const loadReviews = useCallback(() => {
     if (!canReview) return;
@@ -191,25 +207,56 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
       .catch(() => {});
   }, [canReview]);
 
+  const loadPageCounts = useCallback(() => {
+    fetch("/api/notifications/pages", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setPageCounts(data.counts || {}))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     loadUnread();
     loadReviews();
   }, [loadUnread, loadReviews]);
+
+  // Opening a page counts its notifications as seen, which clears that link's badge.
+  useEffect(() => {
+    if (!pathname?.startsWith("/dashboard")) return;
+    fetch("/api/notifications/pages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: pathname }) })
+      .catch(() => {})
+      .finally(loadPageCounts);
+  }, [pathname, loadPageCounts]);
+  usePollingFallback(loadPageCounts, 30000);
   usePollingFallback(loadUnread, 20000);
   usePollingFallback(loadReviews, 30000);
 
   const channel = userChannelName(user.id);
   useRealtimeEvent(channel, "conversation:updated", loadUnread);
   useRealtimeEvent(channel, "task:updated", loadReviews);
+  useRealtimeEvent(channel, "notification:new", loadPageCounts);
+  useRealtimeEvent(channel, "notification:read", loadPageCounts);
   // Role or permissions changed by the GM: reload server data and navigation.
   useRealtimeEvent(channel, "user:updated", () => {
     refresh();
     router.refresh();
   });
 
-  const groups = NAV.map((g) => ({ ...g, items: g.items.filter((i) => navItemVisible(i, user)) })).filter((g) => g.items.length > 0);
-  const allItems = groups.flatMap((g) => g.items.map((i) => ({ ...i, group: g.group })));
-  const isActive = (link) => (link.exact ? pathname === link.href : pathname === link.href || pathname.startsWith(`${link.href}/`));
+  const groups = NAV.map((g) => ({ ...g, items: visibleEntries(g.items, user) })).filter((g) => g.items.length > 0);
+  const allItems = groups.flatMap((g) => pagesOf(g.items).map((i) => ({ ...i, group: g.group })));
+  const under = (href) => pathname === href || pathname.startsWith(`${href}/`);
+  const isActive = (link) => (link.exact ? pathname === link.href : under(link.href) || Boolean(link.also?.some(under)));
+
+  // Each notified page counts on the sidebar page whose address matches it best; a
+  // folder link (Tasks, My profile) adds up its pages.
+  const notifByKey = {};
+  for (const [path, n] of Object.entries(pageCounts)) {
+    const within = (href) => path === href || path.startsWith(`${href}/`);
+    const owner = allItems
+      .map((i) => ({ i, len: Math.max(...[i.href, ...(i.also || [])].map((h) => (i.exact ? (path === h ? h.length : -1) : within(h) ? h.length : -1))) }))
+      .filter((x) => x.len >= 0)
+      .sort((a, b) => b.len - a.len)[0];
+    if (owner) notifByKey[owner.i.key] = (notifByKey[owner.i.key] || 0) + n;
+  }
   // The page on screen: the longest sidebar address that matches.
   const current = allItems.filter(isActive).sort((a, b) => b.href.length - a.href.length)[0] || null;
   const pageKeys = allItems.map((i) => i.key).join(",");
@@ -226,8 +273,9 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
   const [favorites, setFavorites] = useState(user.ui?.favorites || []);
   const [collapsed, setCollapsed] = useState(user.ui?.collapsed || []);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [guideOpen, setGuideOpen] = useState(Boolean(user.isStaff && !user.ui?.welcomed && !(user.mfaRequired && !user.mfaEnabled)));
-  const savePrefs = useCallback((ui) => api("/api/auth/me", { method: "PATCH", body: { ui }, quiet: true }).catch(() => {}), []);
+  const [guideOpen, setGuideOpen] = useState(Boolean(user.isStaff && !user.actingAs && !user.ui?.welcomed && !(user.mfaRequired && !user.mfaEnabled)));
+  // Viewing as someone (CEO) never changes their screen set-up.
+  const savePrefs = useCallback((ui) => (user.actingAs ? Promise.resolve() : api("/api/auth/me", { method: "PATCH", body: { ui }, quiet: true }).catch(() => {})), [user.actingAs]);
 
   const changeTheme = (next) => {
     setTheme(next);
@@ -250,8 +298,10 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
 
   // Pop-ups shown outside the dashboard frame (the notification panel) follow the theme too.
   useEffect(() => {
-    document.documentElement.classList.toggle("erp-light", theme === "light");
-    return () => document.documentElement.classList.remove("erp-light");
+    const root = document.documentElement;
+    root.classList.add("erp-dash");
+    root.classList.toggle("erp-light", theme === "light");
+    return () => root.classList.remove("erp-light", "erp-dash");
   }, [theme]);
 
 
@@ -269,7 +319,11 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
   function renderLink(link, place, small = false) {
     const active = isActive(link);
     const Icon = link.icon;
-    const badge = link.badge === "messages" ? unreadMessages : link.badge === "reviews" ? pendingReviews : 0;
+    const keys = link.children ? link.children.map((c) => c.key) : [link.key];
+    // Task reviews show the waiting queue itself (pendingReviews), not its notifications.
+    const notified = keys.reduce((sum, k) => sum + (k === "reviews" ? 0 : notifByKey[k] || 0), 0);
+    // Messages count their own way (unread chats), so their notifications aren't added.
+    const badge = link.badge === "messages" ? unreadMessages : notified + (keys.includes("reviews") ? pendingReviews : 0);
     const isPinned = favorites.includes(link.key);
     return (
       <div key={`${place}-${link.key}`} className="group relative">
@@ -289,7 +343,7 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
             </span>
           )}
         </Link>
-        {badge === 0 && (
+        {badge === 0 && !link.children && (
           <button
             type="button"
             onClick={() => togglePin(link.key)}
@@ -366,6 +420,7 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
       <aside className="sticky top-0 hidden h-screen w-72 shrink-0 border-e border-white/10 lg:block">{Sidebar}</aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
+        {user.actingAs && <ViewAsBanner user={user} />}
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-white/10 bg-brand-navy/90 px-4 backdrop-blur sm:px-6">
           <button
             type="button"
@@ -399,16 +454,17 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
               className={`h-2.5 w-2.5 rounded-full ${connected ? "bg-emerald-400" : "bg-white/25"}`}
             />
             {user.isStaff && !user.limited && <SearchPalette pages={pages} />}
+            {user.role === "ceo" && !user.actingAs && <ViewAsButton />}
             <ThemeButton theme={theme} onChange={changeTheme} />
             <ShortcutsButton onClick={openHelp} />
             <LanguageSwitch compact />
-            <MessagesButton />
+            {!user.actingAs && <MessagesButton />}
             <NotificationBell />
           </div>
         </header>
 
         <main className="flex-1 p-4 sm:p-6 lg:p-10">
-          {user.mfaRequired && !user.mfaEnabled && !pathname.startsWith("/dashboard/profile") ? (
+          {user.mfaRequired && !user.mfaEnabled && !user.actingAs && !pathname.startsWith("/dashboard/profile") ? (
             <div className="mx-auto max-w-xl">
               <SecurityCard forced />
             </div>
@@ -416,7 +472,7 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
         </main>
       </div>
 
-      {user.isStaff && !pathname.startsWith("/dashboard/messages") && (
+      {user.isStaff && !user.actingAs && !pathname.startsWith("/dashboard/messages") && (
         <MiniChat meId={user.id} canAnnounce={user.permissions.includes("messages.announce")} unread={unreadMessages} />
       )}
 

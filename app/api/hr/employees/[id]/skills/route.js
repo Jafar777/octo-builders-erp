@@ -3,37 +3,39 @@ import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
 import { notify } from "@/lib/notify";
-import { canApproveSkills, cleanSkill, sameSkill, serializeSkillRequests, skillApprovers } from "@/lib/skills";
+import { canApproveSkills, cleanSkill, sameSkill, splitSkills, serializeSkillRequests, skillApprovers } from "@/lib/skills";
 import User from "@/models/User";
 
 const MAX_REQUESTS = 30;
 
 const result = (u) => ({ skills: u.skills || [], skillRequests: serializeSkillRequests(u.skillRequests) });
 
-// The employee adds a skill; it waits for the general manager. Body: { name }
+// The employee adds skills; each one waits for the general manager on its own.
+// Body: { name } — "AutoCAD, 3ds Max، Revit" becomes three requests.
 export async function POST(request, { params }) {
   const user = await requireStaff({ limited: true });
   const { id } = await params;
   if (!user || !isObjectId(id) || id !== user.id) return forbidden();
-  const name = cleanSkill((await readJson(request)).name);
-  if (!name) return fail("skill_required");
+  const names = splitSkills((await readJson(request)).name);
+  if (!names.length) return fail("skill_required");
 
   const me = await User.findById(id);
   if (!me) return notFound();
-  if ((me.skills || []).some((s) => sameSkill(s, name))) return fail("skill_exists", 409);
-  if (me.skillRequests.some((r) => r.status === "pending" && sameSkill(r.name, name))) return fail("skill_pending", 409);
-  if (me.skillRequests.length >= MAX_REQUESTS) return fail("too_many_skill_requests");
-
+  const fresh = names.filter(
+    (name) => !(me.skills || []).some((s) => sameSkill(s, name)) && !me.skillRequests.some((r) => r.status === "pending" && sameSkill(r.name, name))
+  );
+  if (!fresh.length) return fail((me.skills || []).some((s) => sameSkill(s, names[0])) ? "skill_exists" : "skill_pending", 409);
   // Asking again after a refusal replaces the old answer.
-  me.skillRequests = me.skillRequests.filter((r) => !sameSkill(r.name, name));
-  me.skillRequests.push({ name, status: "pending", requestedAt: new Date() });
+  me.skillRequests = me.skillRequests.filter((r) => !fresh.some((name) => sameSkill(r.name, name)));
+  if (me.skillRequests.length + fresh.length > MAX_REQUESTS) return fail("too_many_skill_requests");
+  for (const name of fresh) me.skillRequests.push({ name, status: "pending", requestedAt: new Date() });
   await me.save();
 
   await notify({
     type: "hr.skill_requested",
     recipients: await skillApprovers(),
     actor: user,
-    params: { actor: user.name || user.email, skill: name },
+    params: { actor: user.name || user.email, skill: fresh.join("، ") },
     link: `/dashboard/staff?person=${id}`,
     entityType: "user",
     entityId: id,

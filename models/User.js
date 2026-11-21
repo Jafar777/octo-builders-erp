@@ -92,6 +92,8 @@ const UserSchema = new mongoose.Schema(
     // A trainee: gets the Training Program page (lib/training.js) and a "Trainee" badge
     // on the GM / CEO's screens. Set by the GM / CEO.
     trainee: { type: Boolean, default: false },
+    // Locked by management: the person can't change their own photo, names, phone or emergency contact.
+    profileLocked: { type: Boolean, default: false },
     // Authenticator-app sign-in (lib/totp.js): the secret is stored encrypted. `pending`
     // holds a new secret until its first code is confirmed. `lastCounter` refuses a code
     // used twice.

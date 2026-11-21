@@ -1,5 +1,6 @@
 "use client";
 
+import { matches, SearchBox } from "@/components/erp/ui/ListControls";
 import { useCallback, useEffect, useState } from "react";
 import { ExternalLink, Plus, Star, UserCheck } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
@@ -36,7 +37,8 @@ export default function RecruitmentCenter() {
   }, [load]);
 
   const current = data?.openings.find((o) => o.id === opening);
-  const candidates = (data?.candidates || []).filter((c) => c.opening === opening);
+  const [q, setQ] = useState("");
+  const candidates = (data?.candidates || []).filter((c) => c.opening === opening && matches(q, c.name, c.email, c.phone, c.source));
   const dept = (id) => lookups.departments.find((d) => d.id === id)?.name?.[lang] || "";
 
   return (
@@ -95,6 +97,7 @@ export default function RecruitmentCenter() {
                 </div>
                 {current.description && <p className="mt-3 whitespace-pre-wrap text-sm text-white/65">{current.description}</p>}
               </Card>
+              <SearchBox value={q} onChange={setQ} className="w-64" />
               <div className="grid gap-3 overflow-x-auto md:grid-cols-3 xl:grid-cols-6">
                 {STAGES.map((s) => (
                   <div key={s} className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.02] p-2">

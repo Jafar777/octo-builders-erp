@@ -5,7 +5,7 @@ import { audit } from "@/lib/audit";
 import { canProposeProject, intakeNames, isIntakePlanner, serializeIntake } from "@/lib/intake";
 import { notify } from "@/lib/notify";
 import { prepareProject, proposalBody } from "@/lib/projectCreate";
-import { usersWithPermissionFor } from "@/lib/scope";
+import { usersWithPermissionFor, usersWithRolePermission } from "@/lib/scope";
 import ProjectIntake from "@/models/ProjectIntake";
 
 // A department manager (or the CEO) sets up the intake's project: template, stages,
@@ -33,7 +33,7 @@ export async function PUT(request, { params }) {
   if (!isIntakePlanner(user)) {
     await notify({
       type: "project.proposal_new",
-      recipients: await usersWithPermissionFor("projects.manage", null),
+      recipients: [...new Set([...(await usersWithPermissionFor("projects.manage", null)), ...(await usersWithRolePermission("projects.accept"))])],
       actor: user,
       params: { actor: user.name || user.email, number: intake.number, project: intake.project.name, again: first ? "" : "1" },
       link: `/dashboard/intake?intake=${intake._id}`,

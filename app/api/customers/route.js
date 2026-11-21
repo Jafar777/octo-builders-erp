@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isIntakePlanner } from "@/lib/intake";
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { forbidden } from "@/lib/apiUtils";
 import { DEFAULT_ROLE } from "@/lib/permissions";
@@ -8,8 +9,8 @@ import User from "@/models/User";
 // People who can be a project's customer: accounts that signed up and have no role
 // (employees, managers and the GM / CEO all have one).
 export async function GET() {
-  const user = await requireStaff();
-  if (!user || !hasPermission(user, "projects.manage")) return forbidden();
+  const user = await requireStaff({ limited: true });
+  if (!user || !(hasPermission(user, "projects.manage") || isIntakePlanner(user))) return forbidden();
   const people = await User.find({ role: DEFAULT_ROLE, status: "active" }, { ...NAME_FIELDS, avatarUrl: 1 }).sort({ createdAt: -1 }).lean();
   const lang = await viewerLang();
   return NextResponse.json({

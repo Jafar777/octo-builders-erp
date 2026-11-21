@@ -30,6 +30,10 @@ const TaskSchema = new mongoose.Schema(
     priority: { type: String, enum: ["normal", "important", "urgent"], default: "normal" },
     revision: { type: Number, default: 0 }, // R-00, R-01...
     previousTask: { type: ObjectId, ref: "Task", default: null }, // revision chain / help origin
+    // Ticked by management: the customer follows this task as a milestone (its title, or
+    // customerTitle, and whether it's done — nothing else). lib/customerProgress.js
+    customerMilestone: { type: Boolean, default: false },
+    customerTitle: { type: String, default: "" },
     parentTask: { type: ObjectId, ref: "Task", default: null }, // sub-task of
     // Predecessors: this task can't start until all of them are approved / done.
     dependsOn: [{ type: ObjectId, ref: "Task" }],
@@ -140,6 +144,13 @@ const TaskSchema = new mongoose.Schema(
     ],
 
     // The plan before work started, so a start pressed by mistake can be undone.
+    // Taken off the schedule while its project is on hold (its dates kept here, so
+    // "back on schedule" can put it where it was, or at the next free time).
+    parked: {
+      plannedStart: { type: Date, default: null },
+      dueAt: { type: Date, default: null },
+      at: { type: Date, default: null },
+    },
     startUndo: {
       plannedStart: { type: Date, default: null },
       dueAt: { type: Date, default: null },

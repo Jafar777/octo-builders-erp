@@ -1,5 +1,6 @@
 "use client";
 
+import { matches, SearchBox } from "@/components/erp/ui/ListControls";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, CheckCheck, SlidersHorizontal } from "lucide-react";
@@ -23,6 +24,7 @@ export default function NotificationsCenter() {
   const [hasMore, setHasMore] = useState(() => Boolean(peekApi("/api/notifications?")?.hasMore));
   const [loading, setLoading] = useState(() => !peekApi("/api/notifications?"));
   const [prefsOpen, setPrefsOpen] = useState(false);
+  const [q, setQ] = useState("");
 
   const load = useCallback(
     async (before) => {
@@ -87,9 +89,10 @@ export default function NotificationsCenter() {
         </div>
       )}
 
+      <SearchBox value={q} onChange={setQ} className="mb-4 w-64" />
       {loading && items.length === 0 && <SkeletonList rows={6} avatar={false} />}
       <div className="space-y-2">
-        {items.map((n) => (
+        {items.filter((n) => matches(q, n.message?.ar, n.message?.en)).map((n) => (
           <button
             type="button"
             key={n.id}

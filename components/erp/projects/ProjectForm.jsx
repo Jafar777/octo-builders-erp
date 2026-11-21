@@ -11,6 +11,10 @@ import { stageAfter, stepByStep } from "@/lib/stageFlow";
 import { canRouteStages } from "@/components/erp/projects/StageRouting";
 import { Building2, Check, Star } from "lucide-react";
 
+// The best-person key of a stage: its task type and the department doing it (the
+// stage's own, else the project's). See /api/tasks/best-for.
+const bestKey = (stage, department) => `${stage.taskType}@${String(stage.department || department || "")}`;
+
 // Who reviews each task (lib/reviewFlow): always the department manager, who may send
 // it on to the CEO when reviewing ("accept if the CEO accepts"). Only the customer's
 // review (projects with a customer) is chosen here.
@@ -128,18 +132,19 @@ export default function ProjectForm({ lookups, intake = null, mode = "accept", i
   }, []);
 
   // A template opens step by step; the GM can then reorder and branch it.
-  function pickTemplate(templateId) {
-    if (templateId === form.templateId) return;
+  function pickTemplate(templateId, department = form.department) {
+    if (templateId === form.templateId) return loadBestFor(templates.find((x) => x.id === templateId)?.stages || [], department);
     setForm((f) => ({ ...f, templateId }));
     const next = templates.find((x) => x.id === templateId);
     setStages(next ? stepByStep(next.stages) : []);
-    loadBestFor(next?.stages || []);
+    loadBestFor(next?.stages || [], department);
   }
 
   // Who is clearly best at each of the template's task types (people who create projects only).
-  function loadBestFor(templateStages) {
+  function loadBestFor(templateStages, department) {
     setBestFor({});
-    const types = [...new Set(templateStages.map((s) => s.taskType).filter(Boolean))];
+    // Per task type and the department doing that stage: only its people are suggested.
+    const types = [...new Set(templateStages.filter((s) => s.taskType).map((s) => bestKey(s, department)))];
     if (!types.length || !canRouteStages(user)) return;
     api(`/api/tasks/best-for?types=${encodeURIComponent(types.join(","))}`)
       .then((d) => setBestFor(d.bestFor || {}))
@@ -150,7 +155,8 @@ export default function ProjectForm({ lookups, intake = null, mode = "accept", i
   function pickDepartment(department) {
     const match = templates.find((x) => x.department === department);
     setForm((f) => ({ ...f, department }));
-    if (match) pickTemplate(match.id);
+    if (match) pickTemplate(match.id, department);
+    else if (form.templateId) loadBestFor(templates.find((x) => x.id === form.templateId)?.stages || [], department);
   }
 
   const template = templates.find((x) => x.id === form.templateId);
@@ -267,9 +273,9 @@ export default function ProjectForm({ lookups, intake = null, mode = "accept", i
             renderRow={(s) => (
               <div className="space-y-2">
                 <BestForNote
-                  best={bestFor[s.taskType]}
-                  assigned={taskOf(s.key).assigneeId === bestFor[s.taskType]?.userId}
-                  onAssign={() => setTask(s.key, { assigneeId: bestFor[s.taskType].userId })}
+                  best={bestFor[bestKey(s, form.department)]}
+                  assigned={taskOf(s.key).assigneeId === bestFor[bestKey(s, form.department)]?.userId}
+                  onAssign={() => setTask(s.key, { assigneeId: bestFor[bestKey(s, form.department)].userId })}
                   t={t}
                 />
                 <div className="grid gap-2 sm:grid-cols-[110px_1fr]">

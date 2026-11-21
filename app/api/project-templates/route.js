@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isIntakePlanner } from "@/lib/intake";
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { bilingual, fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
@@ -10,8 +11,8 @@ import ProjectTemplate from "@/models/ProjectTemplate";
 import WorkProject from "@/models/WorkProject";
 
 export async function GET() {
-  const user = await requireStaff();
-  if (!user) return forbidden();
+  const user = await requireStaff({ limited: true });
+  if (!user || (user.limited && !isIntakePlanner(user))) return forbidden();
   const templates = await ProjectTemplate.find().sort({ createdAt: 1 }).lean();
   return NextResponse.json({ templates: templates.map(serializeTemplate) });
 }

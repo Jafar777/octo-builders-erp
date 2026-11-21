@@ -52,6 +52,14 @@ async function done(user, project, action, summary) {
   return NextResponse.json({ milestones: project.milestones.map(serializeMilestone) });
 }
 
+// The project's milestones (payment stages are the billed ones), for its Settings tab.
+export async function GET(request, { params }) {
+  const user = await requireStaff();
+  const { project, error } = await load(user, params);
+  if (error) return error;
+  return NextResponse.json({ milestones: project.milestones.map(serializeMilestone), canBill: hasPermission(user, "invoices.manage") });
+}
+
 // Body: { name, date, dependsOn?: [taskId] }
 export async function POST(request, { params }) {
   const user = await requireStaff();

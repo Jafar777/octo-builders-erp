@@ -149,7 +149,7 @@ export function MySkillsCard({ userId, data }) {
             value={draft}
             onChange={setDraft}
             placeholder="AutoCAD, 3ds Max, Revit…"
-            maxLength={40}
+            maxLength={300}
             onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())}
           />
         </div>

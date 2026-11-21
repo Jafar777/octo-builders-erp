@@ -281,6 +281,15 @@ html {
   padding-top: 0;
 }
 
+/* ---- Dark dashboard: black instead of the brand navy (the public site keeps the navy).
+   .erp-dash is on <html> while the dashboard is open, so pop-ups outside its frame match. */
+.erp-dash:not(.erp-light),
+.erp-root:not(.erp-light) {
+  --color-brand-navy: #000000;
+  --color-brand-navy-light: #141414;
+  --background: #000000;
+}
+
 /* ---- Light dashboard theme (Profile > Appearance, or the sun/moon button) ----
    Every dashboard colour comes from the Tailwind colour variables, so the light theme
    swaps them: "white" becomes the ink, "navy" the paper, and the pale status colours
@@ -329,8 +338,8 @@ html {
 }
 .erp-light .keep-dark {
   --color-white: #fff;
-  --color-brand-navy: #0f2331;
-  --color-brand-navy-light: #16324a;
+  --color-brand-navy: #000000;
+  --color-brand-navy-light: #141414;
   --color-brand-orange: #f37b20;
   --color-brand-peach: #ef9957;
   --color-red-100: oklch(93.6% 0.032 17.717);
@@ -418,7 +427,7 @@ html.erp-light body {
 }
 /* The Gantt keeps its original dark look inside the light theme. */
 .erp-light .keep-dark {
-  background-color: #0f2331;
+  background-color: #000000;
   border-radius: 1.25rem;
   padding: 0.75rem;
 }

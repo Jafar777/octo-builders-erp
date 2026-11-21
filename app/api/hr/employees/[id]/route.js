@@ -71,6 +71,8 @@ export async function GET(request, { params }) {
       annualLeaveDays: u.annualLeaveDays ?? 21,
       kpiExcluded: Boolean(u.kpiExcluded),
       phone: u.phone || "",
+      avatarUrl: u.avatarUrl || "",
+      profileLocked: Boolean(u.profileLocked),
       skills: u.skills || [],
       skillRequests: serializeSkillRequests(u.skillRequests),
       workSchedule: scheduleOut(u.workSchedule),
@@ -81,6 +83,8 @@ export async function GET(request, { params }) {
     documents: canEditFile ? (u.documents || []).map(serializeDocument) : [],
     canEditFile,
     canApproveSkills: canApproveSkills(user),
+    // Photo and "lock their own edits" (company-wide user managers, not on themselves).
+    canManageProfile: hasPermission(user, "users.manage") && user.scope === "all" && id !== user.id,
     salaries: salaries.map((s) => ({ id: s._id.toString(), amount: s.amount, currency: s.currency, from: s.from, note: s.note })),
     canPay,
     salaryLocked: mayPay && !canPay,
@@ -95,9 +99,24 @@ export async function PATCH(request, { params }) {
   const body = await readJson(request);
   const isHr = hasPermission(user, "attendance.manage") && (await canSeePerson(user, id, "attendance.manage"));
 
+  // Company-wide user managers (the CEO) change the photo and lock a person's own edits.
+  const isUserManager = hasPermission(user, "users.manage") && user.scope === "all";
+  const self = id === user.id;
+  const locked = self && user.profileLocked && !user.actingAs;
+
   // Employees keep their own emergency contact up to date; everything else is HR's.
   const changes = {};
-  if (body.emergencyContact && (isHr || id === user.id)) {
+  if (isUserManager) {
+    if (typeof body.avatarUrl === "string") changes.avatarUrl = /^(https?:\/\/|\/uploads\/)/.test(body.avatarUrl) || body.avatarUrl === "" ? body.avatarUrl.slice(0, 500) : undefined;
+    if (changes.avatarUrl === undefined) delete changes.avatarUrl;
+    if (typeof body.profileLocked === "boolean") changes.profileLocked = body.profileLocked;
+    if (!isHr && Object.keys(changes).length && !body.emergencyContact) {
+      await User.findByIdAndUpdate(id, changes);
+      await audit(user, "hr.profile_updated", { entityType: "user", entityId: id, details: changes });
+      return NextResponse.json({ ok: true });
+    }
+  }
+  if (body.emergencyContact && (isHr || (self && !locked))) {
     const c = body.emergencyContact;
     changes.emergencyContact = {
       name: String(c.name || "").trim().slice(0, 100),
@@ -106,7 +125,7 @@ export async function PATCH(request, { params }) {
     };
   }
   if (!isHr) {
-    if (!changes.emergencyContact) return forbidden();
+    if (!changes.emergencyContact && !isUserManager) return forbidden();
     await User.findByIdAndUpdate(id, changes);
     await audit(user, "hr.profile_updated", { entityType: "user", entityId: id, details: changes });
     return NextResponse.json({ ok: true });

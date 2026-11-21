@@ -1,11 +1,13 @@
 "use client";
 
+import { DeleteProjectButton } from "@/components/erp/projects/DeletedItems";
+import ProjectMilestones from "@/components/erp/projects/ProjectMilestones";
 import ProjectFiles from "@/components/erp/projects/ProjectFiles";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeft, CalendarDays, Lock, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarDays, ChevronDown, Lock, Plus, Trash2 } from "lucide-react";
 import ServerFolderField from "@/components/erp/files/ServerFolderField";
 import { LinkOrPath, ServerFolderButton } from "@/components/erp/files/ServerRefs";
 import { useFileServer } from "@/components/erp/files/useFileServer";
@@ -122,6 +124,39 @@ function CellModal({ project, cell, canManage, canPlan, lookups, onOpenTask, onN
           </div>
         </div>
       )}
+      <ErrorText>{error}</ErrorText>
+    </div>
+  );
+}
+
+// On hold: take its not-started tasks off the schedule (their people are free on the
+// Gantt); active again: put the ones taken off back (where they were, or next free time).
+function ScheduleHold({ project, tasks, onDone }) {
+  const { t } = useLanguage();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const holding = tasks.filter((x) => x.status === "todo" && x.plannedStart).length;
+  const parked = tasks.filter((x) => x.status === "todo" && x.parked).length;
+  const onHold = project.status === "on_hold";
+  if (onHold ? holding === 0 : parked === 0) return null;
+  async function run(action) {
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/api/work-projects/${project.id}/schedule`, { method: "POST", body: { action } });
+      onDone?.();
+    } catch (err) {
+      setError(errorText(t, err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border border-amber-400/30 bg-amber-400/[0.06] px-4 py-3 text-sm">
+      <p className="min-w-0 flex-1 text-amber-100">{onHold ? t("erp.projects.holdStillScheduled", { n: holding }) : t("erp.projects.parkedTasks", { n: parked })}</p>
+      <Button variant="ghost" disabled={busy} onClick={() => run(onHold ? "unschedule" : "reschedule")}>
+        <CalendarDays size={16} /> {t(onHold ? "erp.projects.unschedule" : "erp.projects.reschedule")}
+      </Button>
       <ErrorText>{error}</ErrorText>
     </div>
   );
@@ -285,6 +320,26 @@ function ProjectSettings({ project, lookups, onSaved }) {
           {t("erp.projects.saveAsTemplate")}
         </Button>
       </div>
+      <MilestonesCard projectId={project.id} />
+      <DeleteProjectButton project={project} />
+    </div>
+  );
+}
+
+// Milestones and the customer's payment stages: pick the task each payment waits for.
+function MilestonesCard({ projectId }) {
+  const { t } = useLanguage();
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    api(`/api/work-projects/${projectId}/milestones`, { quiet: true })
+      .then(setData)
+      .catch(() => setData(false));
+  }, [projectId]);
+  if (!data) return null;
+  return (
+    <div className="space-y-3 rounded-2xl border border-white/10 p-4">
+      <p className="font-semibold">{t("erp.milestones.title")}</p>
+      <ProjectMilestones projectId={projectId} milestones={data.milestones} canBill={data.canBill} onChanged={(milestones) => setData((d) => ({ ...d, milestones }))} />
     </div>
   );
 }
@@ -337,6 +392,34 @@ export default function ProjectBoard({ projectId }) {
     canManage ||
     Boolean(user?.permissions?.includes("projects.manage") && user?.department && (stage?.department || project?.department) === user.department);
   const sortedTasks = useMemo(() => [...tasks].sort((a, b) => b.number - a.number), [tasks]);
+  // Each drawing's revisions (R-00, R-01…, linked by previousTaskId) as one group: the
+  // latest shows, the earlier ones fold under it.
+  const revisionGroups = useMemo(() => {
+    const byId = new Map(tasks.map((x) => [x.id, x]));
+    // Tasks and revisions of the same drawing (stage + name + type) group together even
+    // when a revision isn't linked to the one before (some imported ones aren't).
+    const drawingKey = (x) => (["task", "revision"].includes(x.kind) ? `d:${x.stage?.key || ""}|${x.title || ""}|${x.type || ""}` : null);
+    const rootOf = (x) => {
+      let cur = x;
+      for (let i = 0; i < 100 && cur.previousTaskId && byId.has(cur.previousTaskId); i++) cur = byId.get(cur.previousTaskId);
+      return drawingKey(cur) || cur.id;
+    };
+    const groups = new Map();
+    for (const x of sortedTasks) {
+      const key = rootOf(x);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(x);
+    }
+    return [...groups.entries()].map(([key, list]) => ({ key, list: list.sort((a, b) => (b.revision || 0) - (a.revision || 0) || b.number - a.number) }));
+  }, [tasks, sortedTasks]);
+  const [openRevisions, setOpenRevisions] = useState(() => new Set());
+  const toggleRevisions = (key) =>
+    setOpenRevisions((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   if (!project) {
     return error ? <ErrorText>{error}</ErrorText> : <PageSkeleton tiles={0} tabs={3} />;
@@ -404,6 +487,8 @@ export default function ProjectBoard({ projectId }) {
         ))}
       </div>
 
+      {canRoute && <ScheduleHold project={project} tasks={tasks} onDone={load} />}
+
       {tab === "board" && (
         <div className="overflow-x-auto rounded-2xl border border-white/10 p-3">
           <div className="grid min-w-[640px] gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(project.stages.length, 1)}, minmax(110px, 1fr))` }}>
@@ -454,9 +539,33 @@ export default function ProjectBoard({ projectId }) {
               <Plus size={16} /> {t("erp.tasks.new")}
             </Button>
           )}
-          {sortedTasks.map((task) => (
-            <TaskRow key={task.id} task={task} lookups={lookups} now={now} onOpen={setOpenTaskId} projectFirst={false} showAssignee />
-          ))}
+          {revisionGroups.map(({ key, list }) => {
+            const [latest, ...earlier] = list;
+            const open = openRevisions.has(key);
+            return (
+              <div key={key}>
+                <TaskRow task={latest} lookups={lookups} now={now} onOpen={setOpenTaskId} projectFirst={false} showAssignee />
+                {earlier.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => toggleRevisions(key)}
+                    aria-expanded={open}
+                    className="ms-6 mt-1 flex items-center gap-1 text-xs text-white/60 hover:text-white"
+                  >
+                    <ChevronDown size={13} className={`transition-transform ${open ? "" : "-rotate-90 rtl:rotate-90"}`} />
+                    {t("erp.projects.earlierRevisions", { n: earlier.length })}
+                  </button>
+                )}
+                {open && (
+                  <div className="ms-6 mt-2 space-y-2 border-s border-white/10 ps-3">
+                    {earlier.map((task) => (
+                      <TaskRow key={task.id} task={task} lookups={lookups} now={now} onOpen={setOpenTaskId} projectFirst={false} showAssignee />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
           {sortedTasks.length === 0 && <EmptyState compact text={t("erp.tasks.none")} />}
         </div>
       )}

@@ -27,13 +27,14 @@ export default function OvertimeRequests() {
   const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState(["mine", "queue", "history"].includes(searchParams.get("tab")) ? searchParams.get("tab") : "mine");
+  const [tab, setTab] = useState(["mine", "queue", "unrequested", "history"].includes(searchParams.get("tab")) ? searchParams.get("tab") : "mine");
   const [month, setMonth] = useState("");
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
 
   const load = useCallback(() => {
-    api(`/api/overtime?tab=${tab}${tab === "history" && month ? `&month=${month}` : ""}`)
+    // "Without a request" loads its own list; this call only says who may decide.
+    api(`/api/overtime?tab=${tab === "unrequested" ? "queue" : tab}${tab === "history" && month ? `&month=${month}` : ""}`)
       .then((d) => {
         setData(d);
         if (tab === "history") setMonth(d.month);
@@ -51,7 +52,7 @@ export default function OvertimeRequests() {
     router.replace(`/dashboard/overtime?tab=${next}`, { scroll: false });
   };
   // The approvers' tab only for department managers and the CEO (the server says).
-  const tabs = ["mine", ...(data?.canDecide || tab === "queue" ? ["queue"] : []), "history"];
+  const tabs = ["mine", ...(data?.canDecide || ["queue", "unrequested"].includes(tab) ? ["queue", "unrequested"] : []), "history"];
 
   return (
     <div className="max-w-5xl">
@@ -67,7 +68,78 @@ export default function OvertimeRequests() {
       {!data && !error && <SkeletonList rows={4} />}
       {data && tab === "mine" && <Mine data={data} onChanged={load} />}
       {data && tab === "queue" && <Queue data={data} onChanged={load} />}
+      {data && tab === "unrequested" && <Unrequested />}
       {data && tab === "history" && <History data={data} month={month} onMonth={setMonth} />}
+    </div>
+  );
+}
+
+// Days someone worked past their hours without asking: approve (paid as overtime) or
+// reject, seeing what they worked on that day.
+function Unrequested() {
+  const { t, lang } = useLanguage();
+  const toast = useToast();
+  const [month, setMonth] = useState("");
+  const [data, setData] = useState(null);
+  const [hours, setHours] = useState({});
+  const [busy, setBusy] = useState("");
+  const load = useCallback(() => {
+    api(`/api/overtime/unrequested${month ? `?month=${month}` : ""}`)
+      .then((d) => {
+        setData(d);
+        if (!month) setMonth(d.month);
+      })
+      .catch(() => setData({ items: [] }));
+  }, [month]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  const decide = async (it, decision) => {
+    const key = `${it.userId}|${it.date}`;
+    setBusy(key);
+    try {
+      await api("/api/overtime/unrequested", { method: "POST", body: { userId: it.userId, date: it.date, decision, hours: Number(hours[key] ?? it.hours) } });
+      load();
+    } catch (err) {
+      toast({ text: errorText(t, err), tone: "error" });
+    } finally {
+      setBusy("");
+    }
+  };
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-white/60">{t("erp.overtime.unrequestedHint")}</p>
+        {month && <MonthPicker month={month} onChange={setMonth} />}
+      </div>
+      {!data && <SkeletonList rows={3} />}
+      {data && !data.items.length && <EmptyState compact icon={CheckCircle2} text={t("erp.overtime.unrequestedNone")} />}
+      {data?.items.map((it) => {
+        const key = `${it.userId}|${it.date}`;
+        return (
+          <Card key={key} className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <Avatar name={it.name} src={it.avatarUrl} size={36} />
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">{it.name}</p>
+                <p className="text-xs text-white/60">{formatDate(it.date, lang)} · {t("erp.overtime.extraHours", { h: it.hours })}</p>
+              </div>
+              <div className="w-28">
+                <Input type="number" min="0.25" step="0.25" label={t("erp.overtime.approveHours")} value={hours[key] ?? String(it.hours)} onChange={(v) => setHours((h) => ({ ...h, [key]: v }))} dir="ltr" />
+              </div>
+              <Button onClick={() => decide(it, "approve")} loading={busy === key}>
+                <CheckCircle2 size={15} /> {t("erp.overtime.approve")}
+              </Button>
+              <Button variant="ghost" onClick={() => decide(it, "reject")} disabled={busy === key}>
+                <XCircle size={15} /> {t("erp.overtime.reject")}
+              </Button>
+            </div>
+            <p className="text-xs text-white/60">
+              {t("erp.overtime.workedOn")}: {it.tasks.length ? it.tasks.map((x) => `#${x.number} ${x.title}`).join(" · ") : t("erp.overtime.noTaskRecorded")}
+            </p>
+          </Card>
+        );
+      })}
     </div>
   );
 }

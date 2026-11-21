@@ -1,5 +1,6 @@
 "use client";
 
+import { matches, SearchBox } from "@/components/erp/ui/ListControls";
 import { useCallback, useEffect, useState } from "react";
 import { CalendarClock, CheckCircle2, FileText, Plus, Send, Sparkles, Trash2, XCircle } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
@@ -22,6 +23,7 @@ export default function SalesCenter() {
   const { t } = useLanguage();
   const lookups = useTaskLookups();
   const [tab, setTab] = useState("leads");
+  const [q, setQ] = useState("");
   const [leads, setLeads] = useState(null);
   const [quotes, setQuotes] = useState(null);
   const [error, setError] = useState("");
@@ -60,11 +62,12 @@ export default function SalesCenter() {
         ))}
       </div>
       <ErrorText>{error}</ErrorText>
+      <SearchBox value={q} onChange={setQ} className="mb-4 w-64" />
 
       {tab === "leads" && leads && (
         <div className="grid gap-3 overflow-x-auto pb-2 md:grid-cols-3 xl:grid-cols-6">
           {STAGES.map((stage) => {
-            const list = leads.leads.filter((l) => l.stage === stage);
+            const list = leads.leads.filter((l) => l.stage === stage && matches(q, l.company, l.name, l.phone, l.email, l.source));
             return (
               <div key={stage} className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.02] p-2">
                 <p className="mb-2 flex items-center justify-between px-1 text-xs font-semibold uppercase tracking-wider text-white/60">
@@ -97,7 +100,7 @@ export default function SalesCenter() {
         <Card>
           {!quotes.quotations.length && <EmptyState compact text={t("erp.sales.noQuotes")} />}
           <ul className="divide-y divide-white/5">
-            {quotes.quotations.map((q) => (
+            {quotes.quotations.filter((x) => matches(q, x.number, x.clientName, x.title)).map((q) => (
               <li key={q.id}>
                 <button type="button" onClick={() => setOpenQuote(q)} className="flex w-full flex-wrap items-center gap-3 py-3 text-start text-sm hover:bg-white/[0.02]">
                   <span className="font-mono text-xs text-white/50" dir="ltr">

@@ -1,5 +1,6 @@
 "use client";
 
+import LevelBadge from "@/components/erp/tasks/LevelBadge";
 import { AlertTriangle, Clock, Timer } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { formatDateTime } from "@/lib/formatTime";
@@ -8,6 +9,9 @@ import { formatDuration, liveActiveMs, PRIORITY_STYLE, revisionLabel, STATUS_STY
 import { PlanningBadges } from "@/components/erp/tasks/TaskPlanning";
 import Stars from "@/components/erp/tasks/Stars";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
+
+// The review level that rejected a task (its last "reject" decision).
+export const rejectedLevel = (task) => [...(task.reviews || [])].reverse().find((r) => r.decision === "reject")?.level || "";
 
 export function StatusBadge({ status }) {
   const { t } = useLanguage();
@@ -129,6 +133,8 @@ export default function TaskRow({ task, lookups, now, onOpen, showAssignee = fal
       {task.stars > 0 && <Stars value={task.stars} size={13} />}
 
       <StatusBadge status={task.status} />
+      {/* Who sent it back: the department manager, management or the customer. */}
+      {task.status === "rejected" && <LevelBadge level={rejectedLevel(task)} />}
     </button>
   );
 }

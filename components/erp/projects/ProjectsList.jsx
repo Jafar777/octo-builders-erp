@@ -1,9 +1,11 @@
 "use client";
 
+import { matches, SearchBox, sortList, SortSelect } from "@/components/erp/ui/ListControls";
+import { DeletedItemsButton, useCanDelete } from "@/components/erp/projects/DeletedItems";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CalendarDays, ChartNoAxesGantt, LayoutGrid, LayoutTemplate, ListChecks, Plus } from "lucide-react";
+import { AlertTriangle, CalendarDays, ChartNoAxesGantt, ClipboardList, LayoutGrid, LayoutTemplate, ListChecks, Plus } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { formatDate } from "@/lib/formatTime";
@@ -20,7 +22,7 @@ import { EmptyState } from "@/components/erp/ui/DataTools";
 
 const STATUSES = ["active", "on_hold", "finished", "archived"];
 
-export default function ProjectsList() {
+export default function ProjectsList({ intakes = false }) {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
   const router = useRouter();
@@ -32,11 +34,23 @@ export default function ProjectsList() {
   const [picked, setView] = useState("timeline");
   const view = gantt ? picked : "cards";
   const canManage = user?.permissions?.includes("projects.manage");
+  const canDelete = useCanDelete();
   const isDeptManager = user?.scope === "department" && user?.permissions?.includes("tasks.review");
 
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState("");
   const visible = useMemo(
-    () => lookups.projects.filter((p) => (!status || p.status === status) && (!department || p.department === department)),
-    [lookups.projects, status, department]
+    () =>
+      sortList(
+        lookups.projects.filter((p) => (!status || p.status === status) && (!department || p.department === department) && matches(q, p.name?.ar, p.name?.en, p.code, p.client)),
+        sort,
+        {
+          name: (a, b) => (a.name?.[lang] || "").localeCompare(b.name?.[lang] || ""),
+          due: (a, b) => new Date(a.dueDate || 8.64e15) - new Date(b.dueDate || 8.64e15),
+          progress: (a, b) => (b.progress || 0) - (a.progress || 0),
+        }
+      ),
+    [lookups.projects, status, department, q, sort, lang]
   );
 
   const inTimeline = view === "timeline" && lookups.projectsLoaded;
@@ -72,6 +86,8 @@ export default function ProjectsList() {
           </button>
         ))}
       </div>
+      <SearchBox value={q} onChange={setQ} className="w-48" />
+      <SortSelect value={sort} onChange={setSort} options={["default", "name", "due", "progress"].map((k) => [k === "default" ? "" : k, t(`erp.ux.sort.${k}`)])} />
       {lookups.departments.length > 1 && (
         <div className="w-48">
           <Select
@@ -91,16 +107,27 @@ export default function ProjectsList() {
         title={t("erp.nav.projects")}
         subtitle={t("erp.projects.subtitle")}
         actions={
-          canManage && (
+          (canManage || intakes || canDelete) && (
             <>
-              <Link href="/dashboard/projects/templates">
-                <Button variant="ghost">
-                  <LayoutTemplate size={16} /> {t("erp.projects.templates")}
-                </Button>
-              </Link>
-              {/* Every project starts from an intake form; the CEO accepts it there. */}
-              {(canRouteStages(user) || isDeptManager) && (
+              <DeletedItemsButton />
+              {canManage && (
+                <Link href="/dashboard/projects/templates">
+                  <Button variant="ghost">
+                    <LayoutTemplate size={16} /> {t("erp.projects.templates")}
+                  </Button>
+                </Link>
+              )}
+              {/* All intake forms: fill in, price, set up and accept projects. */}
+              {intakes && (
                 <Link href="/dashboard/intake">
+                  <Button variant="ghost">
+                    <ClipboardList size={16} /> {t("erp.nav.intake")}
+                  </Button>
+                </Link>
+              )}
+              {/* Every project starts from an intake form: this opens a new one. */}
+              {canManage && (canRouteStages(user) || isDeptManager) && (
+                <Link href="/dashboard/intake?new=1">
                   <Button>
                     <Plus size={16} /> {t("erp.projects.new")}
                   </Button>

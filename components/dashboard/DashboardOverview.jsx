@@ -10,11 +10,13 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  Circle,
   Clock,
   Flame,
   Loader2,
   ShieldAlert,
   UserPlus,
+  Wallet,
   WifiOff,
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
@@ -99,8 +101,15 @@ function CustomerHome() {
   }, []);
   if (!projects) return <SkeletonList rows={3} avatar={false} />;
   const waiting = projects.reduce((n, p) => n + p.waitingForYou, 0);
+  const dueNow = projects.flatMap((p) => (p.payments?.stages || []).filter((s) => s.status === "due").map((s) => ({ ...s, project: p.name?.[lang] || p.code })));
   return (
     <div className="space-y-4">
+      {dueNow.map((s) => (
+        <p key={`${s.project}-${s.n}`} className="animate-fade-up flex items-center gap-3 rounded-2xl border border-brand-orange/40 bg-brand-orange/10 p-4 text-sm font-medium">
+          <Wallet size={18} className="text-brand-orange" />
+          {t("erp.customer.dueNow", { n: s.n, project: s.project })}
+        </p>
+      ))}
       {waiting > 0 && (
         <Link
           href="/dashboard/reviews"
@@ -143,6 +152,51 @@ function CustomerHome() {
                   </span>
                 ))}
               </div>
+              {p.milestones?.length > 0 && (
+                <div className="mt-4">
+                  <p className="mb-2 text-xs font-semibold text-white/70">{t("erp.customer.milestones")}</p>
+                  <ul className="space-y-1.5">
+                    {p.milestones.map((ms) => (
+                      <li key={ms.id} className="flex items-center gap-2 text-sm">
+                        {ms.done ? <CheckCircle2 size={16} className="shrink-0 text-emerald-400" /> : <Circle size={16} className="shrink-0 text-white/30" />}
+                        <span className={`flex-1 ${ms.done ? "text-white/90" : "text-white/70"}`} dir="auto">{ms.title}</span>
+                        <span className={`text-[11px] ${ms.done ? "text-emerald-300" : "text-white/50"}`}>{t(ms.done ? "erp.customer.msDone" : "erp.customer.msOpen")}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {p.payments && (
+                <div className="mt-4 rounded-xl bg-white/[0.03] p-3">
+                  <p className="mb-2 text-xs font-semibold text-white/70">{t("erp.customer.payments")}</p>
+                  <div className="mb-3 grid grid-cols-3 gap-2 text-center text-xs">
+                    {[["total", p.payments.total], ["paidSoFar", p.payments.paid], ["remaining", p.payments.remaining]].map(([k, v]) => (
+                      <div key={k} className="rounded-lg bg-white/[0.04] p-2">
+                        <p className="text-white/50">{t(`erp.customer.${k}`)}</p>
+                        <p className="mt-0.5 font-semibold tabular-nums">{money(v, p.payments.currency || "USD", lang)}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <ul className="space-y-1.5">
+                    {p.payments.stages.map((s) => (
+                      <li key={s.n} className="flex items-center gap-3 text-sm">
+                        <span className="flex-1">
+                          {t("erp.customer.payment", { n: s.n })}
+                          {s.percent ? <span className="text-xs text-white/50"> · {s.percent}%</span> : null}
+                        </span>
+                        <span className="tabular-nums text-white/80">{money(s.amount, p.payments.currency || "USD", lang)}</span>
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-[11px] ${
+                            s.status === "paid" ? "bg-emerald-500/15 text-emerald-300" : s.status === "due" ? "bg-brand-orange/20 text-brand-orange" : "bg-white/10 text-white/60"
+                          }`}
+                        >
+                          {t(`erp.customer.pay.${s.status}`)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           ))}
           {!projects.length && <EmptyState compact text={t("erp.projects.none")} />}
@@ -150,6 +204,73 @@ function CustomerHome() {
       </Section>
     </div>
   );
+}
+
+// "Needs you": every queue this person can act on, each linking to where they act.
+function NeedsYou({ needs, persona }) {
+  const { t } = useLanguage();
+  if (!needs || persona === "employee") return null;
+  if (!needs.length)
+    return (
+      <p className="animate-fade-up flex items-center gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3 text-sm text-emerald-200">
+        <CheckCircle2 size={16} /> {t("erp.home.needs.none")}
+      </p>
+    );
+  return (
+    <div className="animate-fade-up rounded-2xl border border-brand-orange/25 bg-brand-orange/[0.06] p-3">
+      <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wider text-brand-orange">{t("erp.home.needs.title")}</p>
+      <div className="flex flex-wrap gap-2">
+        {needs.map((n) => (
+          <Link key={n.key} href={n.href} className="flex items-center gap-2 rounded-xl bg-white/[0.06] px-3 py-2 text-sm hover:bg-white/[0.12]">
+            <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-brand-orange px-1.5 text-xs font-bold text-white">{n.count}</span>
+            {t(`erp.home.needs.${n.key}`)}
+            <ArrowUpRight size={13} className="text-white/50 rtl:-scale-x-100" />
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// The 4 headline numbers, chosen by the person's job (lib/homePersona.js).
+function HeadlineTiles({ d, m }) {
+  const { t } = useLanguage();
+  const need = (k) => d.needs?.find((n) => n.key === k)?.count || 0;
+  const personal = [
+    <StatTile key="open" label={t("erp.home.openTasks")} value={d.myTasks?.open ?? 0} hint={d.myTasks?.submitted ? t("erp.home.waitingReview", { n: d.myTasks.submitted }) : ""} />,
+    <StatTile key="overdue" label={t("erp.home.overdue")} value={d.myTasks?.overdue ?? 0} tone={d.myTasks?.overdue ? "text-red-300" : ""} />,
+    <StatTile key="worked" label={t("erp.home.workedMonth")} value={d.myMonth ? hm(d.myMonth.worked) : "—"} hint={d.myMonth ? `${t("erp.hr.of")} ${hm(d.myMonth.required)}` : ""} />,
+    <StatTile
+      key="warn"
+      label={t("erp.hr.warnings")}
+      value={d.myMonth?.warnings ?? "—"}
+      tone={d.myMonth?.warnings >= 4 ? "text-red-300" : ""}
+      hint={d.myMonth?.efficiency != null ? `${t("erp.hr.efficiency")} ${Math.round(d.myMonth.efficiency * 100)}%` : ""}
+    />,
+  ];
+  const tile = {
+    present: d.team && <StatTile key="present" label={t("erp.home.present")} value={`${d.team.present}/${d.team.total}`} hint={d.team.onLeave ? `${t("erp.home.onLeave")}: ${d.team.onLeave}` : ""} />,
+    reviews: d.reviews && <StatTile key="reviews" label={t("erp.nav.reviews")} value={d.reviews.count} tone={d.reviews.count ? "text-brand-orange" : ""} />,
+    late: <StatTile key="late" label={t("erp.home.lateTasks")} value={need("lateTasks")} tone={need("lateTasks") ? "text-red-300" : ""} />,
+    projects: d.projects && <StatTile key="projects" label={t("erp.home.activeProjects")} value={d.projects.active} hint={d.projects.atRisk ? t("erp.home.atRisk", { n: d.projects.atRisk }) : ""} />,
+    atRisk: d.projects && <StatTile key="risk" label={t("erp.home.riskTile")} value={d.projects.atRisk} tone={d.projects.atRisk ? "text-[#ec835a]" : ""} />,
+    net: d.finance && <StatTile key="net" label={t("erp.home.monthNet")} value={m(d.finance.monthNet)} tone={d.finance.monthNet < 0 ? "text-red-300" : "text-emerald-300"} />,
+    receivables: d.finance && <StatTile key="recv" label={t("erp.finance.receivables")} value={m(d.finance.receivables)} tone="text-amber-300" />,
+    leave: d.hr && <StatTile key="leave" label={t("erp.home.pendingLeave")} value={d.hr.pendingLeave} tone={d.hr.pendingLeave ? "text-brand-orange" : ""} />,
+    intakes: d.office && <StatTile key="intakes" label={t("erp.home.openIntakes")} value={d.office.intakesNew} />,
+    leads: d.office && d.office.leadsOpen !== null && <StatTile key="leads" label={t("erp.home.openLeads")} value={d.office.leadsOpen} hint={d.office.quotesSent ? t("erp.home.quotesSent", { n: d.office.quotesSent }) : ""} />,
+  };
+  const pick = {
+    executive: ["net", "receivables", "projects", "present"],
+    projects: ["projects", "atRisk", "late", "reviews"],
+    department: ["present", "reviews", "late", "atRisk"],
+    office: ["intakes", "leads", "present"],
+    hr: ["present", "leave", "reviews"],
+  }[d.persona];
+  // Fill up to 4 with the person's own numbers.
+  const chosen = (pick || []).map((k) => tile[k]).filter(Boolean);
+  const list = [...chosen, ...personal].slice(0, 4);
+  return <div className="animate-fade-up grid grid-cols-2 gap-3 md:grid-cols-4">{list}</div>;
 }
 
 // New accounts are sent to their profile until the name is filled in both languages.
@@ -194,6 +315,8 @@ export default function DashboardOverview({ user }) {
 
   const d = data || {};
   const m = (v) => money(v, d.finance?.base || "USD", lang);
+  // Managers see their queues and the business first; their own tasks come after.
+  const mine = d.persona && d.persona !== "employee" ? "order-last" : "";
 
   return (
     <div className="space-y-6">
@@ -234,20 +357,12 @@ export default function DashboardOverview({ user }) {
             </Link>
           )}
 
-          <div className="animate-fade-up grid grid-cols-2 gap-3 md:grid-cols-4">
-            <StatTile label={t("erp.home.openTasks")} value={d.myTasks?.open ?? 0} hint={d.myTasks?.submitted ? t("erp.home.waitingReview", { n: d.myTasks.submitted }) : ""} />
-            <StatTile label={t("erp.home.overdue")} value={d.myTasks?.overdue ?? 0} tone={d.myTasks?.overdue ? "text-red-300" : ""} />
-            <StatTile label={t("erp.home.workedMonth")} value={d.myMonth ? hm(d.myMonth.worked) : "—"} hint={d.myMonth ? `${t("erp.hr.of")} ${hm(d.myMonth.required)}` : ""} />
-            <StatTile
-              label={t("erp.hr.warnings")}
-              value={d.myMonth?.warnings ?? "—"}
-              tone={d.myMonth?.warnings >= 4 ? "text-red-300" : ""}
-              hint={d.myMonth?.efficiency != null ? `${t("erp.hr.efficiency")} ${Math.round(d.myMonth.efficiency * 100)}%` : ""}
-            />
-          </div>
+          <NeedsYou needs={d.needs} persona={d.persona} />
+
+          <HeadlineTiles d={d} m={m} />
 
           <div className="grid gap-6 xl:grid-cols-2">
-            <Section title={t("erp.home.myTasks")} href="/dashboard/tasks" linkLabel={t("erp.home.all")}>
+            <Section title={t("erp.home.myTasks")} href="/dashboard/tasks" linkLabel={t("erp.home.all")} className={mine}>
               <div className="space-y-2">
                 {d.myTasks?.list.map((task) => (
                   <Link key={task.id} href={`/dashboard/tasks?task=${task.id}`} className="flex items-center gap-3 rounded-xl border border-white/[0.06] px-3 py-2.5 text-sm hover:bg-white/[0.05]">
@@ -267,7 +382,7 @@ export default function DashboardOverview({ user }) {
               </div>
             </Section>
 
-            <Section title={t("notifications.title")} href="/dashboard/notifications" linkLabel={t("erp.home.all")}>
+            <Section title={t("notifications.title")} href="/dashboard/notifications" linkLabel={t("erp.home.all")} className={mine}>
               <div className="space-y-2">
                 {d.notifications?.map((n) => (
                   <Link key={n.id} href={n.link || "/dashboard/notifications"} className="flex items-start gap-3 rounded-xl px-2 py-2 text-sm hover:bg-white/[0.05]">

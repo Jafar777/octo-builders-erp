@@ -1,5 +1,7 @@
 "use client";
 
+import PageLinks from "@/components/dashboard/PageLinks";
+import { PROFILE_PAGES } from "@/components/erp/profile/profilePages";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
@@ -32,6 +34,7 @@ export default function MyAttendance({ initialMonth }) {
         subtitle={t("erp.hr.mySubtitle")}
         actions={
           <>
+            <PageLinks pages={PROFILE_PAGES} current="attendance" />
             <MonthPicker month={month} onChange={setMonth} />
             <Button onClick={() => setRequesting(true)}>
               <Plus size={16} /> {t("erp.hr.requestLeave")}

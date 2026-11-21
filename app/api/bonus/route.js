@@ -66,7 +66,8 @@ export async function PATCH(request) {
     bonusPool: Math.max(0, Number(body.bonusPool) || 0),
     bonusCurrency: String(body.bonusCurrency || settings.currencies.base).toUpperCase().slice(0, 6),
     bonusSplit: split,
-    bonusMinScore: 0,
+    // Only people at or above this KPI score (%) enter the race.
+    bonusMinScore: Math.max(0, Math.min(100, Number(body.bonusMinScore) || 0)),
     bonusNote: String(body.bonusNote || "").slice(0, 1000),
   };
   if (body.announce) update.bonusAnnouncedAt = new Date();

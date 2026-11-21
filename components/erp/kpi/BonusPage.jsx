@@ -21,6 +21,7 @@ function ManageBonus({ data, month, onSaved }) {
     bonusCurrency: data.currency,
     bonusSplit: data.split.map(String),
     bonusNote: data.note,
+    bonusMinScore: data.minScore ? String(data.minScore) : "",
     announce: !data.pool,
   });
   const [busy, setBusy] = useState(false);
@@ -43,6 +44,7 @@ function ManageBonus({ data, month, onSaved }) {
           bonusCurrency: form.bonusCurrency,
           bonusSplit: form.bonusSplit.map((x) => Number(x) || 0),
           bonusNote: form.bonusNote,
+          bonusMinScore: Number(form.bonusMinScore) || 0,
           announce: form.announce,
         },
       });
@@ -62,6 +64,7 @@ function ManageBonus({ data, month, onSaved }) {
       <h2 className="text-lg font-semibold">{t("erp.bonus.manageTitle")}</h2>
       <div className="grid gap-4 sm:grid-cols-2">
         <Input type="number" min="0" label={t("erp.bonus.pool")} value={form.bonusPool} onChange={set("bonusPool")} dir="ltr" />
+        <Input type="number" min="0" max="100" label={t("erp.bonus.minScore")} value={form.bonusMinScore} onChange={set("bonusMinScore")} dir="ltr" placeholder="0" />
         <Select label={t("erp.bonus.currency")} value={form.bonusCurrency} onChange={set("bonusCurrency")} options={data.currencies.map((c) => ({ value: c, label: c }))} />
       </div>
 

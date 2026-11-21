@@ -1,5 +1,7 @@
 "use client";
 
+import { pageAllowed } from "@/components/dashboard/DashboardShell";
+import { useAuth } from "@/context/AuthContext";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -19,7 +21,7 @@ import { useConfirm, useAsk } from "@/components/erp/ui/Feedback";
 import { DraftBar, useDraft } from "@/components/erp/ui/useDraft";
 import { EmptyState } from "@/components/erp/ui/DataTools";
 
-const TABS = ["all", "new", "ready", "converted", "declined"];
+const TABS = ["all", "new", "ready", "converted", "declined", "noForm"];
 const STATUS_TONE = {
   new: "bg-amber-500/15 text-amber-200",
   ready: "bg-sky-500/15 text-sky-200",
@@ -48,17 +50,26 @@ function StatusBadge({ status }) {
 // `proposer` = may set up the intake's project as a request (department managers, the CEO).
 export default function IntakeCenter({ planner, finance, proposer = false }) {
   const { t, lang } = useLanguage();
+  const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [tab, setTab] = useState(planner ? "new" : "all");
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [openId, setOpenId] = useState(searchParams.get("intake"));
-  const [editing, setEditing] = useState(null); // null | "new" | intake
+  // "+ New project" on the Projects page lands here with ?new=1: open a blank form.
+  const [editing, setEditing] = useState(searchParams.get("new") ? "new" : null); // null | "new" | intake
   const [converting, setConverting] = useState(null); // { intake, mode: "propose" | "accept" }
   const [detailKey, setDetailKey] = useState(0);
 
   const load = useCallback(() => {
+    // "Projects without a form" (made before the forms, or imported).
+    if (tab === "noForm") {
+      api("/api/intakes/without-form")
+        .then((res) => setData((d) => ({ intakes: [], projects: res.projects, counts: d?.counts })))
+        .catch((err) => setError(errorText(t, err)));
+      return;
+    }
     api(`/api/intakes${tab === "all" ? "" : `?status=${tab}`}`)
       .then(setData)
       .catch((err) => setError(errorText(t, err)));
@@ -100,7 +111,28 @@ export default function IntakeCenter({ planner, finance, proposer = false }) {
       </div>
       <ErrorText>{error}</ErrorText>
       {!data && !error && <SkeletonList rows={5} />}
-      {data && (
+      {data && tab === "noForm" && (
+        <div className="space-y-2">
+          <p className="mb-3 text-sm text-white/60">{t("erp.intake.noFormHint")}</p>
+          {(data.projects || []).map((p) => (
+            <div key={p.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+              {p.code && (
+                <span className="text-xs text-white/60" dir="ltr">
+                  {p.code}
+                </span>
+              )}
+              <span className="min-w-0 flex-1 truncate font-medium" dir="auto">
+                {p.name?.[lang] || p.name?.ar || p.name?.en}
+              </span>
+              <Button variant="ghost" onClick={() => setEditing({ forProject: p })}>
+                <FilePlus2 size={16} /> {t("erp.intake.fillForProject")}
+              </Button>
+            </div>
+          ))}
+          {(data.projects || []).length === 0 && <EmptyState compact text={t("erp.intake.noFormEmpty")} />}
+        </div>
+      )}
+      {data && tab !== "noForm" && (
         <div className="space-y-2">
           {data.intakes.map((i) => (
             <button key={i.id} type="button" onClick={() => open(i.id)} className="flex w-full flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-start hover:bg-white/[0.06]">
@@ -123,10 +155,11 @@ export default function IntakeCenter({ planner, finance, proposer = false }) {
         </div>
       )}
 
-      <Modal open={Boolean(editing)} onClose={() => setEditing(null)} title={editing === "new" ? t("erp.intake.new") : t("erp.intake.edit")} wide>
+      <Modal open={Boolean(editing)} onClose={() => setEditing(null)} title={editing === "new" || editing?.forProject ? t("erp.intake.new") : t("erp.intake.edit")} wide>
         {editing && (
           <IntakeForm
-            intake={editing === "new" ? null : editing}
+            intake={editing === "new" || editing.forProject ? null : editing}
+            forProject={editing.forProject}
             onCancel={() => setEditing(null)}
             onSaved={(saved) => {
               setEditing(null);
@@ -168,7 +201,12 @@ export default function IntakeCenter({ planner, finance, proposer = false }) {
                 load();
                 setDetailKey((k) => k + 1);
               }
-              else router.push(`/dashboard/projects/${result.id}`);
+              // Management without the Projects page (the general manager) stays here.
+              else if (pageAllowed(user, "projects")) router.push(`/dashboard/projects/${result.id}`);
+              else {
+                load();
+                setDetailKey((k) => k + 1);
+              }
             }}
           />
         )}
@@ -215,8 +253,8 @@ function Section({ title, children }) {
 // A required question's label: red, with a star.
 const required = (text) => <span className="text-red-400">{text} *</span>;
 
-function IntakeForm({ intake, onSaved, onCancel }) {
-  const { t } = useLanguage();
+function IntakeForm({ intake, forProject, onSaved, onCancel }) {
+  const { t, lang } = useLanguage();
   const [form, setForm] = useState(() =>
     intake
       ? {
@@ -229,12 +267,14 @@ function IntakeForm({ intake, onSaved, onCancel }) {
           summary: intake.summary,
           missing: intake.missing,
         }
-      : EMPTY
+      : forProject
+        ? { ...EMPTY, project: { ...EMPTY.project, name: forProject.name?.[lang] || forProject.name?.ar || forProject.name?.en || "" } }
+        : EMPTY
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   // A copy on this device while typing; offered back if the form is closed unsaved.
-  const draft = useDraft(intake ? `intake-${intake.id}` : "intake-new", form, setForm);
+  const draft = useDraft(intake ? `intake-${intake.id}` : forProject ? `intake-for-${forProject.id}` : "intake-new", form, setForm);
   const setIn = (group, key) => (value) => setForm((f) => ({ ...f, [group]: { ...f[group], [key]: value } }));
   const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }));
   const setMissing = (i, patch) => setForm((f) => ({ ...f, missing: f.missing.map((m, j) => (j === i ? { ...m, ...patch } : m)) }));
@@ -245,7 +285,7 @@ function IntakeForm({ intake, onSaved, onCancel }) {
     try {
       const res = intake
         ? await api(`/api/intakes/${intake.id}`, { method: "PATCH", body: form })
-        : await api("/api/intakes", { method: "POST", body: form });
+        : await api("/api/intakes", { method: "POST", body: forProject ? { ...form, workProjectId: forProject.id } : form });
       draft.clear();
       onSaved(res.intake);
     } catch (err) {
@@ -553,10 +593,44 @@ function FinanceSummary({ f }) {
       <Row label={t("erp.intake.fin.branch")}>{f.branch ? fin.branchName(f.branch) : ""}</Row>
       <Row label={t("erp.intake.fin.client")}>{f.client ? fin.clientName(f.client) : ""}</Row>
       <Row label={t("erp.intake.fin.advancePaid")}>{f.advancePaid > 0 ? `${both(f.advancePaid, f.currency)} · ${formatDate(f.advanceDate, lang)}` : ""}</Row>
+      <Row label={t("erp.intake.fin.payments")}>{(f.payments || []).map((p, i) => `${i + 1}: ${p}%`).join(" · ")}</Row>
       <Row label={t("erp.intake.fin.paymentTerms")}>{f.paymentTerms}</Row>
       <Row label={t("erp.intake.fin.notes")}>{f.notes}</Row>
       {f.by && <p className="mt-2 text-[11px] text-white/60">{t("erp.intake.pricedBy", { name: f.by, at: formatDateTime(f.at, lang) })}</p>}
     </Card>
+  );
+}
+
+// How many payments the customer makes, each a share of the contract. On the project,
+// each payment waits for a task; when it's approved the customer sees "Payment n is due".
+function PaymentStages({ value, onChange, contract, currency, lang }) {
+  const { t } = useLanguage();
+  const total = value.reduce((s, p) => s + (Number(p) || 0), 0);
+  const setAt = (i, v) => onChange(value.map((p, j) => (j === i ? v : p)));
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium text-white/80">{t("erp.intake.fin.payments")}</p>
+      <p className="text-xs text-white/50">{t("erp.intake.fin.paymentsHint")}</p>
+      {value.map((p, i) => (
+        <div key={i} className="flex items-end gap-2">
+          <div className="w-40">
+            <Input type="number" min="0" max="100" step="0.5" label={t("erp.intake.fin.paymentN", { n: i + 1 })} value={p} onChange={(v) => setAt(i, v)} dir="ltr" />
+          </div>
+          <span className="pb-3 text-sm tabular-nums text-white/60">
+            {contract > 0 && Number(p) > 0 ? formatMoney((contract * Number(p)) / 100, currency, lang) : ""}
+          </span>
+          <button type="button" onClick={() => onChange(value.filter((_, j) => j !== i))} className="mb-2 ms-auto rounded-lg px-2 py-1 text-xs text-red-300 hover:bg-red-500/10">
+            {t("common.delete")}
+          </button>
+        </div>
+      ))}
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" onClick={() => onChange([...value, value.length ? "" : "30"])} disabled={value.length >= 20}>
+          + {t("erp.intake.fin.addPayment")}
+        </Button>
+        {value.length > 0 && <span className={`text-xs ${total > 100 ? "text-red-300" : "text-white/60"}`}>{t("erp.intake.fin.paymentsTotal", { n: Math.round(total * 100) / 100 })}</span>}
+      </div>
+    </div>
   );
 }
 
@@ -575,6 +649,7 @@ function FinanceSection({ intake, onSaved }) {
     advanceDate: f?.advanceDate || "",
     paymentTerms: f?.paymentTerms || "",
     notes: f?.notes || "",
+    payments: (f?.payments || []).map(String),
   }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -591,7 +666,14 @@ function FinanceSection({ intake, onSaved }) {
     setBusy(true);
     setError("");
     try {
-      const body = { ...form, currency, rate: form.rate === "" ? null : Number(form.rate), branch: form.branch || null, client: form.client || null };
+      const body = {
+        ...form,
+        currency,
+        rate: form.rate === "" ? null : Number(form.rate),
+        branch: form.branch || null,
+        client: form.client || null,
+        payments: form.payments.map(Number).filter((p) => p > 0),
+      };
       onSaved((await api(`/api/intakes/${intake.id}/finance`, { method: "PUT", body })).intake);
     } catch (err) {
       setError(errorText(t, err));
@@ -619,6 +701,7 @@ function FinanceSection({ intake, onSaved }) {
         <MoneyPair label={t("erp.intake.fin.advancePaid")} value={form.advancePaid} onChange={set("advancePaid")} currency={currency} partner={partner} rates={rates} lang={lang} />
         {Number(form.advancePaid) > 0 && <Input type="date" label={required(t("erp.intake.fin.advanceDate"))} value={form.advanceDate} onChange={set("advanceDate")} />}
       </div>
+      <PaymentStages value={form.payments} onChange={set("payments")} contract={Number(form.contractValue) || 0} currency={currency} lang={lang} />
       <Input label={t("erp.intake.fin.paymentTerms")} value={form.paymentTerms} onChange={set("paymentTerms")} />
       <Input label={t("erp.intake.fin.notes")} value={form.notes} onChange={set("notes")} />
       <ErrorText>{error}</ErrorText>

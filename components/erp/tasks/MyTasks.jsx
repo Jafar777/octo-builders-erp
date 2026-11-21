@@ -1,5 +1,7 @@
 "use client";
 
+import PageLinks from "@/components/dashboard/PageLinks";
+import { TASK_PAGES } from "@/components/erp/tasks/taskPages";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
@@ -101,9 +103,12 @@ export default function MyTasks({ meId }) {
         title={t("erp.nav.tasks")}
         subtitle={t("erp.tasks.subtitle")}
         actions={
-          <Button onClick={() => setCreating(true)}>
-            <Plus size={16} /> {t("erp.tasks.new")}
-          </Button>
+          <>
+            <PageLinks pages={TASK_PAGES} current="tasks" />
+            <Button onClick={() => setCreating(true)}>
+              <Plus size={16} /> {t("erp.tasks.new")}
+            </Button>
+          </>
         }
       />
 

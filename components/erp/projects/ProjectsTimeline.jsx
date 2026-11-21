@@ -1209,42 +1209,50 @@ function GroupLabel({ group, lang, t, collapsed, onToggle, load, today, cal, bas
           <GripVertical size={14} />
         </span>
       )}
-      <button type="button" dir="rtl" onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 ps-3 text-start text-sm font-semibold" style={{ height: GROUP_H }}>
-        <ChevronDown size={15} className={`shrink-0 text-white/50 transition-transform ${collapsed ? "-rotate-90" : ""}`} />
-        <span className="min-w-0 flex-1 truncate">{title}</span>
-        {!isProject && <TraineeBadge id={group.person.id} />}
-        {isProject && (group.project.late || group.project.dueRisk) && (
-          <AlertTriangle size={13} className="shrink-0 text-red-300" title={group.project.late ? undefined : t("erp.gantt.dueRisk")} />
-        )}
-        {weekLoad && (
-          <span className={`shrink-0 text-[11px] font-normal ${weekLoad.over ? "text-red-300" : "text-white/45"}`} title={t("erp.gantt.weekLoad")}>
-            {weekLoad.over && <AlertTriangle size={11} className="me-0.5 inline" />}
-            {t("erp.gantt.hours", { n: Math.round(weekLoad.hours) })}
-          </span>
-        )}
-      </button>
-      {evm && (evm.spi !== null || evm.cpi !== null) && <EvmBadge evm={evm} t={t} lang={lang} />}
-      {onMilestones && (
-        <button
-          type="button"
-          onClick={onMilestones}
-          title={t("erp.milestones.title")}
-          className="flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-1 text-[10px] font-semibold text-white/35 hover:bg-white/10 hover:text-white"
-        >
-          <Diamond size={11} /> {milestones?.length || 0}
+      {/* The name on its own line, the project's numbers and tools under it (they used to
+          squeeze the name out of the narrow label column). */}
+      <div className="flex min-w-0 flex-1 flex-col justify-center" style={{ height: GROUP_H }}>
+        <button type="button" dir="rtl" onClick={onToggle} className="flex min-w-0 items-center gap-2 ps-3 text-start text-sm font-semibold">
+          <ChevronDown size={15} className={`shrink-0 text-white/50 transition-transform ${collapsed ? "-rotate-90" : ""}`} />
+          <span className="min-w-0 flex-1 truncate">{title}</span>
+          {!isProject && <TraineeBadge id={group.person.id} />}
+          {isProject && (group.project.late || group.project.dueRisk) && (
+            <AlertTriangle size={13} className="shrink-0 text-red-300" title={group.project.late ? undefined : t("erp.gantt.dueRisk")} />
+          )}
+          {weekLoad && (
+            <span className={`shrink-0 text-[11px] font-normal ${weekLoad.over ? "text-red-300" : "text-white/45"}`} title={t("erp.gantt.weekLoad")}>
+              {weekLoad.over && <AlertTriangle size={11} className="me-0.5 inline" />}
+              {t("erp.gantt.hours", { n: Math.round(weekLoad.hours) })}
+            </span>
+          )}
         </button>
-      )}
-      {onSaveBaseline && (
-        <button
-          type="button"
-          onClick={onSaveBaseline}
-          title={t("erp.gantt.saveBaseline", { n: nextBaseline })}
-          // Highlighted while the expected delivery has moved since the last baseline.
-          className={`flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-1 text-[10px] font-semibold ${moved ? "bg-orange-400/20 text-orange-300 hover:bg-orange-400/30" : "text-white/35 hover:bg-white/10 hover:text-white"}`}
-        >
-          <Flag size={11} /> {nextBaseline}
-        </button>
-      )}
+        {(evm || onMilestones || onSaveBaseline) && (
+          <div className="flex min-w-0 items-center gap-1 overflow-hidden ps-8">
+          {evm && (evm.spi !== null || evm.cpi !== null) && <EvmBadge evm={evm} t={t} lang={lang} />}
+          {onMilestones && (
+            <button
+              type="button"
+              onClick={onMilestones}
+              title={t("erp.milestones.title")}
+              className="flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0 text-[10px] font-semibold text-white/35 hover:bg-white/10 hover:text-white"
+            >
+              <Diamond size={11} /> {milestones?.length || 0}
+            </button>
+          )}
+          {onSaveBaseline && (
+            <button
+              type="button"
+              onClick={onSaveBaseline}
+              title={t("erp.gantt.saveBaseline", { n: nextBaseline })}
+              // Highlighted while the expected delivery has moved since the last baseline.
+              className={`flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0 text-[10px] font-semibold ${moved ? "bg-orange-400/20 text-orange-300 hover:bg-orange-400/30" : "text-white/35 hover:bg-white/10 hover:text-white"}`}
+            >
+              <Flag size={11} /> {nextBaseline}
+            </button>
+          )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

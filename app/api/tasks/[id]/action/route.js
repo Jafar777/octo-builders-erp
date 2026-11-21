@@ -10,7 +10,7 @@ import { scaledDue } from "@/lib/projectScale";
 import { replanPaused, setHoursLeft, trackDelays } from "@/lib/projectDelay";
 import { addWorkHours, cancelNeedsApproval, holdsTime, isRedo, nextWorkMoment } from "@/lib/gantt";
 import { cancelTask, rejectCancel, requestCancel, restoreTask } from "@/lib/taskCancel";
-import { reviewTask, startReview } from "@/lib/taskReview";
+import { reviewTask, reviseApproved, startReview } from "@/lib/taskReview";
 import {
   applyTransition,
   canManageTask,
@@ -60,6 +60,13 @@ export async function POST(request, { params }) {
   const now = new Date();
 
   if (action === "review") return review(user, task, body, now);
+  // revise { notes, hours } → a new revision of an approved task (a change from the client).
+  if (action === "revise") {
+    if (!canRouteStages(user) && !canManageTask(user, task) && !(await managesAssignee(user, task))) return forbidden();
+    const res = await reviseApproved(user, task, body);
+    if (res.error) return fail(res.error, 409);
+    return NextResponse.json({ ok: true, revisionTaskId: res.revisionTaskId });
+  }
   if (["cancel", "cancel_decision", "restore"].includes(action)) return cancelling(user, task, body, isAssignee);
 
   if (!ASSIGNEE_ACTIONS.includes(action)) return fail("invalid_action");

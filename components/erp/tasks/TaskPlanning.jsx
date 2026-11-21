@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Link2, ListTree, Lock, Repeat, X } from "lucide-react";
+import { Link2, Lock, Repeat, X } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api } from "@/lib/clientApi";
 import { Input, Label, Select } from "@/components/erp/ui/fields";
@@ -99,16 +99,6 @@ export function PlanningBadges({ task }) {
       {(task.recurrence || task.recurrenceOf) && (
         <span className="text-white/60" title={t("erp.tasks.repeating")}>
           <Repeat size={13} />
-        </span>
-      )}
-      {task.subtasks?.total > 0 && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-white/55" title={t("erp.tasks.subtasks")} dir="ltr">
-          <ListTree size={13} /> {task.subtasks.done}/{task.subtasks.total}
-        </span>
-      )}
-      {task.parentTask && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-white/60" dir="ltr">
-          <Link2 size={12} /> #{task.parentTask.number}
         </span>
       )}
     </>

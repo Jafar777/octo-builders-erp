@@ -1,5 +1,6 @@
 "use client";
 
+import TeamRatings from "@/components/erp/appraisals/TeamRatings";
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, Lock, Plus, Star, Trash2, Unlock } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
@@ -51,6 +52,7 @@ export default function AppraisalsCenter() {
           )
         }
       />
+      <TeamRatings />
       <div className="mb-5 flex gap-1 border-b border-white/10">
         {tabs.map((k) => (
           <button key={k} type="button" onClick={() => setTab(k)} className={`-mb-px border-b-2 px-4 py-2.5 text-sm ${tab === k ? "border-brand-orange text-white" : "border-transparent text-white/50 hover:text-white"}`}>

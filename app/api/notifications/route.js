@@ -35,6 +35,8 @@ export async function PATCH(request) {
   const user = await getCurrentUser();
   if (!user) return forbidden();
 
+  // The CEO looking through someone's eyes doesn't mark their notifications as read.
+  if (user.actingAs) return NextResponse.json({ ok: true, unreadCount: await Notification.countDocuments({ user: user.id, read: false }) });
   const { ids } = await readJson(request);
   const filter = { user: user.id, read: false };
   if (Array.isArray(ids)) filter._id = { $in: ids.filter(isObjectId) };

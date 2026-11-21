@@ -1,20 +1,8 @@
 "use client";
 
+import { DeleteTaskButton } from "@/components/erp/projects/DeletedItems";
 import { useCallback, useEffect, useState } from "react";
-import {
-  CheckCircle2,
-  HandHelping,
-  Link2,
-  Loader2,
-  Lock,
-  Pause,
-  Play,
-  Plus,
-  Repeat,
-  Send,
-  ShieldCheck,
-  XCircle,
-} from "lucide-react";
+import { CheckCircle2, HandHelping, Loader2, Lock, Pause, Play, Plus, Repeat, Send, ShieldCheck, XCircle, RotateCcw } from "lucide-react";
 import DeliveryEditor from "@/components/erp/files/DeliveryEditor";
 import { LinkOrPath, ServerRefList } from "@/components/erp/files/ServerRefs";
 import { useLanguage } from "@/context/LanguageContext";
@@ -24,9 +12,8 @@ import { api, errorText } from "@/lib/clientApi";
 import { formatDate, formatDateTime } from "@/lib/formatTime";
 import Modal from "@/components/erp/ui/Modal";
 import Avatar from "@/components/erp/ui/Avatar";
-import { Button, ErrorText, Input, Label, Select } from "@/components/erp/ui/fields";
+import { Button, ErrorText, Input, Label, Select, Toggle } from "@/components/erp/ui/fields";
 import { StatusBadge, taskHeading } from "@/components/erp/tasks/TaskRow";
-import TaskForm from "@/components/erp/tasks/TaskForm";
 import TaskCancel from "@/components/erp/tasks/TaskCancel";
 import LevelBadge from "@/components/erp/tasks/LevelBadge";
 import { pendingLevel, reviewPlan } from "@/lib/reviewFlow";
@@ -45,7 +32,7 @@ import {
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 import { ExternalReviewBox } from "@/components/erp/tasks/ExternalReview";
 import TaskChecklist from "@/components/erp/tasks/TaskChecklist";
-import { useConfirm } from "@/components/erp/ui/Feedback";
+import { useAsk, useConfirm } from "@/components/erp/ui/Feedback";
 
 const TAG_KINDS = ["neutral", "excellent", "contribution", "error"];
 
@@ -246,6 +233,7 @@ function ReviewChain({ task }) {
 }
 
 export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpenTask }) {
+  const ask = useAsk();
   const { t, lang } = useLanguage();
   const confirm = useConfirm();
   const { user } = useAuth();
@@ -261,18 +249,12 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
   const [delivery, setDelivery] = useState({ deliveryLink: "", deliveryFiles: [] });
   const [comment, setComment] = useState("");
   const [manage, setManage] = useState({ assigneeId: "", dueAt: "" });
-  const [subtasks, setSubtasks] = useState([]);
-  const [addingSub, setAddingSub] = useState(false);
   const [deps, setDeps] = useState(null); // editing predecessors
 
   const load = useCallback(async () => {
     if (!taskId) return;
     try {
-      const [d, subs] = await Promise.all([
-        api(`/api/tasks/${taskId}`),
-        api(`/api/tasks?view=subtasks&parent=${taskId}`).catch(() => ({ tasks: [] })),
-      ]);
-      setSubtasks(subs.tasks);
+      const d = await api(`/api/tasks/${taskId}`);
       setData(d);
       setDelivery({ deliveryLink: d.task.deliveryLink || "", deliveryFiles: d.task.deliveryFiles || [] });
       setManage({ assigneeId: d.task.assignee?.id || "", dueAt: toLocalInput(d.task.dueAt) });
@@ -452,13 +434,8 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
             }}
           />
 
-          {/* Planning: parent, predecessors, repeat rule, sub-tasks */}
+          {/* Planning: predecessors, repeat rule */}
           <div className="space-y-3 rounded-2xl border border-white/10 p-4">
-            {task.parentTask && (
-              <button type="button" onClick={() => onOpenTask?.(task.parentTask.id)} className="flex items-center gap-2 text-sm text-white/70 hover:text-white">
-                <Link2 size={14} /> {t("erp.tasks.subtaskOf")} <span dir="ltr">#{task.parentTask.number}</span> {task.parentTask.title}
-              </button>
-            )}
 
             <div>
               <div className="flex items-center justify-between gap-2">
@@ -516,58 +493,31 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
               </div>
             )}
 
-            {!task.parentTask && (
-              <div>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-white/70">
-                    {t("erp.tasks.subtasks")}
-                    {subtasks.length > 0 && (
-                      <span className="ms-2 text-xs text-white/60" dir="ltr">
-                        {subtasks.filter((x) => ["approved", "done"].includes(x.status)).length}/{subtasks.filter((x) => x.status !== "cancelled").length}
-                      </span>
-                    )}
-                  </p>
-                  {!addingSub && !["approved", "done", "cancelled"].includes(s) && (p.isAssignee || p.canManage) && (
-                    <button type="button" onClick={() => setAddingSub(true)} className="flex items-center gap-1 text-xs text-brand-orange hover:underline">
-                      <Plus size={13} /> {t("erp.tasks.addSubtask")}
-                    </button>
-                  )}
-                </div>
-                <div className="mt-2 space-y-1.5">
-                  {subtasks.map((x) => (
-                    <button
-                      key={x.id}
-                      type="button"
-                      onClick={() => onOpenTask?.(x.id)}
-                      className="flex w-full items-center gap-3 rounded-xl border border-white/10 px-3 py-2 text-start text-sm hover:bg-white/5"
-                    >
-                      <span className="text-xs text-white/60" dir="ltr">
-                        #{x.number}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate">{x.title || taskHeading(x, lang)}</span>
-                      <span className="hidden text-xs text-white/50 sm:inline">{x.assignee?.name}</span>
-                      <StatusBadge status={x.status} />
-                    </button>
-                  ))}
-                  {subtasks.length === 0 && !addingSub && <p className="text-sm text-white/60">—</p>}
-                </div>
-                {addingSub && (
-                  <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <TaskForm
-                      lookups={lookups}
-                      preset={{ parent: task }}
-                      onCancel={() => setAddingSub(false)}
-                      onCreated={() => {
-                        setAddingSub(false);
-                        load();
-                        onChanged?.();
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
           </div>
+
+          {/* A change the client asks for after approval: a new revision of this task. */}
+          {task.status === "approved" && ["task", "revision"].includes(task.kind) && p.canManage && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                const notes = await ask({ text: t("erp.tasks.reviseApprovedAsk"), confirmLabel: t("erp.tasks.reviseApproved") });
+                if (notes === null || notes === undefined || notes === false) return;
+                act("revise", { notes });
+              }}
+              className="flex items-center gap-1.5 text-sm text-amber-200 hover:text-amber-100"
+            >
+              <RotateCcw size={14} /> {t("erp.tasks.reviseApproved")}
+            </button>
+          )}
+
+          <DeleteTaskButton
+            task={task}
+            onDeleted={() => {
+              onChanged?.();
+              onClose?.();
+            }}
+          />
 
           {/* Who reviews it, in order, and where it stands (lib/reviewFlow). */}
           {["task", "revision", "help"].includes(task.kind) && <ReviewChain task={task} />}
@@ -748,6 +698,14 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
                 {t("common.save")}
               </Button>
               <p className="text-[11px] text-white/60 sm:col-span-2">{t("erp.tasks.reassignHint")}</p>
+            </div>
+          )}
+
+          {/* The customer follows this task as a milestone (its title and done / not done). */}
+          {p.canManage && task.project && (
+            <div className="space-y-1 rounded-2xl border border-white/10 p-4">
+              <Toggle checked={Boolean(task.customerMilestone)} onChange={(v) => patch({ customerMilestone: v })} label={t("erp.tasks.customerMilestone")} />
+              <p className="text-[11px] text-white/60">{t("erp.tasks.customerMilestoneHint")}</p>
             </div>
           )}
 

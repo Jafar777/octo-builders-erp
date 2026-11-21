@@ -1,5 +1,6 @@
 "use client";
 
+import { matches, SearchBox } from "@/components/erp/ui/ListControls";
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
@@ -19,6 +20,7 @@ export default function AuditLogView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [open, setOpen] = useState(null);
+  const [q, setQ] = useState("");
 
   const load = useCallback(
     async (before) => {
@@ -56,17 +58,20 @@ export default function AuditLogView() {
     <div>
       <PageHeader title={t("erp.nav.audit")} subtitle={t("erp.audit.subtitle")} />
 
-      <div className="mb-5 max-w-xs">
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <SearchBox value={q} onChange={setQ} className="w-64" />
+        <div className="w-64">
         <Select
           value={action}
           onChange={setAction}
           options={ACTION_FILTERS.map((a) => ({ value: a, label: a ? t(`erp.audit.filter_${a}`) : t("erp.audit.all") }))}
         />
+        </div>
       </div>
       <ErrorText>{error}</ErrorText>
 
       <div className="space-y-2">
-        {logs.map((log) => (
+        {logs.filter((log) => matches(q, log.actorName, label(log.action), log.summary)).map((log) => (
           <div key={log.id} className="rounded-xl border border-white/10 bg-white/[0.03]">
             <button
               type="button"

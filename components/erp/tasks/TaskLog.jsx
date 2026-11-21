@@ -1,5 +1,7 @@
 "use client";
 
+import PageLinks from "@/components/dashboard/PageLinks";
+import { TASK_PAGES } from "@/components/erp/tasks/taskPages";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, ArrowDown, ArrowUp, CalendarDays, ChevronLeft, ChevronRight, FileSpreadsheet, Loader2 } from "lucide-react";
@@ -8,16 +10,24 @@ import { api } from "@/lib/clientApi";
 import { formatDateTime, locale } from "@/lib/formatTime";
 import Avatar from "@/components/erp/ui/Avatar";
 import { Button, PageHeader } from "@/components/erp/ui/fields";
-import { StatusBadge, taskHeading } from "@/components/erp/tasks/TaskRow";
+import { rejectedLevel, StatusBadge, taskHeading } from "@/components/erp/tasks/TaskRow";
 import TaskDrawer from "@/components/erp/tasks/TaskDrawer";
 import Stars from "@/components/erp/tasks/Stars";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
-import { formatDuration, PRIORITY_STYLE, revisionLabel, useNow, liveActiveMs } from "@/components/erp/tasks/taskUi";
+import LevelBadge from "@/components/erp/tasks/LevelBadge";
+import { PRIORITY_STYLE, revisionLabel, useNow, liveActiveMs } from "@/components/erp/tasks/taskUi";
 import { Skeleton } from "@/components/erp/ui/Loading";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 import { LinkOrPath, ServerRefList } from "@/components/erp/files/ServerRefs";
 import { useFileServer } from "@/components/erp/files/useFileServer";
 import { toWindowsPath } from "@/lib/fileServerPaths";
+
+// Every duration in the log as hours:minutes (41:14, 2386:24), never days: these are
+// working hours, and "99d" read as calendar days.
+const hoursText = (ms) => {
+  const total = Math.max(0, Math.round((ms || 0) / 60000));
+  return `${Math.floor(total / 60).toLocaleString("en-US")}:${String(total % 60).padStart(2, "0")}`;
+};
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const pad = (n) => String(n).padStart(2, "0");
@@ -57,8 +67,8 @@ function TimeCell({ task, now }) {
   const over = max > 0 && spent > max;
   return (
     <span className="block min-w-28" dir="ltr">
-      <span className={over ? "text-red-300" : task.status === "in_progress" ? "text-sky-300" : ""}>{formatDuration(spent)}</span>
-      {max > 0 && <span className="text-white/55"> / {formatDuration(max)}</span>}
+      <span className={over ? "text-red-300" : task.status === "in_progress" ? "text-sky-300" : ""}>{hoursText(spent)}</span>
+      {max > 0 && <span className="text-white/55"> / {hoursText(max)}</span>}
       {max > 0 && (
         <span className="mt-1 block h-1 overflow-hidden rounded-full bg-white/10">
           <span className={`block h-full rounded-full ${over ? "bg-red-400" : "bg-sky-400"}`} style={{ width: `${Math.min(100, (spent / max) * 100)}%` }} />
@@ -193,8 +203,8 @@ export default function TaskLog({ mine = false }) {
           ),
       },
       { key: "timeSpent", sort: (x) => liveActiveMs(x, now), excel: (x) => Math.round((liveActiveMs(x, now) / 3600000) * 100) / 100, width: 14, cell: (x) => <TimeCell task={x} now={now} /> },
-      { key: "allowed", sort: (x) => x.maxHours || x.estimatedHours || 0, excel: (x) => x.maxHours || x.estimatedHours || null, width: 12, cell: (x) => (x.maxHours || x.estimatedHours ? <span dir="ltr">{x.maxHours || x.estimatedHours}h</span> : null) },
-      { key: "onHold", sort: (x) => x.holdMs || 0, excel: (x) => Math.round(((x.holdMs || 0) / 3600000) * 100) / 100, width: 12, cell: (x) => (x.holdMs > 0 ? <span dir="ltr">{formatDuration(x.holdMs)}</span> : null) },
+      { key: "allowed", sort: (x) => x.maxHours || x.estimatedHours || 0, excel: (x) => x.maxHours || x.estimatedHours || null, width: 12, cell: (x) => (x.maxHours || x.estimatedHours ? <span dir="ltr">{hoursText((x.maxHours || x.estimatedHours) * 3600000)}</span> : null) },
+      { key: "onHold", sort: (x) => x.holdMs || 0, excel: (x) => Math.round(((x.holdMs || 0) / 3600000) * 100) / 100, width: 12, cell: (x) => (x.holdMs > 0 ? <span dir="ltr">{hoursText(x.holdMs)}</span> : null) },
       { key: "reviewedBy", sort: (x) => x.reviewedBy?.name || "", excel: (x) => x.reviewedBy?.name || "", width: 22, cell: (x) => <Person person={x.reviewedBy} /> },
       { key: "reviewedAt", sort: (x) => time(x.reviewedAt), excel: (x) => (x.reviewedAt ? new Date(x.reviewedAt) : null), date: true, cell: (x) => <DateCell value={x.reviewedAt} lang={lang} /> },
       { key: "stars", sort: (x) => x.stars || 0, excel: (x) => x.stars || null, width: 8, cell: (x) => (x.stars > 0 ? <Stars value={x.stars} size={13} /> : null) },
@@ -213,6 +223,13 @@ export default function TaskLog({ mine = false }) {
               ))}
             </span>
           ),
+      },
+      {
+        key: "rejectedBy",
+        sort: (x) => rejectedLevel(x),
+        excel: (x) => (rejectedLevel(x) ? t(`erp.reviews.level.${rejectedLevel(x)}`) : ""),
+        width: 16,
+        cell: (x) => rejectedLevel(x) && <LevelBadge level={rejectedLevel(x)} />,
       },
       { key: "rejectCause", sort: (x) => x.rejectCause || "", excel: (x) => (x.rejectCause ? t(`erp.tasks.cause.${x.rejectCause}`) : ""), width: 18, cell: (x) => x.rejectCause && t(`erp.tasks.cause.${x.rejectCause}`) },
       {
@@ -247,7 +264,8 @@ export default function TaskLog({ mine = false }) {
         width: 40,
         cell: (x) =>
           (x.deliveryFiles?.length > 0 || x.deliveryLink) && (
-            <span onClick={(e) => e.stopPropagation()} className="flex flex-col items-start gap-1">
+            // Long network paths stay on one short line (the full path on hover).
+            <span onClick={(e) => e.stopPropagation()} className="flex max-w-72 flex-col items-start gap-1 overflow-hidden [&_*]:max-w-full [&_*]:truncate" title={x.deliveryLink || ""}>
               <ServerRefList refs={x.deliveryFiles} ctx={{ for: "task", id: x.id }} />
               <LinkOrPath text={x.deliveryLink} ctx={{ for: "task", id: x.id }} />
             </span>
@@ -341,7 +359,13 @@ export default function TaskLog({ mine = false }) {
       {mine ? (
         <p className="mb-4 text-sm text-white/50">{t("erp.taskLog.mineSubtitle")}</p>
       ) : (
-        <PageHeader title={t("erp.nav.taskLog")} subtitle={t("erp.taskLog.subtitle")} actions={exportButton} />
+        <PageHeader title={t("erp.nav.taskLog")} subtitle={t("erp.taskLog.subtitle")} actions={
+            <>
+              <PageLinks pages={TASK_PAGES} current="taskLog" />
+              {exportButton}
+            </>
+          }
+        />
       )}
 
       {/* The one filter: the month */}
@@ -394,7 +418,7 @@ export default function TaskLog({ mine = false }) {
         <Stat label={t("erp.taskLog.stat.review")} value={stats.review} tone="text-brand-orange" />
         <Stat label={t("erp.taskLog.stat.rejected")} value={stats.rejected} tone="text-red-300" />
         <Stat label={t("erp.taskLog.stat.late")} value={stats.late} tone={stats.late ? "text-red-300" : "text-white"} />
-        <Stat label={t("erp.taskLog.stat.hours")} value={formatDuration(stats.hours)} />
+        <Stat label={t("erp.taskLog.stat.hours")} value={hoursText(stats.hours)} />
         <Stat label={t("erp.taskLog.stat.stars")} value={stats.stars} tone="text-amber-300" />
       </div>
 

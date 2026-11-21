@@ -20,7 +20,8 @@ export async function GET() {
 // intakeId — a priced intake form: its details fill the project's notes, its money
 // becomes the project's finance entries and budget. The tasks are scheduled from now.
 export async function POST(request) {
-  const user = await requireStaff();
+  // The general manager's role is limited, but they accept projects (isIntakePlanner below).
+  const user = await requireStaff({ limited: true });
   if (!user) return forbidden();
   const body = await readJson(request);
 

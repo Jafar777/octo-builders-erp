@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
+import { canDelete, trashProject } from "@/lib/trash";
+import { COMPANY_TASKS_CHANNEL } from "@/lib/tasks";
 import { applyFlow, applyStageRouting, cleanCustomer, cleanProjectFields, cleanStages } from "@/lib/projectPayload";
 import { buildCells, checkStageHandoffs, dueRiskOf, officeTz, projectAccess, projectChannel, serializeProject } from "@/lib/projects";
 import { projectScore } from "@/lib/projectHealth";
@@ -170,4 +172,18 @@ export async function PATCH(request, { params }) {
   }
 
   return NextResponse.json({ project: serializeProject(project.toObject(), { dueRisk: dueRiskOf(project, await officeTz()) }) });
+}
+
+// Delete the project (projects.delete): it goes to Deleted items with its tasks, their
+// history and its file records, restorable for 30 days (lib/trash.js).
+export async function DELETE(request, { params }) {
+  const user = await requireStaff();
+  if (!user || !canDelete(user)) return forbidden();
+  const { id } = await params;
+  if (!isObjectId(id)) return notFound();
+  const counts = await trashProject(id, user);
+  if (!counts) return notFound();
+  await audit(user, "project.deleted", { entityType: "project", entityId: id, summary: `${counts.tasks || 0} tasks` });
+  await publish([COMPANY_TASKS_CHANNEL], "task:updated", { id: "project-deleted" }).catch(() => {});
+  return NextResponse.json({ ok: true, counts });
 }

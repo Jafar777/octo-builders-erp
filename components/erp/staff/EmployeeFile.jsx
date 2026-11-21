@@ -19,6 +19,7 @@ import StaffEditor from "@/components/erp/staff/StaffEditor";
 import KpiRing from "@/components/erp/staff/KpiRing";
 import { PendingSkills } from "@/components/erp/hr/SkillRequests";
 import { useConfirm } from "@/components/erp/ui/Feedback";
+import MediaUploader from "@/components/dashboard/MediaUploader";
 
 const TABS = ["overview", "attendance", "contract", "salary", "documents"];
 
@@ -143,6 +144,29 @@ function EmploymentCard({ person, profile, roles, org, canManage, meId, onStaffS
           </div>
         </>
       )}
+    </Card>
+  );
+}
+
+// CEO: change the person's photo, and lock (or unlock) their own photo and details.
+function PhotoLockCard({ userId, profile, onChanged }) {
+  const { t } = useLanguage();
+  const [avatarUrl, setAvatarUrl] = useState(profile.avatarUrl);
+  const [locked, setLocked] = useState(profile.profileLocked);
+  const { patch, saving, saved, error } = usePatch(userId, onChanged);
+  return (
+    <Card className="space-y-4">
+      <p className="font-semibold">{t("erp.staffFile.photoLock")}</p>
+      <MediaUploader previewUrl={avatarUrl} onUploaded={async (url) => (await patch({ avatarUrl: url })) && setAvatarUrl(url)} />
+      {saving && <p className="text-xs text-white/60">{t("common.loading")}</p>}
+      <Toggle
+        checked={locked}
+        onChange={async (next) => (await patch({ profileLocked: next })) && setLocked(next)}
+        label={t("erp.staffFile.lockProfile")}
+      />
+      <p className="text-xs text-white/60">{t(locked ? "erp.staffFile.lockedHint" : "erp.staffFile.unlockedHint")}</p>
+      <Saved show={saved} />
+      <ErrorText>{error}</ErrorText>
     </Card>
   );
 }
@@ -518,6 +542,7 @@ export default function EmployeeFile({ person, hrRow, roles, org, canManage, meI
         <div className="grid gap-4 lg:grid-cols-2">
           <EmploymentCard person={person} profile={data.profile} roles={roles} org={org} canManage={canManage} meId={meId} onStaffSaved={onStaffSaved} />
           <KpiCard hrRow={hrRow} />
+          {data.canManageProfile && <PhotoLockCard key={`p${data.profile.avatarUrl}${data.profile.profileLocked}`} userId={person.id} profile={data.profile} onChanged={load} />}
           <ContactCard key={`c${data.profile.phone}`} person={person} profile={data.profile} userId={person.id} onChanged={changed} onPhone={(phone) => onStaffSaved({ ...person, phone })} />
           <SkillsCard
             key={`s${data.profile.skills.join("|")}`}

@@ -15,6 +15,9 @@ export async function PATCH(request) {
 
   const { firstName, lastName, avatarUrl, phone, emergencyContact, ui } = await readJson(request);
   const update = {};
+  // Management locked this person's own details (the CEO acting for them still can).
+  const editsProfile = [firstName, lastName, avatarUrl, phone, emergencyContact].some((v) => v !== undefined);
+  if (editsProfile && user.profileLocked && !user.actingAs) return fail("profile_locked", 403);
   // Screen preferences: only what changed is sent; page keys are short words.
   if (ui && typeof ui === "object") {
     const keys = (list) => (Array.isArray(list) ? [...new Set(list.map(String).filter((k) => /^[a-zA-Z]{1,40}$/.test(k)))].slice(0, 40) : undefined);

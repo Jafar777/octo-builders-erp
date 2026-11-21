@@ -1,9 +1,11 @@
 "use client";
 
+import PageLinks from "@/components/dashboard/PageLinks";
+import { TASK_PAGES } from "@/components/erp/tasks/taskPages";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { AlertTriangle, Clock, FolderKanban, Search, Timer } from "lucide-react";
+import { AlertTriangle, ChevronDown, Clock, FolderKanban, Search, Timer } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { COMPANY_TASKS_CHANNEL, useOnlineUsers, usePollingFallback, useRealtimeEvent } from "@/context/RealtimeContext";
 import { api, peekApi } from "@/lib/clientApi";
@@ -18,8 +20,8 @@ import { SkeletonList } from "@/components/erp/ui/Loading";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 
 const MODES = ["person", "project"];
-// Working first, then what's paused, then the queue, then what's waiting for the head.
-const ORDER = { in_progress: 0, help: 1, on_hold: 2, todo: 3, submitted: 4 };
+// Ongoing first (working, asking for help, paused), then waiting for review, then scheduled.
+const ORDER = { in_progress: 0, help: 1, on_hold: 2, submitted: 3, todo: 4 };
 const byStatus = (a, b) => ORDER[a.status] - ORDER[b.status] || new Date(a.dueAt || 8.64e15) - new Date(b.dueAt || 8.64e15);
 
 // One line of a person's card.
@@ -127,6 +129,16 @@ export default function TeamTasks({ meId }) {
   const [department, setDepartment] = useState("");
   const [showFree, setShowFree] = useState(true);
   const [openId, setOpenId] = useState(searchParams.get("task"));
+  // "By project": projects folded by the viewer (click the heading).
+  const [folded, setFolded] = useState(() => new Set());
+  const toggleProject = (key) =>
+    setFolded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const allFolded = view => view.projectGroups.length > 0 && view.projectGroups.every((g) => folded.has(g.project?.id || "none"));
 
   const load = useCallback(async () => {
     const data = await api(TEAM_URL).catch(() => null);
@@ -210,7 +222,7 @@ export default function TeamTasks({ meId }) {
 
   return (
     <div className="max-w-7xl">
-      <PageHeader title={t("erp.nav.teamTasks")} subtitle={t("erp.team.subtitle")} />
+      <PageHeader title={t("erp.nav.teamTasks")} subtitle={t("erp.team.subtitle")} actions={<PageLinks pages={TASK_PAGES} current="teamTasks" />} />
 
       <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
         <span className="rounded-full bg-sky-500/15 px-3 py-1 text-sky-200">
@@ -285,9 +297,27 @@ export default function TeamTasks({ meId }) {
           </div>
         ) : (
           <div className="space-y-8">
-            {view.projectGroups.map(({ project, tasks: list }) => (
-              <section key={project?.id || "none"}>
-                <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-white/70">
+            <div className="-mb-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setFolded(allFolded(view) ? new Set() : new Set(view.projectGroups.map((g) => g.project?.id || "none")))}
+                className="text-xs text-white/60 hover:text-white"
+              >
+                {t(allFolded(view) ? "erp.team.expandAll" : "erp.team.collapseAll")}
+              </button>
+            </div>
+            {view.projectGroups.map(({ project, tasks: list }) => {
+              const key = project?.id || "none";
+              const isFolded = folded.has(key);
+              return (
+              <section key={key}>
+                <button
+                  type="button"
+                  onClick={() => toggleProject(key)}
+                  aria-expanded={!isFolded}
+                  className="mb-3 flex w-full items-center gap-2 rounded-lg text-start text-sm font-semibold text-white/70 hover:text-white"
+                >
+                  <ChevronDown size={15} className={`shrink-0 transition-transform ${isFolded ? "-rotate-90 rtl:rotate-90" : ""}`} />
                   <FolderKanban size={15} />
                   {project ? project.name?.[lang] : t("erp.team.noProject")}
                   {project?.code && (
@@ -296,14 +326,17 @@ export default function TeamTasks({ meId }) {
                     </span>
                   )}
                   <span className="text-xs font-normal text-white/60">({list.length})</span>
-                </h2>
-                <div className="space-y-2">
-                  {list.map((task) => (
-                    <TaskRow key={task.id} task={task} lookups={lookups} now={now} onOpen={open} showAssignee />
-                  ))}
-                </div>
+                </button>
+                {!isFolded && (
+                  <div className="space-y-2">
+                    {list.map((task) => (
+                      <TaskRow key={task.id} task={task} lookups={lookups} now={now} onOpen={open} showAssignee />
+                    ))}
+                  </div>
+                )}
               </section>
-            ))}
+              );
+            })}
           </div>
         )}
         {(mode === "person" ? view.cards : view.projectGroups).length === 0 && (

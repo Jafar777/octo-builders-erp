@@ -1,5 +1,7 @@
 "use client";
 
+import PageLinks from "@/components/dashboard/PageLinks";
+import { PROFILE_PAGES } from "@/components/erp/profile/profilePages";
 import SecurityCard from "@/components/erp/security/SecurityCard";
 import MyAssets from "@/components/erp/purchasing/MyAssets";
 
@@ -27,6 +29,8 @@ function PersonalCard({ user }) {
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
   const incomplete = !namesComplete(user);
+  // Management locked these details (the CEO acting for them still edits).
+  const locked = Boolean(user.profileLocked && !user.actingAs);
 
   async function handleSave() {
     setStatus("saving");
@@ -44,7 +48,9 @@ function PersonalCard({ user }) {
 
   return (
     <Card className="space-y-6 lg:col-span-2">
-      {incomplete && <p className="rounded-xl bg-brand-orange/10 px-4 py-2.5 text-sm text-brand-orange">{t("erp.names.completeProfile")}</p>}
+      {incomplete && !locked && <p className="rounded-xl bg-brand-orange/10 px-4 py-2.5 text-sm text-brand-orange">{t("erp.names.completeProfile")}</p>}
+      {locked && <p className="rounded-xl bg-white/5 px-4 py-2.5 text-sm text-white/70">{t("errors.profile_locked")}</p>}
+      <fieldset disabled={locked} className="space-y-6 disabled:opacity-70">
       <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
         <MediaUploader previewUrl={avatarUrl} onUploaded={setAvatarUrl} />
         <div className="space-y-5">
@@ -68,8 +74,9 @@ function PersonalCard({ user }) {
           <Input label={t("erp.hrFile.relation")} value={contact.relation} onChange={setContactField("relation")} />
         </div>
       </div>
+      </fieldset>
       <ErrorText>{error}</ErrorText>
-      <button
+      {!locked && <button
         type="button"
         onClick={handleSave}
         disabled={status === "saving" || !namesComplete(names)}
@@ -78,7 +85,7 @@ function PersonalCard({ user }) {
         {status === "saving" && <Loader2 size={16} className="animate-spin" />}
         {status === "saved" && <Check size={16} />}
         {status === "saved" ? t("common.saved") : t("common.save")}
-      </button>
+      </button>}
     </Card>
   );
 }
@@ -102,7 +109,7 @@ export default function ProfilePage() {
 
   return (
     <div>
-      <PageHeader title={t("erp.nav.profile")} subtitle={t("erp.profile.subtitle")} />
+      <PageHeader title={t("erp.nav.profile")} subtitle={t("erp.profile.subtitle")} actions={<PageLinks pages={PROFILE_PAGES} current="profile" />} />
       {!user ? (
         <Card>
           <SkeletonText lines={6} />

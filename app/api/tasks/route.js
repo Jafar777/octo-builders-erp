@@ -108,15 +108,9 @@ export async function POST(request) {
   const assignee = await User.findOne({ _id: assigneeId, status: "active", role: { $ne: "user" } }).lean();
   if (!assignee) return fail("invalid_assignee");
 
-  // Sub-task: belongs to a parent task and inherits its project.
-  let parent = null;
-  if (body.parentTaskId) {
-    parent = isObjectId(body.parentTaskId) ? await Task.findById(body.parentTaskId).lean() : null;
-    if (!parent || !isInvolvedInTask(user, parent)) return fail("invalid_parent");
-    if (parent.parentTask) return fail("nested_subtask");
-    body.projectId = parent.project ? parent.project.toString() : "";
-    body.stage = "";
-  }
+  // Sub-tasks were removed: a task can't be created under another one any more.
+  const parent = null;
+  if (body.parentTaskId) return fail("invalid_parent");
 
   let project = null;
   let stage = null;

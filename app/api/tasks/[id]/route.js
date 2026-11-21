@@ -3,6 +3,8 @@ import { reviewAccess } from "@/lib/taskReview";
 import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { notify } from "@/lib/notify";
+import { audit } from "@/lib/audit";
+import { canDelete, trashTask } from "@/lib/trash";
 import {
   canManageTask,
   canViewTask,
@@ -175,6 +177,9 @@ export async function PATCH(request, { params }) {
       if (task.maxHours > 0) changes.dueManual = true;
     }
     if (["normal", "important", "urgent"].includes(body.priority)) changes.priority = body.priority;
+    // Shown to the customer as a milestone (title only), for project tasks.
+    if (typeof body.customerMilestone === "boolean" && task.project) changes.customerMilestone = body.customerMilestone;
+    if (typeof body.customerTitle === "string") changes.customerTitle = body.customerTitle.trim().slice(0, 200);
     if (typeof body.description === "string") changes.description = body.description.slice(0, 4000);
     if (isObjectId(body.assigneeId) && body.assigneeId !== task.assignee.toString()) {
       const found = await User.findOne(
@@ -243,4 +248,18 @@ export async function PATCH(request, { params }) {
   if (reassignedFrom || "dueAt" in changes || changes.dependsOn) await trackDelays({ cause: reassignedFrom ? "reassigned" : "rescheduled", task }, user);
 
   return NextResponse.json({ task: enriched });
+}
+
+// Delete one task (projects.delete): kept 30 days in Deleted items (lib/trash.js).
+export async function DELETE(request, { params }) {
+  const user = await requireStaff();
+  if (!user || !canDelete(user)) return forbidden();
+  const { id } = await params;
+  if (!isObjectId(id)) return notFound();
+  const task = await Task.findById(id).lean();
+  if (!task) return notFound();
+  await trashTask(id, user);
+  await audit(user, "task.deleted", { entityType: "task", entityId: id, summary: `#${task.number}` });
+  await publishTaskChange(task).catch(() => {});
+  return NextResponse.json({ ok: true });
 }
