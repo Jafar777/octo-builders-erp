@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { clearViewAsCookie, setViewAsCookie } from "@/lib/auth";
-import { canBeViewedAs, getSessionUser, VIEW_AS_ROLE } from "@/lib/currentUser";
+import { canBeViewedAs, canViewAs, getSessionUser } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
 import { pickName, viewerLang } from "@/lib/personName";
@@ -8,10 +8,10 @@ import { normalizeRoleKey } from "@/lib/permissions";
 import User from "@/models/User";
 import Role from "@/models/Role";
 
-// "View as…" — the CEO sees the dashboard as another person and can act for them.
+// "View as…" — the CEO (or the programmer) sees the dashboard as another person and can act for them.
 const ceoOnly = async () => {
   const real = await getSessionUser();
-  return real?.role === VIEW_AS_ROLE ? real : null;
+  return canViewAs(real) ? real : null;
 };
 
 // The people the CEO can view as.
@@ -26,7 +26,7 @@ export async function GET() {
   const roleName = Object.fromEntries(roles.map((r) => [r.key, r.name?.[lang] || r.key]));
   return NextResponse.json({
     people: people
-      .filter((u) => canBeViewedAs(u, real.id))
+      .filter((u) => canBeViewedAs(u, real))
       .map((u) => {
         const role = normalizeRoleKey(u.role);
         return { id: u._id.toString(), name: pickName(u, lang), email: u.email, avatarUrl: u.avatarUrl || "", role, roleName: roleName[role] || role };
@@ -43,7 +43,7 @@ export async function POST(request) {
   if (!isObjectId(userId)) return fail("invalid_request");
   const target = await User.findById(userId).lean();
   if (!target) return notFound();
-  if (!canBeViewedAs(target, real.id)) return forbidden();
+  if (!canBeViewedAs(target, real)) return forbidden();
   await setViewAsCookie(real.id, userId);
   await audit(real, "view_as.started", { entityType: "user", entityId: userId, summary: pickName(target, "en") });
   return NextResponse.json({ ok: true });

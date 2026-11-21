@@ -454,7 +454,7 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
               className={`h-2.5 w-2.5 rounded-full ${connected ? "bg-emerald-400" : "bg-white/25"}`}
             />
             {user.isStaff && !user.limited && <SearchPalette pages={pages} />}
-            {user.role === "ceo" && !user.actingAs && <ViewAsButton />}
+            {["ceo", "coder"].includes(user.role) && !user.actingAs && <ViewAsButton />}
             <ThemeButton theme={theme} onChange={changeTheme} />
             <ShortcutsButton onClick={openHelp} />
             <LanguageSwitch compact />
