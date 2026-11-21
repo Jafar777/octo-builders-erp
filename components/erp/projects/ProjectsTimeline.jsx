@@ -117,6 +117,16 @@ export default function ProjectsTimeline({ projects, status, leading = null }) {
   const [groupBy, setGroupBy] = useState("project");
   const [opts, setOpts] = useState({ workdays: true, autoShift: true, critical: true, cancelled: true });
   const [collapsed, setCollapsed] = useState({});
+  // Drawings whose earlier revisions (R-00, R-01…) are unfolded; by default only the latest shows.
+  const [openRevs, setOpenRevs] = useState(() => new Set());
+  const toggleRevs = (key) =>
+    setOpenRevs((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const revInfo = useMemo(() => revisionChains(data?.tasks || []), [data]);
   const [drag, setDrag] = useState(null);
   const [editing, setEditing] = useState(null);
   // The project whose milestones (and billing) are open.
@@ -300,7 +310,9 @@ export default function ProjectsTimeline({ projects, status, leading = null }) {
       if (g.kind === "project" && g.project.dueDate) max = Math.max(max, new Date(g.project.dueDate).getTime());
       if (!collapsed[g.id]) {
         for (const task of g.tasks) {
-          rows.push({ kind: "task", task, group: g, y, h: TASK_H });
+          const rev = revInfo.get(task.id);
+          if (rev && !rev.latest && !openRevs.has(rev.key)) continue;
+          rows.push({ kind: "task", task, group: g, y, h: TASK_H, rev });
           y += TASK_H;
         }
       }
@@ -309,7 +321,7 @@ export default function ProjectsTimeline({ projects, status, leading = null }) {
     const from = startOfDay(min - 3 * DAY);
     const to = Math.min(startOfDay(max + 15 * DAY), from + 3 * 365 * DAY);
     return { rows, height: y, from, to, extent };
-  }, [groups, collapsed, now, baselinesOf]);
+  }, [groups, collapsed, now, baselinesOf, revInfo, openRevs]);
 
   const { rows, height, from, to, extent } = layout;
   // Time ↔ pixels. Hours view: working windows side by side, nights and days off removed.
@@ -842,7 +854,18 @@ export default function ProjectsTimeline({ projects, status, leading = null }) {
                     <span className="shrink-0 text-white/35" dir="ltr">
                       #{row.task.number}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-white/80">{barTitle(row.task, lang)}</span>
+                    <span className={`min-w-0 flex-1 truncate ${row.rev && !row.rev.latest ? "text-white/45" : "text-white/80"}`}>{barTitle(row.task, lang)}</span>
+                    {row.rev?.latest && row.rev.count > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => toggleRevs(row.rev.key)}
+                        title={openRevs.has(row.rev.key) ? t("erp.gantt.hideRevisions") : t("erp.gantt.olderRevisions", { n: row.rev.count - 1 })}
+                        className="flex shrink-0 items-center gap-0.5 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] text-white/70 hover:bg-white/20"
+                      >
+                        +{row.rev.count - 1}
+                        <ChevronDown size={11} className={`transition-transform ${openRevs.has(row.rev.key) ? "rotate-180" : ""}`} />
+                      </button>
+                    )}
                     <span className="hidden max-w-[80px] shrink-0 truncate text-white/40 sm:inline">
                       {groupBy === "person" ? row.task.project?.code || row.task.project?.name?.[lang] : row.task.assignee?.name}
                     </span>
@@ -1173,6 +1196,33 @@ export default function ProjectsTimeline({ projects, status, leading = null }) {
 }
 
 // Task name on the chart; redos carry their number (R-01, R-02…).
+// Each drawing's revisions as one chain (linked by previousTaskId; imported ones that
+// aren't linked group by project + stage + name + type, like the project page).
+// Map(task id → { key, latest, count }) for chains of 2+; the latest = highest revision.
+function revisionChains(tasks) {
+  const byId = new Map(tasks.map((x) => [x.id, x]));
+  // Untitled tasks only chain through their links: their names say nothing.
+  const drawingKey = (x) => (["task", "revision"].includes(x.kind) && x.title ? `${x.project?.id || ""}|${x.stage?.key || ""}|${x.title || ""}|${x.type || ""}` : null);
+  const rootOf = (x) => {
+    let cur = x;
+    for (let i = 0; i < 100 && cur.previousTaskId && byId.has(cur.previousTaskId); i++) cur = byId.get(cur.previousTaskId);
+    return drawingKey(cur) || cur.id;
+  };
+  const chains = new Map();
+  for (const x of tasks) {
+    const key = rootOf(x);
+    if (!chains.has(key)) chains.set(key, []);
+    chains.get(key).push(x);
+  }
+  const out = new Map();
+  for (const [key, list] of chains) {
+    if (list.length < 2) continue;
+    const latest = list.reduce((a, b) => ((b.revision || 0) - (a.revision || 0) || b.number - a.number) > 0 ? b : a);
+    for (const x of list) out.set(x.id, { key, latest: x === latest, count: list.length });
+  }
+  return out;
+}
+
 function barTitle(task, lang) {
   return [taskHeading(task, lang), task.revision > 0 ? revisionLabel(task.revision) : ""].filter(Boolean).join(" · ");
 }
