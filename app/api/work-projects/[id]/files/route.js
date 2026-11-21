@@ -40,7 +40,7 @@ export async function GET(request, { params }) {
 }
 
 // A new file, or a new version of one: { fileId? (ours), name, stage, fileName, size, note }
-// with either { url, imagekitId } (ImageKit) or { server: { vol, path } } (a file on the
+// with either { url, storedId } (a file uploaded to /api/upload) or { server: { vol, path } } (a file on the
 // company file server). Anyone who can open the project uploads; files are never overwritten.
 export async function POST(request, { params }) {
   const user = await requireStaff();
@@ -58,8 +58,8 @@ export async function POST(request, { params }) {
     if (!refsAllowed([ref], [...browseGrants(user, fs), ...(folder ? [[folder.vol, folder.path, "r"]] : [])])) return fail("file_not_allowed");
     server = { vol: ref.vol, path: ref.path };
     url = "";
-  } else if (!/^https:\/\/ik\.imagekit\.io\//.test(url)) return fail("invalid_request");
-  const version = { url, server, fileId: String(b.imagekitId || "").slice(0, 100), fileName: String(b.fileName || "").slice(0, 200), size: Math.max(0, Number(b.size) || 0), note: String(b.note || "").trim().slice(0, 300), by: user.id };
+  } else if (!/^\/uploads\/[^\s]+$/.test(url)) return fail("invalid_request");
+  const version = { url, server, fileId: String(b.storedId || "").slice(0, 100), fileName: String(b.fileName || "").slice(0, 200), size: Math.max(0, Number(b.size) || 0), note: String(b.note || "").trim().slice(0, 300), by: user.id };
   let file = isObjectId(b.fileId) ? await ProjectFile.findOne({ _id: b.fileId, project: project._id }) : null;
   if (file) {
     file.versions.push({ ...version, n: Math.max(0, ...file.versions.map((v) => v.n)) + 1 });

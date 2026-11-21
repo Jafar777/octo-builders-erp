@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { AlertTriangle, Clock, FolderKanban, Search, Timer } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { COMPANY_TASKS_CHANNEL, useOnlineUsers, usePollingFallback, useRealtimeEvent } from "@/context/RealtimeContext";
-import { api } from "@/lib/clientApi";
+import { api, peekApi } from "@/lib/clientApi";
 import { formatDateTime } from "@/lib/formatTime";
 import Avatar from "@/components/erp/ui/Avatar";
 import { PageHeader, Select } from "@/components/erp/ui/fields";
@@ -111,14 +111,17 @@ function PersonCard({ person, tasks, meId, online, departmentName, now, onOpen }
   );
 }
 
+const TEAM_URL = "/api/tasks?view=team";
+
 export default function TeamTasks({ meId }) {
   const { t, lang } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
   const lookups = useTaskLookups();
   const online = useOnlineUsers();
-  const [tasks, setTasks] = useState([]);
-  const [loaded, setLoaded] = useState(false);
+  // A list seen before shows at once while the fresh one loads.
+  const [tasks, setTasks] = useState(() => peekApi(TEAM_URL)?.tasks || []);
+  const [loaded, setLoaded] = useState(() => Boolean(peekApi(TEAM_URL)));
   const [mode, setMode] = useState("person");
   const [query, setQuery] = useState("");
   const [department, setDepartment] = useState("");
@@ -126,7 +129,7 @@ export default function TeamTasks({ meId }) {
   const [openId, setOpenId] = useState(searchParams.get("task"));
 
   const load = useCallback(async () => {
-    const data = await api("/api/tasks?view=team").catch(() => null);
+    const data = await api(TEAM_URL).catch(() => null);
     if (data) setTasks(data.tasks);
     setLoaded(true);
   }, []);

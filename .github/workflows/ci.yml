@@ -9,13 +9,8 @@ on:
 
 env:
   MONGODB_URI: mongodb://localhost:27017/octa_ci
+  UPLOAD_DIR: /tmp/octa-ci-uploads
   JWT_SECRET: ci-only-secret-not-used-anywhere-else
-  IMAGEKIT_ID: ci
-  IMAGEKIT_URL_ENDPOINT: https://ik.imagekit.io/ci
-  IMAGEKIT_PUBLIC_KEY: ci
-  IMAGEKIT_PRIVATE_KEY: ci
-  NEXT_PUBLIC_IMAGEKIT_URL_ENDPOINT: https://ik.imagekit.io/ci
-  NEXT_PUBLIC_IMAGEKIT_PUBLIC_KEY: ci
   RESEND_API_KEY: re_ci
   RESEND_FROM_EMAIL: ci@example.com
   PUSHER_APP_ID: "1"

@@ -116,11 +116,14 @@ export function ShortcutsHelp({ open, onClose, pages, onGuide }) {
 
 // The first-day guide: a few short cards on how the dashboard works, shown once.
 export function WelcomeGuide({ open, onDone, user, pages }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [step, setStep] = useState(0);
   const has = (key) => pages.some((p) => p.key === key);
+  // firstName is { ar, en }: the viewer's language first, then the other, then the full name.
+  const first = user.firstName || {};
+  const greetName = first[lang] || first[lang === "ar" ? "en" : "ar"] || user.displayName || user.name || "";
   const steps = [
-    { icon: LayoutGrid, title: t("erp.ux.g1Title", { name: user.firstName || user.name || "" }), text: t("erp.ux.g1Text") },
+    { icon: LayoutGrid, title: t("erp.ux.g1Title", { name: greetName }), text: t("erp.ux.g1Text") },
     has("tasks") && { icon: ListChecks, title: t("erp.ux.g2Title"), text: t("erp.ux.g2Text") },
     has("attendance") && { icon: CalendarClock, title: t("erp.ux.g3Title"), text: t("erp.ux.g3Text") },
     { icon: Search, title: t("erp.ux.g4Title"), text: t("erp.ux.g4Text") },

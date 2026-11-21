@@ -3,8 +3,9 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 
-// Client side of the real-time layer (Pusher today). Without NEXT_PUBLIC_PUSHER_KEY
-// nothing connects, `connected` stays false, and components poll instead.
+// Client side of the real-time layer: our own server (NEXT_PUBLIC_REALTIME=self, see
+// realtime/server.mjs) or Pusher (NEXT_PUBLIC_PUSHER_KEY). With neither nothing
+// connects, `connected` stays false, and components poll instead.
 
 const RealtimeContext = createContext({ client: null, connected: false, acquire: () => null, release: () => {} });
 
@@ -22,18 +23,31 @@ export function RealtimeProvider({ children }) {
   const counts = useRef(new Map());
 
   useEffect(() => {
+    const selfHosted = process.env.NEXT_PUBLIC_REALTIME === "self";
     const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
-    if (!userId || !key) return undefined;
+    if (!userId || (!selfHosted && !key)) return undefined;
 
     let pusher;
     let cancelled = false;
-    import("pusher-js").then(({ default: Pusher }) => {
-      if (cancelled) return;
-      pusher = new Pusher(key, {
-        cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER,
-        channelAuthorization: { endpoint: "/api/realtime/auth", transport: "ajax" },
-      });
+    // Our own server on this machine (realtime/server.mjs), or Pusher.
+    const connect = selfHosted
+      ? Promise.all([import("socket.io-client"), import("@/context/socketClient")]).then(([{ io }, { createSocketClient }]) => createSocketClient(io))
+      : import("pusher-js").then(
+          ({ default: Pusher }) =>
+            new Pusher(key, {
+              cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER,
+              channelAuthorization: { endpoint: "/api/realtime/auth", transport: "ajax" },
+            })
+        );
+    connect.then((instance) => {
+      if (cancelled) {
+        instance.disconnect();
+        return;
+      }
+      pusher = instance;
       pusher.connection.bind("state_change", ({ current }) => setConnected(current === "connected"));
+      // The socket may have connected before the listener above was added.
+      if (pusher.connection.state === "connected") setConnected(true);
       setClient(pusher);
     });
 

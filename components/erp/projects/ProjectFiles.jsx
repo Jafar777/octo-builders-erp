@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, Download, FileUp, HardDrive, History, ListPlus, Trash2, Upload } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
-import { uploadFileToImageKit } from "@/lib/uploadFile";
+import { uploadFile } from "@/lib/uploadFile";
 import { Button, Card, ErrorText, Input, Select } from "@/components/erp/ui/fields";
 import { useConfirm } from "@/components/erp/ui/Feedback";
 import { EmptyState } from "@/components/erp/ui/DataTools";
@@ -66,8 +66,8 @@ export default function ProjectFiles({ project }) {
         const saved = await fs.gateway.upload(folder.vol, folder.path, file, { onProgress: setProgress });
         await addVersion(existing, { server: { vol: saved.vol, path: saved.path }, fileName: saved.name, size: saved.size });
       } else {
-        const res = await uploadFileToImageKit(file, { onProgress: setProgress, folder: `/octabuilders/projects/${project.id}` });
-        await addVersion(existing, { url: res.url, imagekitId: res.fileId, fileName: file.name, size: file.size });
+        const res = await uploadFile(file, { onProgress: setProgress, folder: `/octabuilders/projects/${project.id}` });
+        await addVersion(existing, { url: res.url, storedId: res.fileId, fileName: file.name, size: file.size });
       }
     } catch (err) {
       setError(err instanceof GatewayError ? gatewayErrorText(t, err) : errorText(t, err));

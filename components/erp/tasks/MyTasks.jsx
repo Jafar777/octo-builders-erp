@@ -6,7 +6,7 @@ import { Plus } from "lucide-react";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/context/LanguageContext";
 import { usePollingFallback, useRealtimeEvent, userChannelName } from "@/context/RealtimeContext";
-import { api } from "@/lib/clientApi";
+import { api, peekApi } from "@/lib/clientApi";
 import Modal from "@/components/erp/ui/Modal";
 import { Button, PageHeader } from "@/components/erp/ui/fields";
 import TaskRow from "@/components/erp/tasks/TaskRow";
@@ -23,21 +23,23 @@ const TABS = ["active", "submitted", "finished"];
 // The employee's own monthly task log (?tab=log), next to the lists above.
 const LOG = "log";
 const FINISHED_DAYS = 45;
+const MINE_URL = "/api/tasks?view=mine";
 
 export default function MyTasks({ meId }) {
   const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
   const lookups = useTaskLookups();
-  const [tasks, setTasks] = useState([]);
-  const [rating, setRating] = useState(null);
-  const [loaded, setLoaded] = useState(false);
+  // A list seen before shows at once while the fresh one loads.
+  const [tasks, setTasks] = useState(() => peekApi(MINE_URL)?.tasks || []);
+  const [rating, setRating] = useState(() => peekApi(MINE_URL)?.rating || null);
+  const [loaded, setLoaded] = useState(() => Boolean(peekApi(MINE_URL)));
   const [tab, setTab] = useState(searchParams.get("tab") === LOG ? LOG : "active");
   const [creating, setCreating] = useState(false);
   const [openId, setOpenId] = useState(searchParams.get("task"));
 
   const load = useCallback(async () => {
-    const data = await api("/api/tasks?view=mine").catch(() => null);
+    const data = await api(MINE_URL).catch(() => null);
     if (data) {
       setTasks(data.tasks);
       setRating(data.rating || null);

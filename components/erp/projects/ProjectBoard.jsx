@@ -13,7 +13,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import ProjectScore from "@/components/erp/projects/ProjectScore";
 import { usePollingFallback, useRealtimeEvent } from "@/context/RealtimeContext";
-import { api, errorText } from "@/lib/clientApi";
+import { api, errorText, peekApi } from "@/lib/clientApi";
 import { formatDate } from "@/lib/formatTime";
 import BilingualField from "@/components/dashboard/BilingualField";
 import Modal from "@/components/erp/ui/Modal";
@@ -293,8 +293,9 @@ export default function ProjectBoard({ projectId }) {
   const { t, lang } = useLanguage();
   const lookups = useTaskLookups();
   const fileServer = useFileServer();
-  const [data, setData] = useState(null);
-  const [tasks, setTasks] = useState([]);
+  // A project opened before shows at once while the fresh copy loads.
+  const [data, setData] = useState(() => peekApi(`/api/work-projects/${projectId}`) || null);
+  const [tasks, setTasks] = useState(() => peekApi(`/api/tasks?view=project&project=${projectId}`)?.tasks || []);
   const [tab, setTab] = useState("board");
   const [cell, setCell] = useState(null);
   const [newTaskFor, setNewTaskFor] = useState(null);

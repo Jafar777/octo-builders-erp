@@ -148,14 +148,17 @@ export default function NotificationBell() {
   }, []);
 
   async function markRead(ids) {
+    // Shown as read straight away; the server's count corrects it when it answers.
+    const newlyRead = notifications.filter((n) => !n.read && (!ids || ids.includes(n.id))).length;
+    setUnreadCount((c) => (ids ? Math.max(0, c - newlyRead) : 0));
+    setNotifications((prev) => prev.map((n) => (!ids || ids.includes(n.id) ? { ...n, read: true } : n)));
     const res = await fetch("/api/notifications", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(ids ? { ids } : {}),
     }).catch(() => null);
     const data = await res?.json().catch(() => null);
-    if (data) setUnreadCount(data.unreadCount);
-    setNotifications((prev) => prev.map((n) => (!ids || ids.includes(n.id) ? { ...n, read: true } : n)));
+    if (data && Number.isFinite(data.unreadCount)) setUnreadCount(data.unreadCount);
   }
 
   function openNotification(n) {

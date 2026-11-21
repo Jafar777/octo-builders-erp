@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Loader2, Plus, X } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
-import { uploadFileToImageKit } from "@/lib/uploadFile";
+import { uploadFile } from "@/lib/uploadFile";
 import { moveItem } from "@/components/dashboard/ItemList";
 
 export default function GalleryUploader({ images, onChange }) {
@@ -19,7 +19,7 @@ export default function GalleryUploader({ images, onChange }) {
     setUploading(files.length);
     const results = await Promise.allSettled(
       files.map((file) =>
-        uploadFileToImageKit(file).finally(() => setUploading((n) => n - 1))
+        uploadFile(file).finally(() => setUploading((n) => n - 1))
       )
     );
     const urls = results.filter((r) => r.status === "fulfilled").map((r) => r.value.url);

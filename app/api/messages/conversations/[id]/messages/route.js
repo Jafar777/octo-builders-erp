@@ -90,7 +90,7 @@ async function cleanAttachments(list, user) {
       if (!ref) continue;
       server.push(ref);
       out.push({ url: "", name: ref.name, mime: "", size: ref.size, vol: ref.vol, path: ref.path, dir: ref.dir });
-    } else if (typeof a?.url === "string" && /^https?:\/\//.test(a.url)) {
+    } else if (typeof a?.url === "string" && /^(https?:\/\/|\/uploads\/)/.test(a.url)) {
       out.push({ url: a.url, name: String(a.name || "").slice(0, 200), mime: String(a.mime || "").slice(0, 100), size: Number(a.size) || 0 });
     }
   }

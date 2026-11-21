@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   Check,
+  Clock,
   CheckCheck,
   ChevronsDown,
   CornerUpLeft,
@@ -30,7 +31,7 @@ import {
 } from "@/context/RealtimeContext";
 import { api, errorText } from "@/lib/clientApi";
 import { formatClock, formatDate } from "@/lib/formatTime";
-import { CHAT_UPLOAD_FOLDER, uploadFileToImageKit } from "@/lib/uploadFile";
+import { CHAT_UPLOAD_FOLDER, uploadFile } from "@/lib/uploadFile";
 import Avatar from "@/components/erp/ui/Avatar";
 import ConversationInfo from "@/components/erp/messages/ConversationInfo";
 import { Skeleton } from "@/components/erp/ui/Loading";
@@ -126,6 +127,7 @@ export default function ChatPane({
   const inputRef = useRef(null);
   const lastTypingSent = useRef(0);
   const stickToBottom = useRef(true);
+  const pendingSeq = useRef(0);
 
   const id = conversation.id;
   const channel = conversationChannelName(id);
@@ -320,7 +322,7 @@ export default function ChatPane({
     setUploading((n) => n + files.length);
     const results = await Promise.allSettled(
       files.map((file) =>
-        uploadFileToImageKit(file, { folder: CHAT_UPLOAD_FOLDER })
+        uploadFile(file, { folder: CHAT_UPLOAD_FOLDER })
           .then((r) => ({ url: r.url, name: file.name, mime: file.type, size: file.size }))
           .finally(() => setUploading((n) => n - 1))
       )
@@ -334,30 +336,67 @@ export default function ChatPane({
   async function send() {
     const body = text.trim();
     if ((!body && attachments.length === 0) || sending) return;
-    setSending(true);
     setError("");
+    // New messages don't wait for the server: the next one can be typed straight away.
+    if (!editing) {
+      sendNew(body).catch((err) => setError(errorText(t, err)));
+      return;
+    }
+    setSending(true);
     try {
-      if (editing) {
-        const { message } = await api(`/api/messages/items/${editing.id}`, { method: "PATCH", body: { text: body } });
-        setMessages((prev) => mergeMessages(prev, [message]));
-        setEditing(null);
-      } else {
-        const names = mentions.filter((m) => body.includes(`@${nameOf(m)}`));
-        const { message } = await api(`/api/messages/conversations/${id}/messages`, {
-          method: "POST",
-          body: { text: body, attachments, replyTo: replyTo?.id, mentions: names },
-        });
-        stickToBottom.current = true;
-        setMessages((prev) => mergeMessages(prev, [message]));
-        setAttachments([]);
-        setReplyTo(null);
-        setMentions([]);
-      }
+      const { message } = await api(`/api/messages/items/${editing.id}`, { method: "PATCH", body: { text: body } });
+      setMessages((prev) => mergeMessages(prev, [message]));
+      setEditing(null);
       setText("");
     } catch (err) {
       setError(errorText(t, err));
     } finally {
       setSending(false);
+    }
+  }
+
+  // A new message shows at once (faded, with a clock) and the box is cleared; the
+  // server's copy replaces it when it answers. If sending fails it is taken back out
+  // and the text returns to the box.
+  async function sendNew(body) {
+    const names = mentions.filter((m) => body.includes(`@${nameOf(m)}`));
+    const draft = { text: body, attachments, replyTo, mentions };
+    pendingSeq.current += 1;
+    const tempId = `pending-${id}-${pendingSeq.current}`;
+    const temp = {
+      id: tempId,
+      conversationId: id,
+      senderId: meId,
+      text: body,
+      attachments,
+      replyTo: replyTo?.id || null,
+      mentions: [],
+      system: false,
+      editedAt: null,
+      deleted: false,
+      createdAt: new Date().toISOString(),
+      pending: true,
+    };
+    stickToBottom.current = true;
+    setMessages((prev) => mergeMessages(prev, [temp]));
+    setText("");
+    setAttachments([]);
+    setReplyTo(null);
+    setMentions([]);
+    try {
+      const { message } = await api(`/api/messages/conversations/${id}/messages`, {
+        method: "POST",
+        body: { text: body, attachments: draft.attachments, replyTo: draft.replyTo?.id, mentions: names },
+      });
+      setMessages((prev) => mergeMessages(prev.filter((m) => m.id !== tempId), [message]));
+    } catch (err) {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      // Only put the draft back if nothing new was typed meanwhile.
+      setText((current) => (current ? current : draft.text));
+      setAttachments((current) => (current.length ? current : draft.attachments));
+      setReplyTo((current) => current || draft.replyTo);
+      setMentions((current) => (current.length ? current : draft.mentions));
+      throw err;
     }
   }
 
@@ -388,7 +427,7 @@ export default function ChatPane({
   }
 
   // Read receipt for my latest message.
-  const lastMine = [...messages].reverse().find((m) => m.senderId === meId && !m.deleted);
+  const lastMine = [...messages].reverse().find((m) => m.senderId === meId && !m.deleted && !m.pending);
   const seenBy = lastMine
     ? readStates.filter(
         (s) => s.userId !== meId && s.lastReadAt && new Date(s.lastReadAt) >= new Date(lastMine.createdAt)
@@ -568,7 +607,7 @@ export default function ChatPane({
           const editable = mine && !m.deleted && !review && now - new Date(m.createdAt) < EDIT_WINDOW_MS;
 
           return (
-            <div key={m.id} id={`msg-${m.id}`} className={`rounded-2xl transition-colors duration-700 ${highlight === m.id ? "bg-brand-orange/15" : ""}`}>
+            <div key={m.id} id={`msg-${m.id}`} className={`rounded-2xl transition-colors duration-700 ${highlight === m.id ? "bg-brand-orange/15" : ""} ${m.pending ? "opacity-70" : ""}`}>
               {showDay && (
                 <div className="my-4 flex justify-center">
                   <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] text-white/55">{day}</span>
@@ -620,7 +659,8 @@ export default function ChatPane({
                   <span className="mt-0.5 flex items-center gap-1 px-1 text-[11px] text-white/55">
                     {formatClock(m.createdAt, lang)}
                     {m.editedAt && !m.deleted && ` · ${t("erp.messages.edited")}`}
-                    {mine && lastMine?.id === m.id && !review &&
+                    {mine && m.pending && <Clock size={12} aria-label={t("erp.messages.sending")} />}
+                    {mine && !m.pending && lastMine?.id === m.id && !review &&
                       (seenBy > 0 ? (
                         <span className="flex items-center gap-0.5 text-sky-300">
                           <CheckCheck size={12} />
@@ -631,7 +671,7 @@ export default function ChatPane({
                       ))}
                   </span>
                 </div>
-                {!m.deleted && !review && canWrite && (
+                {!m.deleted && !m.pending && !review && canWrite && (
                   <div className="mb-5 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                     <button
                       type="button"

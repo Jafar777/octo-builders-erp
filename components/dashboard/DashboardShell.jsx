@@ -10,7 +10,6 @@ import {
   HardDrive,
   Globe2,
   LogOut,
-  ArrowLeft,
   Menu,
   X,
   MessagesSquare,
@@ -44,7 +43,6 @@ import {
   UserPlus,
   Timer,
   ChevronDown,
-  Clock3,
   Pin,
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
@@ -65,14 +63,6 @@ import { FeedbackProvider } from "@/components/erp/ui/Feedback";
 import { ShortcutsButton, ShortcutsHelp, ThemeButton, useShortcuts, WelcomeGuide } from "@/components/dashboard/ShellExtras";
 import { api } from "@/lib/clientApi";
 
-const RECENT_KEY = "erp.recentPages";
-const readRecent = () => {
-  try {
-    return JSON.parse(window.localStorage.getItem(RECENT_KEY) || "[]");
-  } catch {
-    return [];
-  }
-};
 
 // Sidebar entries; `perm` hides an entry from roles without that permission,
 // `staff` hides it from accounts that have no role yet, and `when(user)` is a custom rule.
@@ -231,11 +221,10 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
   );
 
   // Their own set-up: theme, pinned pages and folded groups are saved on the account
-  // (every device); recent pages stay on this device.
+  // (every device).
   const [theme, setTheme] = useState(user.ui?.theme || "dark");
   const [favorites, setFavorites] = useState(user.ui?.favorites || []);
   const [collapsed, setCollapsed] = useState(user.ui?.collapsed || []);
-  const [recent, setRecent] = useState([]);
   const [helpOpen, setHelpOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(Boolean(user.isStaff && !user.ui?.welcomed && !(user.mfaRequired && !user.mfaEnabled)));
   const savePrefs = useCallback((ui) => api("/api/auth/me", { method: "PATCH", body: { ui }, quiet: true }).catch(() => {}), []);
@@ -265,28 +254,12 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
     return () => document.documentElement.classList.remove("erp-light");
   }, [theme]);
 
-  const currentKey = current?.key;
-  useEffect(() => {
-    const list = readRecent().filter((k) => k !== currentKey);
-    const next = currentKey ? [currentKey, ...list].slice(0, 6) : list;
-    try {
-      window.localStorage.setItem(RECENT_KEY, JSON.stringify(next));
-    } catch {}
-    // Read from the storage of this device after the page changes.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setRecent(next);
-  }, [currentKey]);
 
   const openHelp = () => setHelpOpen(true);
   useShortcuts({ pages, onHelp: openHelp });
 
   const byKey = Object.fromEntries(allItems.map((i) => [i.key, i]));
   const pinned = favorites.map((k) => byKey[k]).filter(Boolean);
-  const recentItems = recent
-    .filter((k) => k !== currentKey && !favorites.includes(k))
-    .map((k) => byKey[k])
-    .filter(Boolean)
-    .slice(0, 3);
 
   async function handleLogout() {
     await logout();
@@ -316,7 +289,7 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
             </span>
           )}
         </Link>
-        {place !== "recent" && badge === 0 && (
+        {badge === 0 && (
           <button
             type="button"
             onClick={() => togglePin(link.key)}
@@ -337,10 +310,6 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
     <div className="flex h-full flex-col justify-between p-5">
       <div className="min-h-0 flex-1 overflow-y-auto">
         <Image src="/brand/00-Icon.png" alt="Octo Builders" width={36} height={36} className="mb-6 h-9 w-9" />
-        <Link href="/" className="mb-6 flex items-center gap-2 text-sm text-white/60 hover:text-white">
-          <ArrowLeft size={16} className="rtl:rotate-180" />
-          {t("dashboard.backToSite")}
-        </Link>
 
         {pinned.length > 0 && (
           <nav className="mb-5 space-y-1" aria-label={t("erp.ux.pinned")}>
@@ -348,14 +317,6 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
               <Pin size={12} /> {t("erp.ux.pinned")}
             </p>
             {pinned.map((link) => renderLink(link, "pin"))}
-          </nav>
-        )}
-        {recentItems.length > 0 && (
-          <nav className="mb-5 space-y-1" aria-label={t("erp.ux.recent")}>
-            <p className="flex items-center gap-1.5 px-4 pb-1.5 text-xs font-semibold uppercase tracking-wider text-white/55">
-              <Clock3 size={12} /> {t("erp.ux.recent")}
-            </p>
-            {recentItems.map((link) => renderLink(link, "recent", true))}
           </nav>
         )}
 

@@ -13,10 +13,15 @@ export default function TaskChecklist({ taskId, items, canEdit }) {
   const [error, setError] = useState("");
   async function send(body) {
     setError("");
+    const before = list;
+    // Ticking and removing show at once (adding waits: the server gives the new step its id).
+    if (body.toggle) setList((l) => l.map((c) => (c.id === body.toggle ? { ...c, done: !c.done } : c)));
+    if (body.remove) setList((l) => l.filter((c) => c.id !== body.remove));
     try {
       const res = await api(`/api/tasks/${taskId}/checklist`, { method: "PATCH", body });
       setList(res.checklist);
     } catch (err) {
+      setList(before);
       setError(errorText(t, err));
     }
   }

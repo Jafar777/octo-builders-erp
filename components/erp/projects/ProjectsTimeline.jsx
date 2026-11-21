@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Ban, Building2, ChevronDown, Diamond, GripVertical, ChevronsDownUp, ChevronsUpDown, Crosshair, Download, ExternalLink, FileSpreadsheet, FileText, Flag, Plus, SlidersHorizontal, Sparkles, UserCheck } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
-import { api, errorText } from "@/lib/clientApi";
+import { api, errorText, peekApi } from "@/lib/clientApi";
 import { locale } from "@/lib/formatTime";
 import {
   addWorkHours,
@@ -111,7 +111,8 @@ function scaleTicks(zoom, from, to, lang) {
 
 export default function ProjectsTimeline({ projects, status, leading = null }) {
   const { t, lang } = useLanguage();
-  const [data, setData] = useState(null);
+  // The chart seen before shows at once while the fresh one loads.
+  const [data, setData] = useState(() => peekApi(`/api/work-projects/timeline?status=${status}`) || null);
   const [zoom, setZoom] = useState("day");
   const [groupBy, setGroupBy] = useState("project");
   const [opts, setOpts] = useState({ workdays: true, autoShift: true, critical: true, cancelled: true });

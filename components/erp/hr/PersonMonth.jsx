@@ -5,6 +5,7 @@ import { AlertTriangle, Lock } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
 import { formatClock, locale } from "@/lib/formatTime";
+import { dateFormat } from "@/lib/intlCache";
 import Modal from "@/components/erp/ui/Modal";
 import { Button, ErrorText, Input, Select, Toggle } from "@/components/erp/ui/fields";
 import { DAY_STYLE, hm, money, StatTile } from "@/components/erp/hr/hrUi";
@@ -236,7 +237,7 @@ export default function PersonMonth({ userId, month, onData }) {
       </div>
     );
   const s = data.attendance.summary;
-  const dayName = (d) => new Intl.DateTimeFormat(locale(lang), { weekday: "short", timeZone: "UTC" }).format(new Date(`${d}T00:00:00Z`));
+  const dayName = (d) => dateFormat(locale(lang), { weekday: "short", timeZone: "UTC" }).format(new Date(`${d}T00:00:00Z`));
 
   return (
     <div className="space-y-6">

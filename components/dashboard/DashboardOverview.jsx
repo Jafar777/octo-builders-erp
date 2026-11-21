@@ -20,7 +20,7 @@ import {
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { usePollingFallback, useRealtimeEvent, userChannelName } from "@/context/RealtimeContext";
-import { api, errorText } from "@/lib/clientApi";
+import { api, errorText, peekApi } from "@/lib/clientApi";
 import { formatDate, formatDateTime, formatRelative, locale } from "@/lib/formatTime";
 import { namesComplete } from "@/components/erp/staff/NameFields";
 import { ErrorText, Input } from "@/components/erp/ui/fields";
@@ -169,7 +169,8 @@ function CompleteProfileNote({ user }) {
 
 export default function DashboardOverview({ user }) {
   const { t, lang } = useLanguage();
-  const [data, setData] = useState(null);
+  // The home screen seen before shows at once while the fresh one loads.
+  const [data, setData] = useState(() => (user?.isStaff ? peekApi("/api/home") || null : null));
 
   const load = useCallback(() => {
     if (!user?.isStaff) return;

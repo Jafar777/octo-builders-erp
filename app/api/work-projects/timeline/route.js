@@ -16,6 +16,17 @@ import WorkProject from "@/models/WorkProject";
 import { inDepartments } from "@/lib/scope";
 
 const STATUSES = ["active", "on_hold", "finished", "archived"];
+// The chart never shows a task's write-ups, files or review history (it opens the task
+// page for those), and with ~2,000 tasks they made the reply several megabytes. Left
+// out of the query, and the serialized fields they feed are dropped before sending.
+const NOT_ON_CHART = { description: 0, deliveryLink: 0, deliveryFiles: 0, attachments: 0, headNotes: 0, employeeNotes: 0, rejectCause: 0, ratings: 0, reviews: 0 };
+const SERIALIZED_NOT_ON_CHART = ["description", "deliveryLink", "deliveryFiles", "attachments", "headNotes", "employeeNotes", "rejectCause", "ratings", "reviews", "review", "createdBy", "reviewedBy"];
+const forChart = (list) =>
+  list.map((t) => {
+    const out = { ...t };
+    for (const k of SERIALIZED_NOT_ON_CHART) delete out[k];
+    return out;
+  });
 const idStr = (v) => (v ? v.toString() : null);
 
 // Gantt data: every task of the projects I can list, the working calendar, each
@@ -44,7 +55,7 @@ export async function GET(request) {
     taskQuery.$or = [{ assignee: { $in: [user.id, ...team.map((u) => u._id.toString())] } }, inDepartments(user)];
   }
   // Cancelled tasks stay on the chart, greyed out (like inactive tasks in MS Project).
-  const tasks = await Task.find(taskQuery)
+  const tasks = await Task.find(taskQuery, NOT_ON_CHART)
     .sort({ plannedStart: 1, createdAt: 1 })
     .limit(3000)
     .lean();
@@ -59,7 +70,7 @@ export async function GET(request) {
     plannedStart: { $ne: null },
     dueAt: { $ne: null },
     _id: { $nin: tasks.map((t) => t._id) },
-  })
+  }, NOT_ON_CHART)
     .limit(3000)
     .lean();
   const people = await User.find({ _id: { $in: assigneeIds } }, { name: 1, nameAr: 1, email: 1, avatarUrl: 1, workSchedule: 1 }).lean();
@@ -76,8 +87,8 @@ export async function GET(request) {
   const nowMs = Date.now();
 
   return NextResponse.json({
-    tasks: await enrichTasks(tasks),
-    busy: await enrichTasks(busy),
+    tasks: forChart(await enrichTasks(tasks)),
+    busy: forChart(await enrichTasks(busy)),
     calendar,
     people: people.map((p) => ({
       id: p._id.toString(),

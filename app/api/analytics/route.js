@@ -49,7 +49,18 @@ export async function GET() {
 
   // Counters
   const open = tasks.filter((t) => OPEN.includes(t.status));
-  const monthOf = (d) => (d ? localParts(new Date(d), tz).date.slice(0, 7) : null);
+  // The same dates are looked at by many counters below: work each one out once.
+  const monthCache = new Map();
+  const monthOf = (d) => {
+    if (!d) return null;
+    const ms = new Date(d).getTime();
+    let m = monthCache.get(ms);
+    if (m === undefined) {
+      m = localParts(new Date(ms), tz).date.slice(0, 7);
+      monthCache.set(ms, m);
+    }
+    return m;
+  };
   const counters = {
     open: open.length,
     submitted: tasks.filter((t) => t.status === "submitted").length,
@@ -129,10 +140,14 @@ export async function GET() {
     LeaveRequest.find({ status: "approved", from: { $lte: today }, to: { $gte: today } }, { user: 1, type: 1 }).lean(),
   ]);
   const punchedToday = new Set(todayPunches.filter((p) => localParts(p.time, tz).date === today).map((p) => p.badgeId));
+  const leaveOf = new Map();
+  for (const l of leavesToday) if (!leaveOf.has(idStr(l.user))) leaveOf.set(idStr(l.user), l);
+  const openOf = {};
+  for (const t of open) (openOf[idStr(t.assignee)] ||= []).push(t);
   const team = staff.map((s) => {
-    const mine = open.filter((t) => idStr(t.assignee) === s.id);
+    const mine = openOf[s.id] || [];
     const working = mine.find((t) => t.status === "in_progress");
-    const leave = leavesToday.find((l) => idStr(l.user) === s.id);
+    const leave = leaveOf.get(s.id);
     return {
       id: s.id,
       name: s.name,

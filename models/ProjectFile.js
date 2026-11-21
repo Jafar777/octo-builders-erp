@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 const { ObjectId } = mongoose.Schema.Types;
 
 // A project document kept by stage — a drawing, a render, a BOQ — with every version
-// uploaded over time (the latest first on screen). Files live on ImageKit, or on the
+// uploaded over time (the latest first on screen). Files live in this server's uploads folder, or on the
 // company file server when it's connected (version.server).
 const ProjectFileSchema = new mongoose.Schema(
   {
@@ -14,7 +14,7 @@ const ProjectFileSchema = new mongoose.Schema(
       new mongoose.Schema(
         {
           n: { type: Number, required: true },
-          url: { type: String, default: "" }, // ImageKit; "" when kept on the company server
+          url: { type: String, default: "" }, // /uploads/...; "" when kept on the company server
           fileId: { type: String, default: "" },
           // Kept on the company file server instead: { vol, path } on the office share.
           server: { vol: { type: String, default: "" }, path: { type: String, default: "" } },

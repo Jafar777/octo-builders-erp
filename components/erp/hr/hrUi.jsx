@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { locale } from "@/lib/formatTime";
+import { dateFormat, numberFormat } from "@/lib/intlCache";
 
 export const DAY_STYLE = {
   present: "text-emerald-300",
@@ -31,7 +32,7 @@ export function money(value, currency, lang) {
   if (value === null || value === undefined) return "—";
   let text;
   try {
-    text = new Intl.NumberFormat(locale(lang), { style: "currency", currency, maximumFractionDigits: 2 }).format(value);
+    text = numberFormat(locale(lang), { style: "currency", currency, maximumFractionDigits: 2 }).format(value);
   } catch {
     text = `${value.toFixed(2)} ${currency}`;
   }
@@ -45,7 +46,7 @@ export function shiftMonth(month, n) {
 
 export function monthLabel(month, lang) {
   const [y, m] = month.split("-").map(Number);
-  return new Intl.DateTimeFormat(locale(lang), { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, 1)));
+  return dateFormat(locale(lang), { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, 1)));
 }
 
 export function MonthPicker({ month, onChange }) {

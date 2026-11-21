@@ -6,7 +6,7 @@ import { AlertOctagon, AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronD
 import { useLanguage } from "@/context/LanguageContext";
 import ProjectScore from "@/components/erp/projects/ProjectScore";
 import { usePollingFallback } from "@/context/RealtimeContext";
-import { api, errorText } from "@/lib/clientApi";
+import { api, errorText, peekApi } from "@/lib/clientApi";
 import { formatDate } from "@/lib/formatTime";
 import Avatar from "@/components/erp/ui/Avatar";
 import { Card, ErrorText, PageHeader } from "@/components/erp/ui/fields";
@@ -88,7 +88,7 @@ function ProgressCell({ p, t }) {
 export default function Analytics() {
   const { t, lang } = useLanguage();
   const lookups = useTaskLookups();
-  const [data, setData] = useState(null);
+  const [data, setData] = useState(() => peekApi("/api/analytics") || null);
   const [error, setError] = useState("");
   const [tab, setTab] = useState("active");
   const [sort, setSort] = useState({ key: "risk", dir: -1 });

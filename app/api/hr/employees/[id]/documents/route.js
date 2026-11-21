@@ -5,7 +5,7 @@ import { audit } from "@/lib/audit";
 import { canSeePerson, serializeDocument } from "@/lib/hrAccess";
 import User from "@/models/User";
 
-// Add a document (already uploaded to ImageKit) to an HR file.
+// Add a document (already uploaded to /api/upload) to an HR file.
 // HR, or the employee for their own file. Body: { name, url, fileId, mime, size }
 export async function POST(request, { params }) {
   const user = await requireStaff({ limited: true });
@@ -15,7 +15,7 @@ export async function POST(request, { params }) {
   if (!isHr && id !== user.id) return forbidden();
 
   const body = await readJson(request);
-  if (typeof body.url !== "string" || !/^https:\/\//.test(body.url)) return fail("invalid_request");
+  if (typeof body.url !== "string" || !/^(https:\/\/|\/uploads\/)/.test(body.url)) return fail("invalid_request");
   const target = await User.findById(id);
   if (!target) return notFound();
   if ((target.documents || []).length >= 50) return fail("too_many_documents");

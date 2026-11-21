@@ -28,7 +28,6 @@ const QUIET = [
   /\/api\/auth\//,
   /\/api\/realtime/,
   /\/api\/uploads?/,
-  /\/api\/imagekit/,
   /preview/,
   // Ticking checklist steps confirms itself on screen.
   /\/checklist/,

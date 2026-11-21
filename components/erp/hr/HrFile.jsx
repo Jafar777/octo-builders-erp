@@ -6,7 +6,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { api, errorText } from "@/lib/clientApi";
 import { formatDate } from "@/lib/formatTime";
-import { uploadFileToImageKit } from "@/lib/uploadFile";
+import { uploadFile } from "@/lib/uploadFile";
 import { Button, Card, ErrorText, Input } from "@/components/erp/ui/fields";
 import { useConfirm } from "@/components/erp/ui/Feedback";
 
@@ -70,7 +70,7 @@ export function DocumentsCard({ userId, data, onChanged }) {
       }
       setUploading((n) => n + 1);
       try {
-        const r = await uploadFileToImageKit(file);
+        const r = await uploadFile(file);
         await api(`/api/hr/employees/${userId}/documents`, {
           method: "POST",
           body: { name: file.name, url: r.url, fileId: r.fileId, mime: file.type, size: file.size },

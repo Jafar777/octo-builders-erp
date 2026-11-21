@@ -185,5 +185,7 @@ TaskSchema.index({ "recurrence.nextAt": 1 });
 TaskSchema.index({ status: 1, reviewLevel: 1 });
 TaskSchema.index({ "reviews.by": 1 });
 TaskSchema.index({ "legacy.source": 1, "legacy.id": 1 }, { sparse: true });
+// Monthly counts (KPI, home, reports) pick tasks by when they were made.
+TaskSchema.index({ createdAt: 1 });
 
 export default mongoose.models.Task || mongoose.model("Task", TaskSchema);

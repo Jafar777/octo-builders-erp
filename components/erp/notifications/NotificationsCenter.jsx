@@ -6,7 +6,7 @@ import { Bell, CheckCheck, SlidersHorizontal } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { useRealtimeEvent, userChannelName } from "@/context/RealtimeContext";
-import { api } from "@/lib/clientApi";
+import { api, peekApi } from "@/lib/clientApi";
 import { formatDateTime } from "@/lib/formatTime";
 import { Button, PageHeader } from "@/components/erp/ui/fields";
 import { SkeletonList } from "@/components/erp/ui/Loading";
@@ -17,10 +17,11 @@ export default function NotificationsCenter() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
   const router = useRouter();
-  const [items, setItems] = useState([]);
+  // The list seen before shows at once while the fresh one loads.
+  const [items, setItems] = useState(() => peekApi("/api/notifications?")?.notifications || []);
   const [unreadOnly, setUnreadOnly] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [hasMore, setHasMore] = useState(() => Boolean(peekApi("/api/notifications?")?.hasMore));
+  const [loading, setLoading] = useState(() => !peekApi("/api/notifications?"));
   const [prefsOpen, setPrefsOpen] = useState(false);
 
   const load = useCallback(
@@ -46,11 +47,12 @@ export default function NotificationsCenter() {
 
   useRealtimeEvent(userChannelName(user?.id), "notification:new", (n) => setItems((prev) => [n, ...prev]));
 
+  // Shown as read straight away; the server is told in the background.
   async function markRead(ids) {
-    await api("/api/notifications", { method: "PATCH", body: ids ? { ids } : {} }).catch(() => {});
     setItems((prev) =>
       unreadOnly && !ids ? [] : prev.map((n) => (!ids || ids.includes(n.id) ? { ...n, read: true } : n))
     );
+    await api("/api/notifications", { method: "PATCH", body: ids ? { ids } : {} }).catch(() => {});
   }
 
   function open(n) {

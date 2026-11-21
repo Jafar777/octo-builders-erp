@@ -6,7 +6,7 @@ import { CheckCircle2, Loader2, Paperclip, XCircle } from "lucide-react";
 import { LinkOrPath, ServerRefList } from "@/components/erp/files/ServerRefs";
 import { useLanguage } from "@/context/LanguageContext";
 import { usePollingFallback, useRealtimeEvent, userChannelName } from "@/context/RealtimeContext";
-import { api, errorText } from "@/lib/clientApi";
+import { api, errorText, peekApi } from "@/lib/clientApi";
 import { formatDateTime, locale } from "@/lib/formatTime";
 import Modal from "@/components/erp/ui/Modal";
 import Avatar from "@/components/erp/ui/Avatar";
@@ -71,8 +71,8 @@ export default function ReviewQueue({ meId, customer = false }) {
 function Queue({ meId, customer, openId, onOpen, onTabs }) {
   const { t } = useLanguage();
   const lookups = useTaskLookups({ enabled: !customer });
-  const [tasks, setTasks] = useState([]);
-  const [loaded, setLoaded] = useState(false);
+  const [tasks, setTasks] = useState(() => peekApi("/api/reviews?tab=queue")?.tasks || []);
+  const [loaded, setLoaded] = useState(() => Boolean(peekApi("/api/reviews?tab=queue")));
   const [person, setPerson] = useState("");
 
   const load = useCallback(async () => {

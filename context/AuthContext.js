@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
+import { clearApiCache } from "@/lib/clientApi";
 
 const AuthContext = createContext(null);
 
@@ -26,8 +27,17 @@ export function AuthProvider({ children }) {
     refresh();
   }, [refresh]);
 
+  // Remembered screens belong to one account: forget them when it changes.
+  const lastUserId = useRef(null);
+  useEffect(() => {
+    const id = user?.id || null;
+    if (lastUserId.current && lastUserId.current !== id) clearApiCache();
+    lastUserId.current = id;
+  }, [user?.id]);
+
   const logout = useCallback(async () => {
     await fetch("/api/auth/logout", { method: "POST" });
+    clearApiCache();
     setUser(null);
   }, []);
 

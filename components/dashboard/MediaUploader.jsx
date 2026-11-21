@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { Upload, Loader2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
-import { uploadFileToImageKit } from "@/lib/uploadFile";
+import { uploadFile } from "@/lib/uploadFile";
 
 export default function MediaUploader({ accept = "image/*", onUploaded, previewUrl, kind = "image" }) {
   const { t } = useLanguage();
@@ -19,7 +19,7 @@ export default function MediaUploader({ accept = "image/*", onUploaded, previewU
     setProgress(0);
     setUploading(true);
     try {
-      const result = await uploadFileToImageKit(file, { onProgress: setProgress });
+      const result = await uploadFile(file, { onProgress: setProgress });
       onUploaded(result.url);
     } catch {
       setError(t("errors.server_error"));
