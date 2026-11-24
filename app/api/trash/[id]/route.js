@@ -4,14 +4,14 @@ import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils"
 import { audit } from "@/lib/audit";
 import { publish } from "@/lib/realtime/server";
 import { COMPANY_TASKS_CHANNEL } from "@/lib/tasks";
-import { canDelete, purgeTrash, restoreTrash } from "@/lib/trash";
+import { canDelete, canTouchTrash, purgeTrash, restoreTrash } from "@/lib/trash";
 
 // { action: "restore" } puts it back as it was; { action: "purge" } erases it now.
 export async function POST(request, { params }) {
   const user = await requireStaff();
   if (!user || !canDelete(user)) return forbidden();
   const { id } = await params;
-  if (!isObjectId(id)) return notFound();
+  if (!isObjectId(id) || !(await canTouchTrash(user, id))) return notFound();
   const { action } = await readJson(request);
   if (action === "restore") {
     const res = await restoreTrash(id);

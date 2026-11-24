@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { loadLinks, reachesPerson } from "@/lib/reporting";
 import { requirePermission } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
@@ -13,10 +14,12 @@ import Department from "@/models/Department";
 import Branch from "@/models/Branch";
 import JobTitle from "@/models/JobTitle";
 import Task from "@/models/Task";
-import { DEFAULT_ROLE, isHiddenRole, isTopRole } from "@/lib/permissions";
+import { DEFAULT_ROLE, effectiveAccess, isHiddenRole, isTopRole } from "@/lib/permissions";
+import { escalation } from "@/lib/roles";
 import { usersWithPermissionFor } from "@/lib/scope";
 import { ACTIVE_STATUSES } from "@/lib/tasks";
 import { isTrainingAdmin } from "@/lib/training";
+import { followManagerChange } from "@/lib/managerChange";
 
 const idStr = (v) => (v ? v.toString() : null);
 const REF_FIELDS = { department: Department, branch: Branch, jobTitle: JobTitle };
@@ -31,6 +34,13 @@ export async function PATCH(request, { params }) {
   const target = await User.findById(id);
   if (!target) return notFound();
 
+  // Below company-wide scope: only their own team (lib/reporting.js), or someone still
+  // waiting for a role — never themselves (their record is on their profile page).
+  if (actor.scope !== "all") {
+    const reaches = id !== actor.id && (target.role === "user" || (actor.scope === "department" && reachesPerson(actor, target, await loadLinks())));
+    if (!reaches) return forbidden();
+  }
+
   const body = await readJson(request);
   // The hidden coder accounts and role are a coder's alone.
   if ((isHiddenRole(target.role) || isHiddenRole(body.role)) && !isHiddenRole(actor.role)) return notFound();
@@ -44,6 +54,10 @@ export async function PATCH(request, { params }) {
     if ((isTopRole(body.role) || isTopRole(before.role)) && !isTopRole(actor.role)) return forbidden();
     const role = await Role.findOne({ key: body.role }).lean();
     if (!role) return fail("invalid_role");
+    // Below the CEO, nobody gives a role with more than they have themselves (permissions
+    // or scope), counting the person's own exceptions — as on the Roles page.
+    const given = effectiveAccess(role, target.access, role.key);
+    if (escalation(actor, [], given.permissions, given.scope)) return fail("cannot_grant_more", 403);
     if (before.role === "ceo") {
       const ceos = await User.countDocuments({ role: "ceo", status: "active" });
       if (ceos <= 1) return fail("last_gm", 409);
@@ -87,6 +101,8 @@ export async function PATCH(request, { params }) {
     Object.assign(changes, names);
   }
 
+  // (Before the change: whose manager it may change, for the open reviews below.)
+  const deptsBefore = [target.department, ...(target.managedDepartments || [])];
   target.set(changes);
   await target.save();
   const after = serializeStaff(target.toObject(), await viewerLang());
@@ -142,6 +158,11 @@ export async function PATCH(request, { params }) {
 
   if ("role" in changes || "department" in changes || "status" in changes || "managedDepartments" in changes) {
     await syncStaffChannels();
+    // Who manages whom may have changed: pending leave / overtime and open reviews follow (they and the
+    // people of every department they were or are in, or head).
+    const depts = [...deptsBefore, target.department, ...(target.managedDepartments || [])].filter(Boolean);
+    const members = depts.length ? await User.find({ status: "active", department: { $in: depts } }, { _id: 1 }).lean() : [];
+    await followManagerChange([id, ...members.map((m) => m._id)], actor);
   }
 
   return NextResponse.json({ staff: after });

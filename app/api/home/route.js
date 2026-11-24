@@ -20,10 +20,18 @@ import WorkProject from "@/models/WorkProject";
 import { NAME_FIELDS, pickName, viewerLang } from "@/lib/personName";
 import { inDepartments, userDepartments } from "@/lib/scope";
 import { homePersona } from "@/lib/homePersona";
-import { canDecideAny, isOvertimeAdmin } from "@/lib/overtime";
+import { canDecideAny, isOvertimeAdmin, managerOvertimeFilter } from "@/lib/overtime";
+import { managerLeaveFilter } from "@/lib/leave";
+import { isDeptManager } from "@/lib/managerKpi";
+import { canOpenPath } from "@/lib/pageAccess";
+import { reachedIds } from "@/lib/reporting";
 import { canSeeIntakeFinance, isIntakePlanner } from "@/lib/intake";
 import Invoice from "@/models/Invoice";
 import Lead from "@/models/Lead";
+import OfficeItem from "@/models/OfficeItem";
+import { canConfirmChange, pendingChanges } from "@/lib/clientChangeServer";
+import { canUseOffice, inboxQuery, officeDayCounts, officePulse } from "@/lib/officeServer";
+import { isTopRole } from "@/lib/permissions";
 import OvertimeRequest from "@/models/OvertimeRequest";
 import ProjectIntake from "@/models/ProjectIntake";
 import PurchaseRequest from "@/models/PurchaseRequest";
@@ -114,7 +122,8 @@ export async function GET() {
     );
     jobs.push(
       (async () => {
-        const staff = await hrStaff({ status: "active", ...(user.scope === "all" ? {} : inDepartments(user)) });
+        // Their team (lib/reporting.js: their departments' people and anyone moved to them).
+        const staff = await hrStaff({ status: "active", ...(user.scope === "all" ? {} : { _id: { $in: await reachedIds(user) } }) });
         const punches = await RawPunch.find({ time: { $gte: new Date(now - 36 * 3600000) }, ...ACTIVE_PUNCH }, { badgeId: 1, time: 1 }).lean();
         const inToday = new Set(punches.filter((p) => localParts(p.time, tz).date === today).map((p) => p.badgeId));
         const onLeave = await LeaveRequest.countDocuments({ status: "approved", from: { $lte: today }, to: { $gte: today }, user: { $in: staff.map((s) => s.id) } });
@@ -129,8 +138,10 @@ export async function GET() {
     );
   }
 
-  // --- HR: leave waiting, contracts ending, devices offline
-  if (can("leave.approve") || can("attendance.manage")) {
+  // --- HR: leave waiting at the HR / GM step, contracts ending, devices offline — the
+  // whole company's, so only for company-wide HR / GM / CEO (department managers get
+  // their team's leave under "needs", below).
+  if (user.scope === "all" && (can("leave.approve") || can("attendance.manage")) && canOpenPath(user, "/dashboard/hr")) {
     jobs.push(
       (async () => {
         const in30 = new Date(new Date(`${today}T00:00:00Z`).getTime() + 30 * 86400000).toISOString().slice(0, 10);
@@ -150,7 +161,7 @@ export async function GET() {
   }
 
   // --- finance: fund balances, receivables, this month's result
-  if (can("finance.view")) {
+  if (can("finance.view") && canOpenPath(user, "/dashboard/finance")) {
     jobs.push(
       (async () => {
         const f = await loadFinance(today.slice(0, 4));
@@ -169,7 +180,7 @@ export async function GET() {
   }
 
   // --- GM: people waiting for a role
-  if (can("users.manage")) {
+  if (can("users.manage") && canOpenPath(user, "/dashboard/staff")) {
     jobs.push(
       (async () => {
         // Customers linked to a project have no role on purpose: they're not waiting for one.
@@ -187,24 +198,34 @@ export async function GET() {
       const q = [];
       const add = (key, href, promise) => q.push(Promise.resolve(promise).then((count) => ({ key, href, count })).catch(() => ({ key, href, count: 0 })));
       if (canDecideAny(user)) {
-        add("overtime", "/dashboard/overtime?tab=queue", OvertimeRequest.countDocuments({ status: "pending", user: { $ne: user.id }, ...(isOvertimeAdmin(user) ? {} : { department: { $in: deps } }) }));
+        add("overtime", "/dashboard/orders?type=waiting", OvertimeRequest.countDocuments({ status: "pending", user: { $ne: user.id }, ...(isOvertimeAdmin(user) ? {} : managerOvertimeFilter(user)) }));
       }
       // Leave at the department manager's step (their departments), or at HR / GM's.
-      if (user.scope === "department" && can("leave.approve")) add("leaveManager", "/dashboard/hr?tab=leave", LeaveRequest.countDocuments({ status: "pending", stage: "manager", department: { $in: deps }, user: { $ne: user.id } }));
-      if (user.scope === "all" && can("leave.approve")) add("leave", "/dashboard/hr?tab=leave", LeaveRequest.countDocuments({ status: "pending", stage: { $ne: "manager" } }));
+      // (Department managers decide it whatever their permissions say — lib/leave.js —
+      // on the Requests page, which everyone can open.)
+      if (isDeptManager(user)) add("leaveManager", "/dashboard/orders?type=waiting", LeaveRequest.countDocuments({ status: "pending", stage: "manager", ...managerLeaveFilter(user), user: { $ne: user.id } }));
+      if (user.scope === "all" && can("leave.approve")) add("leave", "/dashboard/orders?type=waiting", LeaveRequest.countDocuments({ status: "pending", stage: { $ne: "manager" } }));
       if (can("purchasing.approve")) {
-        add("purchases", "/dashboard/purchasing", PurchaseRequest.countDocuments({ status: "pending", requestedBy: { $ne: user.id }, ...(user.scope === "all" ? {} : { department: { $in: deps } }) }));
+        add("purchases", "/dashboard/orders?type=waiting", PurchaseRequest.countDocuments({ status: "pending", requestedBy: { $ne: user.id }, ...(user.scope === "all" ? {} : { department: { $in: deps } }) }));
       }
       if (canSeeIntakeFinance(user)) add("intakePricing", "/dashboard/intake", ProjectIntake.countDocuments({ status: "new" }));
       if (isIntakePlanner(user)) add("intakeAccept", "/dashboard/intake", ProjectIntake.countDocuments({ status: "ready", "proposal.at": { $ne: null } }));
       if (can("invoices.manage")) add("invoices", "/dashboard/finance?tab=invoices", Invoice.countDocuments({ status: "draft" }));
-      if (can("sales.manage")) add("staleLeads", "/dashboard/sales", Lead.countDocuments({ stage: { $in: ["new", "contacted", "meeting", "proposal"] }, updatedAt: { $lt: new Date(now - 7 * 86400000) } }));
-      if (can("users.manage")) add("skills", "/dashboard/staff", User.countDocuments({ status: { $ne: "inactive" }, skillRequests: { $elemMatch: { status: "pending" } } }));
+      if (can("sales.manage")) add("staleLeads", "/dashboard/finance?tab=sales", Lead.countDocuments({ stage: { $in: ["new", "contacted", "meeting", "proposal"] }, updatedAt: { $lt: new Date(now - 7 * 86400000) } }));
+      if (can("users.manage") && user.scope === "all") add("skills", "/dashboard/staff", User.countDocuments({ status: { $ne: "inactive" }, skillRequests: { $elemMatch: { status: "pending" } } }));
+      // Managers' client-change requests: the CEO decides (opens the oldest).
+      if (canConfirmChange(user)) {
+        const list = await pendingChanges();
+        if (list.length) add("clientChanges", `/dashboard/tasks?task=${list[0].task}`, list.length);
+      }
+      // What the executive office sent them / their departments, still unanswered.
+      add("officeInbox", "/dashboard/office/inbox", OfficeItem.countDocuments(inboxQuery(user)));
       // Late work in the departments (or company) they run.
       if (["department", "projects", "executive"].includes(out.persona)) {
-        add("lateTasks", "/dashboard/team-tasks", Task.countDocuments({ ...(user.scope === "all" ? {} : { department: { $in: deps } }), status: { $in: ACTIVE_STATUSES }, dueAt: { $lt: new Date(now) } }));
+        add("lateTasks", "/dashboard/team-tasks?late=1", Task.countDocuments({ ...(user.scope === "all" ? {} : { department: { $in: deps } }), status: { $in: ACTIVE_STATUSES }, dueAt: { $lt: new Date(now) } }));
       }
-      out.needs = (await Promise.all(q)).filter((x) => x.count > 0);
+      // Only what they can open: a count that leads to "no access" helps nobody.
+      out.needs = (await Promise.all(q)).filter((x) => x.count > 0 && canOpenPath(user, x.href));
     })()
   );
   // Office: intake forms and the sales pipeline at a glance.
@@ -219,6 +240,22 @@ export async function GET() {
         out.office = { intakesNew, leadsOpen, quotesSent };
       })()
     );
+  }
+
+  // The executive office: its day (the secretary), and its pulse (the CEO).
+  if (canUseOffice(user)) {
+    jobs.push(
+      officeDayCounts(tz).then((c) => {
+        out.officeDay = c;
+      })
+    );
+    if (isTopRole(user.role)) {
+      jobs.push(
+        officePulse(tz).then((p) => {
+          out.officePulse = p;
+        })
+      );
+    }
   }
 
   await Promise.all(jobs);

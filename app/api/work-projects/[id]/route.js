@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
-import { canDelete, trashProject } from "@/lib/trash";
+import { canDelete, canDeleteIn, trashProject } from "@/lib/trash";
 import { COMPANY_TASKS_CHANNEL } from "@/lib/tasks";
 import { applyFlow, applyStageRouting, cleanCustomer, cleanProjectFields, cleanStages } from "@/lib/projectPayload";
 import { buildCells, checkStageHandoffs, dueRiskOf, officeTz, projectAccess, projectChannel, serializeProject } from "@/lib/projects";
@@ -181,6 +181,9 @@ export async function DELETE(request, { params }) {
   if (!user || !canDelete(user)) return forbidden();
   const { id } = await params;
   if (!isObjectId(id)) return notFound();
+  const target = await WorkProject.findById(id, { department: 1 }).lean();
+  if (!target) return notFound();
+  if (!canDeleteIn(user, target.department)) return forbidden();
   const counts = await trashProject(id, user);
   if (!counts) return notFound();
   await audit(user, "project.deleted", { entityType: "project", entityId: id, summary: `${counts.tasks || 0} tasks` });

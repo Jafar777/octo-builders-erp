@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Link2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
 import BilingualField from "@/components/dashboard/BilingualField";
 import Modal from "@/components/erp/ui/Modal";
 import { Button, ErrorText, Input, PageHeader, Toggle } from "@/components/erp/ui/fields";
 import OrgChart from "@/components/erp/org/OrgChart";
+import DepartmentMerges from "@/components/erp/org/DepartmentMerges";
 import { useConfirm } from "@/components/erp/ui/Feedback";
 import { EmptyState } from "@/components/erp/ui/DataTools";
 
@@ -91,6 +92,10 @@ export default function OrgManager({ initialOrg, canManage }) {
   const tabs = canManage ? [...TYPES, "hierarchy"] : ["hierarchy"];
   const [editing, setEditing] = useState(null); // item, or "new"
   const [error, setError] = useState("");
+  // Live temporary merges (DepartmentMerges reports them), to mark merged departments.
+  const [merges, setMerges] = useState([]);
+  const mergedWith = (id) => merges.filter((m) => m.departments.includes(id)).flatMap((m) => m.departments.filter((d) => d !== id));
+  const deptName = (id) => org?.departments.find((d) => d.id === id)?.name?.[lang] || "";
 
   async function remove(item) {
     if (!(await confirm({ text: t("common.confirmDelete"), kind: "delete" }))) return;
@@ -150,6 +155,7 @@ export default function OrgManager({ initialOrg, canManage }) {
         <OrgChart />
       ) : (
       <>
+      {tab === "departments" && <DepartmentMerges departments={org.departments} onChange={setMerges} />}
       <ErrorText>{error}</ErrorText>
 
       <div className="mt-4 space-y-2">
@@ -166,6 +172,12 @@ export default function OrgManager({ initialOrg, canManage }) {
                 {tab === "branches" && ` · ${item.currency} · ${item.timezone}`}
               </p>
             </div>
+            {tab === "departments" && mergedWith(item.id).length > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-brand-orange/30 bg-brand-orange/10 px-2.5 py-1 text-xs text-brand-orange">
+                <Link2 size={12} />
+                {t("erp.org.merge.mergedWith", { departments: mergedWith(item.id).map(deptName).join(" + ") })}
+              </span>
+            )}
             {item.active === false && (
               <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-white/50">{t("erp.org.inactive")}</span>
             )}

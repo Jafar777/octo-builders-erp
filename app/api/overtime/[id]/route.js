@@ -4,6 +4,7 @@ import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils"
 import { audit } from "@/lib/audit";
 import { notify } from "@/lib/notify";
 import { canDecideOvertime } from "@/lib/overtime";
+import { hrMonthState } from "@/lib/hr";
 import OvertimeRequest from "@/models/OvertimeRequest";
 
 const idStr = (v) => (v ? v.toString() : null);
@@ -24,11 +25,15 @@ export async function PATCH(request, { params }) {
   const body = await readJson(request);
   if (!["approve", "reject"].includes(body.decision)) return fail("invalid_request");
 
+  // The payroll month is closed: its overtime is settled.
+  if ((await hrMonthState(req.date.slice(0, 7))).closed) return fail("month_closed", 409);
+
   const approve = body.decision === "approve";
   let hours = req.hours;
   if (approve && body.hours !== undefined && body.hours !== "") {
     hours = Math.round(Number(body.hours) * 2) / 2;
-    if (!(hours >= 0.5 && hours <= 16)) return fail("invalid_hours");
+    // Fewer hours than asked, never more.
+    if (!(hours >= 0.5 && hours <= req.hours)) return fail("invalid_hours");
   }
   req.status = approve ? "approved" : "rejected";
   req.approvedHours = approve ? hours : 0;
@@ -43,7 +48,7 @@ export async function PATCH(request, { params }) {
     recipients: [idStr(req.user)],
     actor: user,
     params: { actor: user.name || user.email, hours, date: req.date },
-    link: "/dashboard/overtime",
+    link: "/dashboard/orders?type=overtime",
     entityType: "overtime",
     entityId: req._id,
   });

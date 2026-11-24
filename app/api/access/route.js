@@ -18,7 +18,7 @@ export async function GET() {
 
   const [users, departments] = await Promise.all([
     User.find(
-      { $and: [staffQueryFor(actor), { role: { $ne: DEFAULT_ROLE } }] },
+      { $and: [await staffQueryFor(actor), { role: { $ne: DEFAULT_ROLE } }] },
       { ...NAME_FIELDS, avatarUrl: 1, role: 1, department: 1, managedDepartments: 1, status: 1, trainee: 1, access: 1, lastLoginAt: 1 }
     )
       .sort({ name: 1 })

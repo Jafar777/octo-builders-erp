@@ -104,7 +104,7 @@ export default function StaffManager({ initialStaff, roles, org, canManage, canF
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("erp.search")}
+            placeholder={t("erp.searchHint")}
             className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pe-3 ps-9 text-sm outline-none focus:border-white/30"
           />
         </div>
@@ -145,6 +145,7 @@ export default function StaffManager({ initialStaff, roles, org, canManage, canF
               <Fragment key={p.id}>
               <tr
                 id={`staff-${p.id}`}
+                data-entity={`user:${p.id}`}
                 onClick={canFile ? () => toggle(p.id) : undefined}
                 className={`scroll-mt-4 border-t border-white/5 hover:bg-white/[0.03] ${canFile ? "cursor-pointer" : ""} ${expanded ? "bg-white/[0.04]" : ""}`}
               >

@@ -22,6 +22,8 @@ const LeadSchema = new mongoose.Schema(
     owner: { type: ObjectId, ref: "User", default: null },
     nextAction: { date: { type: String, default: "" }, note: { type: String, default: "" } },
     lostReason: { type: String, default: "" },
+    // When someone first got back to them (the office's response time, lib/kpi/office.js).
+    firstContactAt: { type: Date, default: null },
     client: { type: ObjectId, ref: "Client", default: null },
     notes: [
       new mongoose.Schema(

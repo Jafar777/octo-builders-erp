@@ -1,5 +1,6 @@
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { loadOrg } from "@/lib/org";
+import HrTabs from "@/components/erp/hr/HrTabs";
 import OrgManager from "@/components/erp/org/OrgManager";
 import NoAccess from "@/components/erp/NoAccess";
 
@@ -9,5 +10,10 @@ export default async function OrganizationPage() {
   if (!user) return <NoAccess />;
   const canManage = hasPermission(user, "org.manage");
   const org = canManage ? await loadOrg() : null;
-  return <OrgManager initialOrg={org ? JSON.parse(JSON.stringify(org)) : null} canManage={canManage} />;
+  return (
+    <>
+      <HrTabs current="organization" />
+      <OrgManager initialOrg={org ? JSON.parse(JSON.stringify(org)) : null} canManage={canManage} />
+    </>
+  );
 }

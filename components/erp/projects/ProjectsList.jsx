@@ -140,10 +140,7 @@ export default function ProjectsList({ intakes = false }) {
 
       {/* With the Gantt, these filters share its one-line toolbar; otherwise they stand alone. */}
       {inTimeline ? (
-        // keep-dark: the Gantt looks the same in the light theme.
-        <div className="keep-dark">
-          <ProjectsTimeline projects={visible} status={status} leading={filters} />
-        </div>
+        <ProjectsTimeline projects={visible} status={status} leading={filters} />
       ) : (
         <div className="mb-4 flex flex-wrap items-center gap-2">{filters}</div>
       )}
@@ -155,6 +152,7 @@ export default function ProjectsList({ intakes = false }) {
           return (
             <Link
               key={p.id}
+              data-entity={`project:${p.id}`}
               href={`/dashboard/projects/${p.id}`}
               className="group rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition-colors hover:border-white/20 hover:bg-white/[0.06]"
             >

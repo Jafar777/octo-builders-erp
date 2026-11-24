@@ -7,6 +7,7 @@ import { viewerLang } from "@/lib/personName";
 import { serializeStaff, staffQueryFor } from "@/lib/staff";
 import Role from "@/models/Role";
 import User from "@/models/User";
+import HrTabs from "@/components/erp/hr/HrTabs";
 import StaffManager from "@/components/erp/staff/StaffManager";
 import NoAccess from "@/components/erp/NoAccess";
 import { canApproveSkills } from "@/lib/skills";
@@ -15,7 +16,7 @@ export default async function StaffPage() {
   const user = await requirePermission("users.view");
   if (!user) return <NoAccess />;
 
-  const query = staffQueryFor(user);
+  const query = await staffQueryFor(user);
 
   const [staff, roles, org, settings, lang] = await Promise.all([
     User.find(query).sort({ createdAt: -1 }).lean(),
@@ -26,17 +27,20 @@ export default async function StaffPage() {
   ]);
 
   return (
-    <StaffManager
-      initialStaff={staff.map((u) => serializeStaff(u, lang))}
-      roles={roles.map((r) => serializeRole(r))}
-      org={JSON.parse(JSON.stringify(org))}
-      canManage={hasPermission(user, "users.manage")}
-      /* The employee file (HR data, salary, documents) is for HR and the general manager. */
-      canFile={user.isStaff && hasPermission(user, "attendance.manage")}
-      month={todayIn(settings.hr.timezone).slice(0, 7)}
-      currencies={settings.currencies}
-      meId={user.id}
-      canApproveSkills={canApproveSkills(user)}
-    />
+    <>
+      <HrTabs current="staff" />
+      <StaffManager
+        initialStaff={staff.map((u) => serializeStaff(u, lang))}
+        roles={roles.map((r) => serializeRole(r))}
+        org={JSON.parse(JSON.stringify(org))}
+        canManage={hasPermission(user, "users.manage")}
+        /* The employee file (HR data, salary, documents) is for HR and the general manager. */
+        canFile={user.isStaff && hasPermission(user, "attendance.manage")}
+        month={todayIn(settings.hr.timezone).slice(0, 7)}
+        currencies={settings.currencies}
+        meId={user.id}
+        canApproveSkills={canApproveSkills(user)}
+      />
+    </>
   );
 }

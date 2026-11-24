@@ -2,14 +2,13 @@ import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, readJson } from "@/lib/apiUtils";
 import { MONTH_RE, todayIn } from "@/lib/hr";
-import { departmentManagers } from "@/lib/leave";
+import { holding, personManagers } from "@/lib/reporting";
 import { notify } from "@/lib/notify";
-import { canAskOvertime, canDecideAny, isOvertimeAdmin, overtimeScope, serializeOvertime } from "@/lib/overtime";
+import { canAskOvertime, canDecideAny, isOvertimeAdmin, managerOvertimeFilter, overtimeScope, serializeOvertime } from "@/lib/overtime";
 import { viewerLang } from "@/lib/personName";
 import { getSettings } from "@/lib/settings";
 import OvertimeRequest from "@/models/OvertimeRequest";
 import User from "@/models/User";
-import { inDepartments } from "@/lib/scope";
 
 const idStr = (v) => (v ? v.toString() : null);
 const PERSON = { name: 1, nameAr: 1, email: 1, avatarUrl: 1 };
@@ -30,7 +29,7 @@ export async function GET(request) {
   let query;
   if (tab === "queue") {
     if (!canDecideAny(user)) return forbidden();
-    query = { status: "pending", user: { $ne: user.id }, ...(isOvertimeAdmin(user) ? {} : inDepartments(user)) };
+    query = { status: "pending", user: { $ne: user.id }, ...(isOvertimeAdmin(user) ? {} : managerOvertimeFilter(user)) };
   } else if (tab === "history") {
     query = { ...overtimeScope(user), date: { $gte: `${month}-01`, $lte: `${month}-31` }, status: { $in: ["approved", "rejected"] } };
   } else {
@@ -85,13 +84,16 @@ export async function POST(request) {
 
   const existing = await OvertimeRequest.findOne({ user: user.id, date: today });
   if (existing && existing.status !== "pending") return fail("overtime_decided", 409);
+  // Their manager decides (the one the chart moved them to, else their department's;
+  // the CEO when there's none).
+  // (Only those who may approve overtime: anyone else couldn't act on it.)
+  const managers = await holding(await personManagers({ id: user.id, department: user.department }), "overtime.approve");
   const saved = existing
     ? Object.assign(existing, { hours, reason })
-    : new OvertimeRequest({ user: user.id, department: user.department || null, date: today, hours, reason });
+    : new OvertimeRequest({ user: user.id, department: user.department || null, managers, routed: true, date: today, hours, reason });
   await saved.save();
 
-  // Their department manager decides (the CEO when the department has none).
-  let recipients = await departmentManagers(user.department, user.id);
+  let recipients = managers;
   if (!recipients.length) recipients = (await User.find({ role: "ceo", status: "active" }, { _id: 1 }).lean()).map((u) => idStr(u._id));
   if (!existing) {
     await notify({
@@ -99,7 +101,7 @@ export async function POST(request) {
       recipients,
       actor: user,
       params: { actor: user.name || user.email, hours },
-      link: "/dashboard/overtime?tab=queue",
+      link: "/dashboard/orders?type=waiting",
       entityType: "overtime",
       entityId: saved._id,
     });

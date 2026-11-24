@@ -78,6 +78,40 @@ ok("the head gets a hybrid score", head.hybrid && head.hybrid.share === 60 && he
 ok("their review speed comes from their reviews (4h → 100)", head.hybrid.metrics.review_speed === 100);
 ok("employees keep their system score", hybrid.results.find((r) => r.userId === "e").score === hybrid.results.find((r) => r.userId === "e").systemScore);
 
+// Engine: the CEO moved people in the chart (User.reportsTo, lib/reporting.js).
+const moved = computeKpi({
+  users: [
+    { id: "a1", department: "A" },
+    { id: "a2", department: "A", chartManager: "hB" }, // moved from A to B's head
+    { id: "b1", department: "B" },
+    { id: "hA", department: "A" },
+    { id: "hB", department: "B" },
+  ],
+  attendance: { a1: { workedHours: 100 }, a2: { workedHours: 100 }, b1: { workedHours: 100 }, hA: { workedHours: 100 }, hB: { workedHours: 100 } },
+  tasks: [],
+  config: DEFAULT_KPI,
+  ratingTags: [],
+  managers: { hA: { share: 60 }, hB: { share: 60 } },
+});
+const teamSize = (id) => moved.results.find((r) => r.userId === id).hybrid.teamSize;
+ok("a person moved to another manager leaves their department head's team", teamSize("hA") === 1, String(teamSize("hA")));
+ok("...and joins their new manager's team", teamSize("hB") === 2, String(teamSize("hB")));
+
+// Engine: the managers the caller worked out (a head of two departments).
+const twoDepts = computeKpi({
+  users: [
+    { id: "a1", department: "A", managers: ["hA"] },
+    { id: "b1", department: "B", managers: ["hA"] }, // B is headed by hA too
+    { id: "hA", department: "A", managers: [] },
+  ],
+  attendance: { a1: { workedHours: 100 }, b1: { workedHours: 100 }, hA: { workedHours: 100 } },
+  tasks: [],
+  config: DEFAULT_KPI,
+  ratingTags: [],
+  managers: { hA: { share: 60 } },
+});
+ok("a head's team covers every department they head", twoDepts.results.find((r) => r.userId === "hA").hybrid.teamSize === 2);
+
 // Project schedule against Baseline 1 (planned 1 Oct → 31 Oct, 30 days).
 const bl = { start: d(1), end: d(31) };
 ok("on the baseline → 100", scheduleScore(bl, d(31)) === 100);

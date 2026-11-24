@@ -116,8 +116,9 @@ export default function LeaveList({ leaves, approver = false, onChanged, empty }
   const ask = useAsk();
   const toast = useToast();
   const [error, setError] = useState("");
-  // Managers: tick several requests and approve them in one go.
-  const decidable = leaves.filter((l) => l.canDecide);
+  // Managers: tick several requests and approve them in one go (not ones still waiting
+  // for their manager: skipping that step is done one by one).
+  const decidable = leaves.filter((l) => l.canDecide && !l.overrule);
   const tools = useTableTools(decidable);
   const bulk = approver && decidable.length > 1;
   async function approveMany(rows) {
@@ -134,7 +135,12 @@ export default function LeaveList({ leaves, approver = false, onChanged, empty }
 
   async function decide(id, decision) {
     setError("");
-    const note = decision === "reject" ? await ask({ text: t("erp.hr.rejectReason"), danger: true }) : "";
+    const note =
+      decision === "reject"
+        ? await ask({ text: t("erp.hr.rejectReason"), danger: true })
+        : decision === "revoke"
+          ? await ask({ text: t("erp.leaveFlow.revokeAsk"), danger: true, confirmLabel: t("erp.leaveFlow.revoke") })
+          : "";
     if (note === null) return;
     try {
       await api(`/api/leave/${id}`, { method: "PATCH", body: { decision, note } });
@@ -157,8 +163,8 @@ export default function LeaveList({ leaves, approver = false, onChanged, empty }
         </TableToolbar>
       )}
       {leaves.map((l) => (
-        <div key={l.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
-          {bulk && (l.canDecide ? <Checkbox checked={tools.selected.has(l.id)} onChange={() => tools.toggle(l.id)} label={l.userName} /> : <span className="w-5" />)}
+        <div key={l.id} data-entity={`leave:${l.id}`} className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
+          {bulk && (l.canDecide && !l.overrule ? <Checkbox checked={tools.selected.has(l.id)} onChange={() => tools.toggle(l.id)} label={l.userName} /> : <span className="w-5" />)}
           {approver && <span className="font-medium">{l.userName}</span>}
           <span>{t(`erp.hr.leave.${l.type}`)}</span>
           <span className="text-white/60" dir="ltr">
@@ -172,11 +178,16 @@ export default function LeaveList({ leaves, approver = false, onChanged, empty }
           {l.canDecide && (
             <>
               <Button onClick={() => decide(l.id, "approve")}>
-                {t(l.stage === "manager" ? "erp.leaveFlow.approveForward" : "erp.tasks.approve")}
+                {t(l.stage === "manager" && !l.overrule ? "erp.leaveFlow.approveForward" : "erp.tasks.approve")}
               </Button>
               <Button variant="danger" onClick={() => decide(l.id, "reject")}>{t("erp.tasks.reject")}</Button>
+              {l.overrule && <span className="basis-full text-xs text-amber-300/80">{t("erp.leaveFlow.overruleHint")}</span>}
             </>
           )}
+          {l.canRevoke && (
+            <Button variant="ghost" onClick={() => decide(l.id, "revoke")}>{t("erp.leaveFlow.revoke")}</Button>
+          )}
+          {l.revoked && <span className="basis-full text-xs text-red-300/80">{t("erp.leaveFlow.revoked")}{l.revoked.note ? ` · ${l.revoked.note}` : ""}</span>}
           {l.status === "pending" && !approver && (
             <Button variant="ghost" onClick={() => decide(l.id, "cancel")}>{t("common.cancel")}</Button>
           )}

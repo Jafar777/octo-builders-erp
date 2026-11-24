@@ -17,6 +17,9 @@ const RoleSchema = new mongoose.Schema(
     crossDepartment: { type: Boolean, default: false },
     // Its holders must sign in with an authenticator app as well as the email code.
     requireMfa: { type: Boolean, default: false },
+    // How its holders' KPI is measured: "tasks" (engineers: Gantt work) or "office" (the
+    // secretary: follow-ups, response time, documentation — lib/kpi/office.js).
+    kpiProfile: { type: String, enum: ["tasks", "office"], default: "tasks" },
   },
   { timestamps: true }
 );

@@ -37,6 +37,27 @@ const TaskSchema = new mongoose.Schema(
     parentTask: { type: ObjectId, ref: "Task", default: null }, // sub-task of
     // Predecessors: this task can't start until all of them are approved / done.
     dependsOn: [{ type: ObjectId, ref: "Task" }],
+    // A client change (lib/clientChange.js): work already going or handed in that can't go
+    // on (resume, hand in, review) until these new revisions are handed in...
+    // (No default on these: filling them in on older tasks made every save a list change,
+    // which Mongoose refuses when something else saved the task meanwhile.)
+    waitsForChange: { type: [{ type: ObjectId, ref: "Task" }], default: undefined },
+    // ...and revisions the CEO said don't affect this task (its stage doesn't wait for them).
+    changeExempt: { type: [{ type: ObjectId, ref: "Task" }], default: undefined },
+    // The hybrid way of working (lib/hybrid.js). "self" = the employee started it; "" = planned.
+    origin: { type: String, enum: ["", "self"], default: "" },
+    startReason: { type: String, default: "" },
+    pushed: { type: [Number], default: undefined }, // numbers of the planned tasks it pushed later
+    // Fixed in place by the CEO: the schedule works around it.
+    fixed: { type: Boolean, default: false },
+    // Allowed to start although its stage waits for earlier ones.
+    stageOk: { type: Boolean, default: false },
+    // The delivery date it's judged by: unlike dueAt it only moves for reasons outside the
+    // employee's control (promiseMoves in lib/hybrid.js).
+    promisedAt: { type: Date, default: null },
+    // The clock was stopped at the end of the working day; the last day it slid by itself.
+    autoPausedAt: { type: Date, default: null },
+    slidOn: { type: String, default: "" },
     // External review: once this task is handed in, another office checks it. For
     // `hours` (working hours, set by the CEO) the tasks waiting for it can't start, but
     // nobody's time is held: the employees work on other projects meanwhile. Marking
@@ -187,11 +208,20 @@ const TaskSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// The first planned date is the promise (imported work has none).
+TaskSchema.pre("save", function () {
+  if (!this.promisedAt && this.dueAt && !this.legacy?.source) this.promisedAt = this.dueAt;
+});
+
 TaskSchema.index({ assignee: 1, status: 1 });
+TaskSchema.index({ origin: 1, createdAt: -1 });
 TaskSchema.index({ project: 1, item: 1, stage: 1, revision: -1 });
 TaskSchema.index({ department: 1, status: 1 });
 TaskSchema.index({ parentTask: 1 });
 TaskSchema.index({ dependsOn: 1 });
+TaskSchema.index({ waitsForChange: 1 });
+TaskSchema.index({ changeExempt: 1 });
+TaskSchema.index({ previousTask: 1 });
 TaskSchema.index({ "recurrence.nextAt": 1 });
 TaskSchema.index({ status: 1, reviewLevel: 1 });
 TaskSchema.index({ "reviews.by": 1 });

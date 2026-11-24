@@ -11,6 +11,7 @@ import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 import { Button, Card, ErrorText, Input, PageHeader } from "@/components/erp/ui/fields";
 import { SkeletonList } from "@/components/erp/ui/Loading";
 import { MonthPicker } from "@/components/erp/hr/hrUi";
+import { ordersChanged } from "@/components/erp/orders/ordersChanged";
 import { useConfirm, useToast } from "@/components/erp/ui/Feedback";
 import { Checkbox, EmptyState, TableToolbar, useTableTools } from "@/components/erp/ui/DataTools";
 
@@ -23,11 +24,12 @@ const STATUS_STYLE = {
 // Overtime requests (lib/overtime.js): an employee asks for today; their department
 // manager or the CEO approves (the hours count) or rejects (nothing counts). History:
 // the month's decided requests and each person's approved total.
-export default function OvertimeRequests() {
+// `embedded`: without its own page title. `only`: just that list (the Requests page's queue).
+export default function OvertimeRequests({ embedded = false, only = "" }) {
   const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState(["mine", "queue", "unrequested", "history"].includes(searchParams.get("tab")) ? searchParams.get("tab") : "mine");
+  const [tab, setTab] = useState(only || (["mine", "queue", "unrequested", "history"].includes(searchParams.get("tab")) ? searchParams.get("tab") : "mine"));
   const [month, setMonth] = useState("");
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -49,15 +51,15 @@ export default function OvertimeRequests() {
     setData(null);
     setError("");
     setTab(next);
-    router.replace(`/dashboard/overtime?tab=${next}`, { scroll: false });
+    router.replace(`/dashboard/orders?type=overtime&tab=${next}`, { scroll: false });
   };
   // The approvers' tab only for department managers and the CEO (the server says).
   const tabs = ["mine", ...(data?.canDecide || ["queue", "unrequested"].includes(tab) ? ["queue", "unrequested"] : []), "history"];
 
   return (
     <div className="max-w-5xl">
-      <PageHeader title={t("erp.overtime.title")} subtitle={t("erp.overtime.subtitle")} />
-      <div className="mb-5 flex flex-wrap gap-1 rounded-xl border border-white/10 p-1">
+      {!embedded && !only && <PageHeader title={t("erp.overtime.title")} subtitle={t("erp.overtime.subtitle")} />}
+      <div className={`mb-5 flex-wrap gap-1 rounded-xl border border-white/10 p-1 ${only ? "hidden" : "flex"}`}>
         {tabs.map((x) => (
           <button key={x} type="button" onClick={() => pick(x)} className={`rounded-lg px-4 py-2 text-sm ${tab === x ? "bg-brand-orange text-white" : "text-white/60 hover:text-white"}`}>
             {t(`erp.overtime.tab.${x}`)}
@@ -67,7 +69,7 @@ export default function OvertimeRequests() {
       <ErrorText>{error}</ErrorText>
       {!data && !error && <SkeletonList rows={4} />}
       {data && tab === "mine" && <Mine data={data} onChanged={load} />}
-      {data && tab === "queue" && <Queue data={data} onChanged={load} />}
+      {data && tab === "queue" && <Queue data={data} onChanged={() => { load(); ordersChanged(); }} />}
       {data && tab === "unrequested" && <Unrequested />}
       {data && tab === "history" && <History data={data} month={month} onMonth={setMonth} />}
     </div>
@@ -153,6 +155,7 @@ function StatusChip({ status }) {
 function RequestRow({ r, showUser, children }) {
   const { t, lang } = useLanguage();
   return (
+    <div data-entity={`overtime:${r.id}`} className="rounded-2xl">
     <Card className="space-y-2 !p-4">
       <div className="flex flex-wrap items-center gap-3">
         {showUser && (
@@ -180,6 +183,7 @@ function RequestRow({ r, showUser, children }) {
       )}
       {children}
     </Card>
+    </div>
   );
 }
 
@@ -340,7 +344,7 @@ function Decide({ r, onDone }) {
   return (
     <div className="space-y-2 border-t border-white/10 pt-3">
       <div className="grid gap-2 sm:grid-cols-[140px_1fr]">
-        <Input type="number" min="0.5" max="16" step="0.5" label={t("erp.overtime.approveHours")} value={hours} onChange={setHours} dir="ltr" />
+        <Input type="number" min="0.5" max={r.hours} step="0.5" label={t("erp.overtime.approveHours")} value={hours} onChange={setHours} dir="ltr" />
         <Input label={t("erp.overtime.note")} value={note} onChange={setNote} />
       </div>
       <ErrorText>{error}</ErrorText>

@@ -1,4 +1,4 @@
-import { cleanIntake, cleanIntakeFinance, intakeNotes, PROJECT_PRIORITY } from "../lib/intakeRules.js";
+import { cleanIntake, cleanIntakeFinance, docKeysFor, intakeNotes, PROJECT_PRIORITY, requirementKeysFor, scopeKeysFor } from "../lib/intakeRules.js";
 
 let fails = 0;
 const ok = (name, c, x = "") => { console.log(`${c ? "PASS" : "FAIL"} ${name} ${c ? "" : x}`); if (!c) fails++; };
@@ -43,6 +43,18 @@ ok("valid money side", !f.error && f.value.contractValue === 5000 && f.value.rat
 const notes = intakeNotes({ ...c.value, finance: { contractValue: 99999 } }, (group, key) => `${group}.${key}`);
 ok("notes carry the requirements and scope", notes.includes("req.style: Modern") && notes.includes("scope.render_3d"));
 ok("notes never carry money", !notes.includes("99999"));
+
+// The Word form's two versions: the questions follow the project type.
+const dev = requirementKeysFor(["developers"]);
+ok("developers ask per-floor needs, not spaces", dev.includes("perFloor") && dev.includes("conditions") && !dev.includes("spaces"));
+const inter = requirementKeysFor(["interior"]);
+ok("interior asks spaces, references, floors & ceilings", ["spaces", "references", "floorsCeilings"].every((k) => inter.includes(k)) && !inter.includes("perFloor"));
+ok("no type yet: the developers form", requirementKeysFor([]).join() === dev.join());
+ok("both types: both sets", ["perFloor", "spaces"].every((k) => requirementKeysFor(["developers", "interior"]).includes(k)));
+ok("an older answer stays visible", requirementKeysFor(["interior"], { priorities: "speed" }).includes("priorities"));
+ok("interior documents leave out the survey", !docKeysFor(["interior"]).includes("survey") && docKeysFor(["interior"], ["survey"]).includes("survey"));
+ok("scope: the form list, plus older ticks", scopeKeysFor([]).includes("video") && !scopeKeysFor([]).includes("render_3d") && scopeKeysFor(["render_3d"]).includes("render_3d"));
+ok("new answers are kept", cleanIntake({ client: { name: "A" }, project: { name: "B" }, requirements: { spaces: "4", perFloor: "x" }, scope: ["all", "video"] }).value.requirements.spaces === "4");
 
 if (fails) {
   console.log(`${fails} failed`);

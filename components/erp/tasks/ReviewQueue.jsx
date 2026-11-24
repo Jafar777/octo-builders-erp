@@ -118,7 +118,7 @@ function Queue({ meId, customer, openId, onOpen, onTabs }) {
           customer ? (
             <CustomerTaskRow key={task.id} task={task} onOpen={() => onOpen(task.id)} />
           ) : (
-            <div key={task.id} className="relative">
+            <div key={task.id} data-entity={`task:${task.id}`} className="relative">
               <TaskRow task={task} lookups={lookups} now={0} onOpen={onOpen} showAssignee />
               <LevelBadge level={task.reviewLevel} className="absolute -top-2 end-4 border border-brand-navy" />
             </div>

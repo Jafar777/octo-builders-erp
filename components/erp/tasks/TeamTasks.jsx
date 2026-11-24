@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { AlertTriangle, ChevronDown, Clock, FolderKanban, Search, Timer } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAuth } from "@/context/AuthContext";
 import { COMPANY_TASKS_CHANNEL, useOnlineUsers, usePollingFallback, useRealtimeEvent } from "@/context/RealtimeContext";
 import { api, peekApi } from "@/lib/clientApi";
 import { formatDateTime } from "@/lib/formatTime";
@@ -129,6 +130,9 @@ export default function TeamTasks({ meId }) {
   const [department, setDepartment] = useState("");
   const [showFree, setShowFree] = useState(true);
   const [openId, setOpenId] = useState(searchParams.get("task"));
+  // ?late=1 (the overview's "late tasks"): only unfinished work past its due date.
+  const [lateOnly, setLateOnly] = useState(searchParams.get("late") === "1");
+  const { user } = useAuth();
   // "By project": projects folded by the viewer (click the heading).
   const [folded, setFolded] = useState(() => new Set());
   const toggleProject = (key) =>
@@ -161,6 +165,15 @@ export default function TeamTasks({ meId }) {
 
   const now = useNow(tasks.some((x) => x.status === "in_progress"));
 
+  // Late = not finished and past its due date, in the departments the viewer runs (the
+  // whole company for company-wide roles) — the same count as the overview.
+  const myDepartments = useMemo(() => (user?.scope === "all" ? null : user?.departments || []), [user]);
+  const isLateForMe = useCallback(
+    (x) => !["submitted", "approved", "done", "cancelled"].includes(x.status) && x.dueAt && new Date(x.dueAt).getTime() < now && (!myDepartments || myDepartments.includes(x.department)),
+    [myDepartments, now]
+  );
+  const lateCount = useMemo(() => tasks.filter(isLateForMe).length, [tasks, isLateForMe]);
+
   const view = useMemo(() => {
     const q = query.trim().toLowerCase().replace(/^#/, "");
     const taskText = (x) =>
@@ -182,6 +195,10 @@ export default function TeamTasks({ meId }) {
     for (const person of people.values()) {
       if (department && person.department !== department) continue;
       let list = (tasksOf.get(person.id) || []).slice().sort(byStatus);
+      if (lateOnly) {
+        list = list.filter(isLateForMe);
+        if (!list.length) continue;
+      }
       // A name match shows all of that person's work; otherwise show only matching tasks.
       if (q && !person.name.toLowerCase().includes(q)) {
         list = list.filter((x) => taskText(x).includes(q));
@@ -213,11 +230,22 @@ export default function TeamTasks({ meId }) {
         free: cards.filter((c) => !c.tasks.length).length,
       },
     };
-  }, [tasks, lookups, query, department, showFree, lang]);
+  }, [tasks, lookups, query, department, showFree, lang, lateOnly, isLateForMe]);
 
+  // Keeps ?late=1 and ?task= in the address, so a reload or a shared link shows the same.
+  const urlFor = (taskId, late) => {
+    const p = new URLSearchParams();
+    if (late) p.set("late", "1");
+    if (taskId) p.set("task", taskId);
+    return `/dashboard/team-tasks${p.size ? `?${p}` : ""}`;
+  };
   function open(id) {
     setOpenId(id);
-    router.replace(id ? `/dashboard/team-tasks?task=${id}` : "/dashboard/team-tasks", { scroll: false });
+    router.replace(urlFor(id, lateOnly), { scroll: false });
+  }
+  function toggleLate() {
+    setLateOnly(!lateOnly);
+    router.replace(urlFor(openId, !lateOnly), { scroll: false });
   }
 
   return (
@@ -231,7 +259,24 @@ export default function TeamTasks({ meId }) {
         <span className="rounded-full bg-brand-orange/15 px-3 py-1 text-brand-orange">
           {t("erp.team.waitingReview")}: {view.counts.review}
         </span>
-        {mode === "person" && showFree && (
+        {/* Late work: a filter, red while there is any. */}
+        <button
+          type="button"
+          onClick={toggleLate}
+          aria-pressed={lateOnly}
+          title={t("erp.team.lateHint")}
+          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 transition ${
+            lateOnly
+              ? "border-red-400/60 bg-red-500/25 text-red-100"
+              : lateCount
+                ? "border-red-500/30 bg-red-500/10 text-red-300 hover:bg-red-500/20"
+                : "border-white/10 text-white/50 hover:text-white"
+          }`}
+        >
+          <AlertTriangle size={12} />
+          {t("erp.team.lateOnly")}: {lateCount}
+        </button>
+        {mode === "person" && showFree && !lateOnly && (
           <span className="rounded-full bg-white/10 px-3 py-1 text-white/60">
             {t("erp.team.free")}: {view.counts.free}
           </span>
@@ -270,7 +315,7 @@ export default function TeamTasks({ meId }) {
             </button>
           ))}
         </div>
-        {mode === "person" && (
+        {mode === "person" && !lateOnly && (
           <label className="flex items-center gap-2 py-2 text-sm text-white/60">
             <input type="checkbox" checked={showFree} onChange={(e) => setShowFree(e.target.checked)} className="accent-brand-orange" />
             {t("erp.team.showFree")}
@@ -340,7 +385,7 @@ export default function TeamTasks({ meId }) {
           </div>
         )}
         {(mode === "person" ? view.cards : view.projectGroups).length === 0 && (
-          <p className="py-10 text-center text-white/60">{t("erp.team.nothing")}</p>
+          <p className="py-10 text-center text-white/60">{t(lateOnly && !lateCount ? "erp.team.lateNone" : "erp.team.nothing")}</p>
         )}
       </div>
 

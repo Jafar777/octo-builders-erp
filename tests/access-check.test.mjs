@@ -1,0 +1,17 @@
+import { dropUnused, giveMissing, roleIssues } from "../lib/accessCheck.js";
+import { PERMISSION_KEYS, PAGE_KEYS } from "../lib/permissions.js";
+let fails = 0;
+const ok = (n, c, x = "") => { console.log(`${c ? "PASS" : "FAIL"} ${n}`, c ? "" : x); if (!c) fails++; };
+const R = (o) => ({ key: "r", scope: "all", limited: false, permissions: [], pages: [], ...o });
+ok("no page list hides nothing", roleIssues(R({ permissions: ["sales.manage"] })).length === 0);
+const sales = roleIssues(R({ permissions: ["sales.manage"], pages: ["projects"] }));
+ok("hidden page found", sales.length === 1 && sales[0].page === "finance");
+ok("showing it fixes it", roleIssues(giveMissing(R({ permissions: ["sales.manage"], pages: ["projects"] }), sales[0])).length === 0);
+ok("removing it fixes it", roleIssues(dropUnused(R({ permissions: ["sales.manage"], pages: ["projects"] }), sales[0])).length === 0);
+ok("missing permission found", roleIssues(R({ permissions: ["finance.manage"] }))[0]?.needs === "finance.view");
+ok("managers need appraisals", roleIssues(R({ scope: "department", permissions: ["tasks.review"], pages: ["reviews"] }))[0]?.page === "appraisals");
+ok("fixed roles are skipped", !roleIssues(R({ key: "ceo", pages: ["x"], permissions: ["sales.manage"] })).length && !roleIssues(R({ limited: true, permissions: ["sales.manage"], pages: ["x"] })).length);
+const all = roleIssues(R({ permissions: PERMISSION_KEYS, pages: ["profile"] }));
+ok("every page named exists", all.filter((x) => x.type === "page").every((x) => PAGE_KEYS.includes(x.page)));
+ok("removing every permission in turn never loops", (() => { let r = R({ permissions: PERMISSION_KEYS, pages: ["profile"] }); for (let i = 0; i < 99; i++) { const x = roleIssues(r)[0]; if (!x) return true; r = dropUnused(r, x); } return false; })());
+process.exit(fails ? 1 : 0);

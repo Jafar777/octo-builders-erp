@@ -4,6 +4,7 @@ import { useState } from "react";
 import { GripVertical, Plus, Trash2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
+import HybridSettings from "@/components/erp/settings/HybridSettings";
 import BilingualField from "@/components/dashboard/BilingualField";
 import SaveBar from "@/components/dashboard/SaveBar";
 import { Button, Card, Input, PageHeader, Select } from "@/components/erp/ui/fields";
@@ -486,6 +487,7 @@ export default function SettingsManager({ initial }) {
         <WorkHoursSettings initial={initial.workHours} calendar={calendar} />
         <CurrencySettings initial={initial.currencies} />
         <TasksSettings initial={initial.tasks} />
+        <HybridSettings taskTypes={initial.tasks.taskTypes} />
       </div>
     </div>
   );

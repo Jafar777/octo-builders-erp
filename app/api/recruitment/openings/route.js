@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/currentUser";
+import { getCurrentUser, hasPermission, requirePermission } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
 import { peopleNames } from "@/lib/sales";
@@ -9,6 +9,17 @@ const idStr = (v) => (v ? v.toString() : null);
 
 // Openings with their candidates (the Recruitment page).
 export async function GET() {
+  const me = await getCurrentUser();
+  // Helping with hiring (the executive office): the open positions and their candidates'
+  // contact and interview dates — no ratings, notes or hiring.
+  if (me?.isStaff && !me.limited && !hasPermission(me, "recruitment.manage") && hasPermission(me, "recruitment.assist")) {
+    const [openings, candidates] = await Promise.all([JobOpening.find({ status: "open" }).sort({ createdAt: -1 }).lean(), Candidate.find({ stage: { $nin: ["hired", "rejected"] } }).sort({ updatedAt: -1 }).limit(500).lean()]);
+    return NextResponse.json({
+      assist: true,
+      openings: openings.map((o) => ({ id: idStr(o._id), title: o.title, status: o.status })),
+      candidates: candidates.map((c) => ({ id: idStr(c._id), opening: idStr(c.opening), name: c.name, email: c.email, phone: c.phone, cvUrl: c.cvUrl, stage: c.stage, interviews: (c.interviews || []).map((i) => ({ date: i.date })), createdAt: c.createdAt })),
+    });
+  }
   const user = await requirePermission("recruitment.manage");
   if (!user) return forbidden();
   const [openings, candidates] = await Promise.all([JobOpening.find().sort({ createdAt: -1 }).lean(), Candidate.find().sort({ updatedAt: -1 }).limit(2000).lean()]);

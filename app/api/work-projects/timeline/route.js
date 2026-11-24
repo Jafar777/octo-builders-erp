@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { reachedIds } from "@/lib/reporting";
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { projectEvm } from "@/lib/evm";
 import { hourlyRates } from "@/lib/costRates";
@@ -20,7 +21,7 @@ const STATUSES = ["active", "on_hold", "finished", "archived"];
 // page for those), and with ~2,000 tasks they made the reply several megabytes. Left
 // out of the query, and the serialized fields they feed are dropped before sending.
 const NOT_ON_CHART = { description: 0, deliveryLink: 0, deliveryFiles: 0, attachments: 0, headNotes: 0, employeeNotes: 0, rejectCause: 0, ratings: 0, reviews: 0 };
-const SERIALIZED_NOT_ON_CHART = ["description", "deliveryLink", "deliveryFiles", "attachments", "headNotes", "employeeNotes", "rejectCause", "ratings", "reviews", "review", "createdBy", "reviewedBy"];
+const SERIALIZED_NOT_ON_CHART = ["description", "deliveryLink", "deliveryFiles", "attachments", "headNotes", "employeeNotes", "rejectCause", "ratings", "stars", "reviews", "review", "createdBy", "reviewedBy"];
 const forChart = (list) =>
   list.map((t) => {
     const out = { ...t };
@@ -50,9 +51,10 @@ export async function GET(request) {
   const departmentOnly = isGanttDeptManager(user);
   const taskQuery = { project: { $in: projects.map((p) => p._id) } };
   if (departmentOnly) {
-    const team = user.department ? await User.find(inDepartments(user), { _id: 1 }).lean() : [];
+    // Their people (lib/reporting.js: their departments', and anyone moved to them in the chart)...
+    const team = await reachedIds(user);
     // ...and their departments' work given to employees of other departments.
-    taskQuery.$or = [{ assignee: { $in: [user.id, ...team.map((u) => u._id.toString())] } }, inDepartments(user)];
+    taskQuery.$or = [{ assignee: { $in: team } }, inDepartments(user)];
   }
   // Cancelled tasks stay on the chart, greyed out (like inactive tasks in MS Project).
   const tasks = await Task.find(taskQuery, NOT_ON_CHART)

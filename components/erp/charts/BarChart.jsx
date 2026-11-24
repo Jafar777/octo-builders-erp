@@ -132,8 +132,8 @@ export function ScoreRing({ score, target = 80, size = 120 }) {
   const pct = Math.max(0, Math.min(100, score || 0)) / 100;
   const t = (target / 100) * 2 * Math.PI - Math.PI / 2;
   return (
-    <svg width={size} height={size} viewBox="0 0 120 120" role="img" aria-label={`${score} / 100`}>
-      <circle cx="60" cy="60" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="10" />
+    <svg width={size} height={size} viewBox="0 0 120 120" role="img" aria-label={`${score} / 100`} className="shrink-0 text-white">
+      <circle cx="60" cy="60" r={r} fill="none" stroke="currentColor" strokeOpacity={0.1} strokeWidth="10" />
       <circle
         cx="60"
         cy="60"
@@ -146,11 +146,11 @@ export function ScoreRing({ score, target = 80, size = 120 }) {
         transform="rotate(-90 60 60)"
         style={{ transition: "stroke-dasharray 0.8s ease" }}
       />
-      <line x1={60 + 38 * Math.cos(t)} y1={60 + 38 * Math.sin(t)} x2={60 + 55 * Math.cos(t)} y2={60 + 55 * Math.sin(t)} stroke="#ffffff" strokeWidth="2" opacity="0.6" />
-      <text x="60" y="58" textAnchor="middle" fill="#ffffff" fontSize="26" fontWeight="700">
+      <line x1={60 + 38 * Math.cos(t)} y1={60 + 38 * Math.sin(t)} x2={60 + 55 * Math.cos(t)} y2={60 + 55 * Math.sin(t)} stroke="currentColor" strokeWidth="2" opacity="0.6" />
+      <text x="60" y="58" textAnchor="middle" fill="currentColor" fontSize="26" fontWeight="700">
         {score ?? "—"}
       </text>
-      <text x="60" y="76" textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize="11">
+      <text x="60" y="76" textAnchor="middle" fill="currentColor" fillOpacity={0.6} fontSize="11">
         / 100
       </text>
     </svg>

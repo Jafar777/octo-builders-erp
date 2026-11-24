@@ -146,7 +146,7 @@ export default function ProjectsSummary() {
         <Panel title={t("erp.summary.overdueTasks")} icon={AlertTriangle}>
           <div className="space-y-2.5">
             {data.overdue.map((task) => (
-              <Link key={task.id} href={`/dashboard/tasks?task=${task.id}`} className="-m-2 flex items-start gap-3 rounded-xl p-2 hover:bg-white/5">
+              <Link key={task.id} data-entity={`task:${task.id}`} href={`/dashboard/tasks?task=${task.id}`} className="-m-2 flex items-start gap-3 rounded-xl p-2 hover:bg-white/5">
                 <Avatar name={task.assignee?.name} src={task.assignee?.avatarUrl} size={28} />
                 <span className="min-w-0 flex-1">
                   <TaskName task={task} compact number />

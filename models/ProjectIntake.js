@@ -40,6 +40,10 @@ const ProjectIntakeSchema = new mongoose.Schema(
       deliverables: text,
       colorsMaterials: text,
       floors: text,
+      perFloor: text, // developers: what each floor needs
+      spaces: text, // interior: how many spaces to design
+      references: text, // interior: references for the spaces
+      floorsCeilings: text, // interior: floor and ceiling types
       currentIssues: text,
       conditions: text, // municipality / regulatory / technical
       priorities: text, // speed / quality / budget / luxury

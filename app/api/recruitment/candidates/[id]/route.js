@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/currentUser";
+import { getCurrentUser, hasPermission, requirePermission } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
 import { notify } from "@/lib/notify";
@@ -15,13 +15,21 @@ const dateOk = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || "");
 // Fields, { stage }, { note }, { interview: { date, with: [ids], rating, note } },
 // { hire: { startDate, role, onboarding: [{ title, assignee }] } }
 export async function PATCH(request, { params }) {
-  const user = await requirePermission("recruitment.manage");
-  if (!user) return forbidden();
+  const user = await getCurrentUser();
+  if (!user?.isStaff || user.limited) return forbidden();
+  const full = hasPermission(user, "recruitment.manage");
+  if (!full && !hasPermission(user, "recruitment.assist")) return forbidden();
   const { id } = await params;
   if (!isObjectId(id)) return notFound();
   const c = await Candidate.findById(id);
   if (!c) return notFound();
   const b = await readJson(request);
+  // Helping with hiring: contact details, the CV link and booking an interview date only.
+  if (!full) {
+    if (b.stage !== undefined || b.rating !== undefined || b.hire || b.note || b.rejectReason !== undefined) return forbidden();
+    if (b.interview) b.interview = { date: b.interview.date, with: b.interview.with || [] };
+    if (["hired", "rejected"].includes(c.stage)) return forbidden();
+  }
 
   for (const [k, n] of [["name", 150], ["email", 150], ["phone", 40], ["source", 80], ["rejectReason", 300]]) if (b[k] !== undefined) c[k] = String(b[k] || "").trim().slice(0, n);
   for (const k of ["cvUrl", "portfolioUrl"]) if (b[k] !== undefined) c[k] = /^https?:\/\//.test(String(b[k] || "")) ? String(b[k]).slice(0, 500) : "";

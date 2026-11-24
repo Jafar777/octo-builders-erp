@@ -28,13 +28,14 @@ import { revisionLabel, STATUS_STYLE, useNow } from "@/components/erp/tasks/task
 import { PageSkeleton } from "@/components/erp/ui/Loading";
 import StageRouting, { canRouteStages, FlowBadge } from "@/components/erp/projects/StageRouting";
 import StageFlowEditor from "@/components/erp/projects/StageFlowEditor";
+import ProjectChanges from "@/components/erp/projects/ProjectChanges";
 import ProjectDelivery, { DeliverySummary } from "@/components/erp/projects/ProjectDelivery";
 import { CustomerSelect } from "@/components/erp/projects/ProjectForm";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 import { useAsk } from "@/components/erp/ui/Feedback";
 import { EmptyState } from "@/components/erp/ui/DataTools";
 
-const TABS = ["board", "tasks", "files", "delivery", "settings"];
+const TABS = ["board", "tasks", "files", "delivery", "changes", "settings"];
 
 function CellModal({ project, cell, canManage, canPlan, lookups, onOpenTask, onNewTask, onChanged, onClose }) {
   const { t, lang } = useLanguage();
@@ -572,6 +573,7 @@ export default function ProjectBoard({ projectId }) {
 
       {tab === "files" && <ProjectFiles project={project} />}
       {tab === "delivery" && <ProjectDelivery project={project} onOpenTask={setOpenTaskId} />}
+      {tab === "changes" && <ProjectChanges projectId={project.id} onOpenTask={setOpenTaskId} />}
       {tab === "settings" && canManage && <ProjectSettings key={project.id} project={project} lookups={lookups} onSaved={load} />}
 
       <Modal open={Boolean(cell)} onClose={() => setCell(null)} title={t("erp.projects.cell")}>

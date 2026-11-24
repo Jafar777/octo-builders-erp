@@ -6,7 +6,8 @@ import { Grid3x3, History, Lock, Plus, Search, ShieldCheck, Users } from "lucide
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/clientApi";
-import { Button, PageHeader } from "@/components/erp/ui/fields";
+import { roleIssues } from "@/lib/accessCheck";
+import { Button } from "@/components/erp/ui/fields";
 import RoleEditor from "./RoleEditor";
 import PermissionMatrix from "./PermissionMatrix";
 import PeopleAccess, { hasExceptions } from "./PeopleAccess";
@@ -20,7 +21,7 @@ const TABS = [
   { key: "history", icon: History },
 ];
 
-// The Roles page: the CEO's control over what everyone sees and does.
+// Roles and permissions (a tab of the System page, its own tabs in ?view): the CEO's control over what everyone sees and does.
 //   Roles   — each role's permissions, data scope, restricted account, visible pages
 //   Matrix  — every role side by side, edited together
 //   People  — one person: their role, and exceptions to it (allow / deny, scope, pages)
@@ -31,7 +32,7 @@ export default function RolesManager({ initialRoles }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const tab = TABS.some((x) => x.key === params.get("tab")) ? params.get("tab") : "roles";
+  const tab = TABS.some((x) => x.key === params.get("view")) ? params.get("view") : "roles";
   const [roles, setRoles] = useState(initialRoles);
   const [people, setPeople] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -48,7 +49,7 @@ export default function RolesManager({ initialRoles }) {
       .catch(() => {});
   }, []);
 
-  const go = (key) => router.replace(`${pathname}?tab=${key}`, { scroll: false });
+  const go = (key) => router.replace(`${pathname}?tab=roles&view=${key}`, { scroll: false });
   const role = draft ? null : roles.find((r) => r.key === picked) || null;
   const holdersOf = (key) => people.filter((p) => p.role === key);
 
@@ -75,20 +76,16 @@ export default function RolesManager({ initialRoles }) {
 
   return (
     <div>
-      <PageHeader
-        title={t("erp.access.title")}
-        subtitle={t("erp.access.subtitle")}
-        actions={
-          <Button
-            onClick={() => {
-              setDraft({ name: { ar: "", en: "" }, description: { ar: "", en: "" }, permissions: [], scope: "self", limited: false, pages: [], crossDepartment: false });
-              go("roles");
-            }}
-          >
-            <Plus size={16} /> {t("erp.access.newRole")}
-          </Button>
-        }
-      />
+      <div className="flex justify-end">
+        <Button
+          onClick={() => {
+            setDraft({ name: { ar: "", en: "" }, description: { ar: "", en: "" }, permissions: [], scope: "self", limited: false, pages: [], crossDepartment: false });
+            go("roles");
+          }}
+        >
+          <Plus size={16} /> {t("erp.access.newRole")}
+        </Button>
+      </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
         {stats.map((s) => (
@@ -149,6 +146,7 @@ export default function RolesManager({ initialRoles }) {
                       </span>
                       <span className="mt-1 flex flex-wrap items-center gap-1">
                         <Chip tone="sky">{t(`erp.roles.scope_${r.scope}`)}</Chip>
+                        {roleIssues(r).length > 0 && <Chip tone="orange">{t("erp.access.check.chip", { n: roleIssues(r).length })}</Chip>}
                         {r.limited && <Chip tone="red">{t("erp.access.restrictedChip")}</Chip>}
                         {r.crossDepartment && !r.top && <Chip tone="green">{t("erp.access.work.anyChip")}</Chip>}
                         <span className="text-[11px] text-white/55">

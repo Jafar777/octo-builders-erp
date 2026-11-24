@@ -3,7 +3,7 @@ import { signInAs } from "./fixtures.mjs";
 
 test("the CEO opens the permission matrix", async ({ page, context }) => {
   await signInAs(context, "ceo");
-  await page.goto("/dashboard/roles?tab=matrix");
+  await page.goto("/dashboard/system?tab=roles&view=matrix");
   await expect(page.getByRole("table")).toBeVisible();
 });
 

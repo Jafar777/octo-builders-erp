@@ -73,6 +73,7 @@ export default function TaskRow({ task, lookups, now, onOpen, showAssignee = fal
   return (
     <button
       type="button"
+      data-entity={`task:${task.id}`}
       onClick={() => onOpen(task.id)}
       className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-start transition-colors hover:bg-white/[0.06]"
     >

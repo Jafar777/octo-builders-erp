@@ -36,6 +36,8 @@ export async function GET() {
       active: p.status !== "inactive",
       // Departments whose tasks they can be given ("all" or ids), Roles page.
       work: p.work,
+      // The manager the CEO moved them to in the chart (only they give them work).
+      chartManager: p.chartManager,
     })),
     departments: departments.map((d) => ({ id: d._id.toString(), name: d.name, color: d.color })),
   });

@@ -32,6 +32,12 @@ ok("no punches past day = absent + warning", d["2026-09-06"].status === "absent"
 ok("exempted day: absent without warning, bonus kept", d["2026-09-07"].status === "absent" && d["2026-09-07"].warnings.length === 0 && d["2026-09-07"].bonus === 20);
 ok("approved annual leave = credited", d["2026-09-08"].status === "annual_leave" && d["2026-09-08"].credited === 8);
 ok("future day = upcoming", d["2026-09-15"].status === "upcoming");
+// A punch on a day of approved leave (passing by the office) doesn't cancel the leave.
+const onLeave = computeAttendance({
+  user: {}, month: "2026-09", punches: [p("2026-09-08", "11:00")], overrides: [],
+  leaves: [{ type: "annual", from: "2026-09-08", to: "2026-09-09" }], settings, today: "2026-09-10",
+}).days.find((x) => x.date === "2026-09-08");
+ok("a punch on a leave day keeps the leave (paid, nothing missing)", onLeave.status === "annual_leave" && onLeave.credited === 8, JSON.stringify(onLeave));
 ok("holiday = 0 required", d["2026-09-23"].status === "holiday" && d["2026-09-23"].required === 0);
 ok("month requirement = 25 working days × 8 = 200h", summary.requiredHours === 200, summary.requiredHours);
 ok("summary counts (single late punch on the 5th also late)", summary.lateCount === 2 && summary.absentDays === 2 && summary.warnings === 4, JSON.stringify(summary));

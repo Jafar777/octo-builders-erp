@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
+import { reachedIds } from "@/lib/reporting";
 import { hasPermission, requirePermission } from "@/lib/currentUser";
 import { forbidden } from "@/lib/apiUtils";
 import { localParts } from "@/lib/attendance";
 import { utilization } from "@/lib/evm";
 import { hourlyRates } from "@/lib/costRates";
 import { pickName, viewerLang } from "@/lib/personName";
-import { outsideRoleKeys, inDepartments } from "@/lib/scope";
+import { outsideRoleKeys } from "@/lib/scope";
 import { getSettings } from "@/lib/settings";
 import { monthWorkHours } from "@/lib/workDays";
 import Task from "@/models/Task";
@@ -26,7 +27,8 @@ export async function GET(request) {
   const month = /^\d{4}-\d{2}$/.test(raw) ? raw : localParts(new Date(), tz).date.slice(0, 7);
 
   const peopleQuery = { status: "active", role: { $nin: await outsideRoleKeys() } };
-  if (user.scope !== "all") Object.assign(peopleQuery, user.scope === "department" ? inDepartments(user) : { _id: user.id });
+  // Department scope: their people (lib/reporting.js), not only their departments'.
+  if (user.scope !== "all") Object.assign(peopleQuery, user.scope === "department" ? { _id: { $in: await reachedIds(user) } } : { _id: user.id });
   const people = await User.find(peopleQuery, { name: 1, nameAr: 1, email: 1, avatarUrl: 1, department: 1, workSchedule: 1 }).lean();
   const ids = people.map((p) => p._id);
 

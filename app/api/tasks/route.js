@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
+import { placeKey } from "@/lib/hybrid";
+import { getSettings } from "@/lib/settings";
 import { notify } from "@/lib/notify";
 import { holdsTime, HOUR, readyTime } from "@/lib/gantt";
 import { cascadeFrom, clearOverlaps, findOverlap, freeSlot, getWorkCalendar } from "@/lib/ganttServer";
@@ -165,6 +167,16 @@ export async function POST(request) {
     const hours = Number(body.hours);
     if (Number.isFinite(hours) && hours >= 0.5 && hours <= 200) maxHours = Math.round(hours * 2) / 2;
     else if (!(isScheduler && dueAt)) return fail("invalid_task_hours");
+  }
+  // Where employees also start work themselves: planning work that's already planned, going
+  // or handed in would make it twice. Told first; they may still want it.
+  if (kind === "task" && project && stage && !body.duplicateOk) {
+    const { hybrid } = await getSettings();
+    if (Object.keys(hybrid?.departments || {}).length) {
+      const key = placeKey(project._id, stage.key, body.title);
+      const open = (await Task.find({ project: project._id, stage: stage.key, kind: { $in: ["task", "revision"] }, status: { $in: ["todo", "in_progress", "on_hold", "help", "submitted"] } }, { number: 1, project: 1, stage: 1, title: 1 }).lean()).find((x) => placeKey(x.project, x.stage, x.title) === key);
+      if (open) return fail("place_open", 409, { number: open.number });
+    }
   }
   const deps = await cleanDependsOn(body.dependsOn);
   if (deps.error) return fail(deps.error);

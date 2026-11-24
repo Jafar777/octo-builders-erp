@@ -6,6 +6,7 @@ import { todayIn } from "@/lib/hr";
 import { localParts } from "@/lib/attendance";
 import { canManageFingerprint, cleanBadge, closedMonthOf, punchTime, replacePunch } from "@/lib/fingerprint";
 import { getSettings } from "@/lib/settings";
+import { protectedBadges } from "@/lib/hrAccess";
 import RawPunch from "@/models/RawPunch";
 
 async function load(params) {
@@ -13,7 +14,10 @@ async function load(params) {
   if (!canManageFingerprint(user)) return { error: forbidden() };
   const { id } = await params;
   const punch = isObjectId(id) ? await RawPunch.findById(id) : null;
-  return punch ? { user, punch } : { error: notFound() };
+  if (!punch) return { error: notFound() };
+  // Not one's own punches, nor an HR person's (the CEO's to correct).
+  if (await protectedBadges(user, [punch.badgeId])) return { error: forbidden() };
+  return { user, punch };
 }
 
 // Correct one punch. Body: { date, time (office time), badgeId, note } — any of them.
@@ -29,6 +33,7 @@ export async function PATCH(request, { params }) {
   if (!time || time > new Date(Date.now() + 60000) || localParts(time, tz).date > todayIn(tz)) return fail("invalid_date");
   const badgeId = body.badgeId !== undefined ? cleanBadge(body.badgeId) : punch.badgeId;
   if (!badgeId) return fail("invalid_request");
+  if (badgeId !== punch.badgeId && (await protectedBadges(user, [badgeId]))) return forbidden();
   if (await closedMonthOf([punch.time, time], tz)) return fail("month_closed", 409);
 
   const note = body.note !== undefined ? String(body.note).slice(0, 300) : punch.note;

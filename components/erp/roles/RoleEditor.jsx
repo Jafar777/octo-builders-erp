@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
+import { dropUnused, giveMissing, roleIssues } from "@/lib/accessCheck";
 import {
   PERMISSIONS,
   RESTRICTED_PAGES,
@@ -43,6 +44,7 @@ const blank = {
   pages: [],
   crossDepartment: false,
   requireMfa: false,
+  kpiProfile: "tasks",
 };
 const formOf = (r) =>
   r
@@ -55,6 +57,7 @@ const formOf = (r) =>
         pages: r.pages,
         crossDepartment: Boolean(r.crossDepartment),
         requireMfa: Boolean(r.requireMfa),
+        kpiProfile: r.kpiProfile === "office" ? "office" : "tasks",
       }
     : blank;
 
@@ -70,6 +73,7 @@ function changeCount(a, b) {
     (a.limited !== b.limited) +
     (a.crossDepartment !== b.crossDepartment) +
     (Boolean(a.requireMfa) !== Boolean(b.requireMfa)) +
+    ((a.kpiProfile || "tasks") !== (b.kpiProfile || "tasks")) +
     (a.name.ar !== b.name.ar || a.name.en !== b.name.en) +
     (a.description.ar !== b.description.ar ||
       a.description.en !== b.description.en)
@@ -107,6 +111,9 @@ export default function RoleEditor({
     (p) => !form.limited || RESTRICTED_PERMISSIONS.includes(p),
   );
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
+
+  // What wouldn't work as it's set now, before it's saved.
+  const issues = locked ? [] : roleIssues({ ...form, key: role?.key });
 
   const q = query.trim().toLowerCase();
   const matches = (p) =>
@@ -266,6 +273,32 @@ export default function RoleEditor({
       </div>
       <ErrorText>{error}</ErrorText>
 
+      {issues.length > 0 && (
+        <div className="space-y-3 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
+          <p className="flex items-center gap-2 font-semibold">
+            <ShieldAlert size={16} className="shrink-0" /> {t("erp.access.check.title", { n: issues.length })}
+          </p>
+          <p className="text-xs text-white/60">{t("erp.access.check.hint")}</p>
+          <ul className="space-y-2">
+            {issues.map((x) => (
+              <li key={`${x.type}-${x.page || x.permission}`} className="flex flex-wrap items-center gap-2 rounded-xl bg-black/20 px-3 py-2">
+                <span className="min-w-0 flex-1 text-xs">
+                  {x.type === "page"
+                    ? t("erp.access.check.page", { page: t(`erp.nav.${x.page}`), perms: x.permissions.map((p) => t(`erp.perm.${p}`)).join(" · ") })
+                    : t("erp.access.check.needs", { perm: t(`erp.perm.${x.permission}`), needs: t(`erp.perm.${x.needs}`) })}
+                </span>
+                <Button variant="ghost" onClick={() => setForm((f) => giveMissing(f, x))}>
+                  {x.type === "page" ? t("erp.access.check.showPage") : t("erp.access.check.add")}
+                </Button>
+                <Button variant="ghost" onClick={() => setForm((f) => dropUnused(f, x))}>
+                  {t("erp.access.check.remove")}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {(top || noRole) && (
         <p className="flex items-start gap-2 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-100">
           <ShieldAlert size={16} className="mt-0.5 shrink-0" />
@@ -340,6 +373,27 @@ export default function RoleEditor({
               <p className="mt-2 text-xs leading-relaxed text-white/60">
                 {t("erp.access.work.roleHint")}
               </p>
+            </Section>
+          )}
+
+          {!top && !noRole && !form.limited && (
+            <Section title={t("erp.roles.kpiProfile.title")}>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {["tasks", "office"].map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    disabled={locked}
+                    onClick={() => set("kpiProfile")(k)}
+                    className={`rounded-xl border p-3 text-start transition ${
+                      (form.kpiProfile || "tasks") === k ? "border-brand-orange bg-brand-orange/10" : "border-white/10 hover:border-white/25"
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                  >
+                    <p className="text-sm font-medium">{t(`erp.roles.kpiProfile.${k}`)}</p>
+                    <p className="mt-1 text-[11px] leading-snug text-white/60">{t(`erp.roles.kpiProfile.${k}Hint`)}</p>
+                  </button>
+                ))}
+              </div>
             </Section>
           )}
 

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
-import { cleanEntry, serializeEntry } from "@/lib/financeEntries";
+import { inClosedMonth, cleanEntry, serializeEntry } from "@/lib/financeEntries";
 import { getSettings } from "@/lib/settings";
 import FinanceEntry, { ENTRY_KINDS } from "@/models/FinanceEntry";
 import WorkProject from "@/models/WorkProject";
@@ -30,6 +30,7 @@ export async function POST(request) {
   const settings = await getSettings();
   const { value, error } = await cleanEntry(await readJson(request), settings);
   if (error) return fail(error);
+  if (await inClosedMonth(value.date)) return fail("month_closed", 409);
 
   const entry = await FinanceEntry.create({ ...value, createdBy: user.id });
   await audit(user, "finance.entry_created", {

@@ -167,8 +167,8 @@ export function TableToolbar({ tools, placeholder, exportFile, exportColumns, ac
             <input
               value={tools.query}
               onChange={(e) => tools.setQuery(e.target.value)}
-              placeholder={placeholder || t("erp.search")}
-              aria-label={placeholder || t("erp.search")}
+              placeholder={placeholder || t("erp.searchHint")}
+              aria-label={placeholder || t("erp.searchHint")}
               className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pe-9 ps-9 text-sm outline-none placeholder:text-white/45 focus:border-white/30"
             />
             {tools.query && (

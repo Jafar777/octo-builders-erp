@@ -9,7 +9,7 @@ import { Banknote, CheckCircle2, ExternalLink, FilePlus2, FolderPlus, Pencil, Pl
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
 import { formatDate, formatDateTime } from "@/lib/formatTime";
-import { DOC_KEYS, INTAKE_PRIORITIES, PROJECT_TYPES, REQUIREMENT_KEYS, SCOPE_KEYS } from "@/lib/intakeRules";
+import { docKeysFor, INTAKE_PRIORITIES, PROJECT_TYPES, REQUIREMENT_KEYS, requirementKeysFor, SCOPE_FORM, scopeKeysFor } from "@/lib/intakeRules";
 import Modal from "@/components/erp/ui/Modal";
 import { Button, Card, ErrorText, Input, Label, PageHeader, Select } from "@/components/erp/ui/fields";
 import { SkeletonList } from "@/components/erp/ui/Loading";
@@ -135,7 +135,7 @@ export default function IntakeCenter({ planner, finance, proposer = false }) {
       {data && tab !== "noForm" && (
         <div className="space-y-2">
           {data.intakes.map((i) => (
-            <button key={i.id} type="button" onClick={() => open(i.id)} className="flex w-full flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-start hover:bg-white/[0.06]">
+            <button key={i.id} data-entity={`intake:${i.id}`} type="button" onClick={() => open(i.id)} className="flex w-full flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-start hover:bg-white/[0.06]">
               <span className="text-xs text-white/60" dir="ltr">
                 #{i.number}
               </span>
@@ -337,7 +337,7 @@ function IntakeForm({ intake, forProject, onSaved, onCancel }) {
 
       <Section title={t("erp.intake.section.requirements")}>
         <div className="grid gap-3 sm:grid-cols-2">
-          {REQUIREMENT_KEYS.map((k) => (
+          {requirementKeysFor(form.project.types, form.requirements).map((k) => (
             <div key={k}>
               <Label>{t(`erp.intake.req.${k}`)}</Label>
               {area(form.requirements[k], setIn("requirements", k))}
@@ -348,11 +348,23 @@ function IntakeForm({ intake, forProject, onSaved, onCancel }) {
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Section title={t("erp.intake.section.documents")}>
-          <Checks keys={DOC_KEYS} group="doc" value={form.documents} onChange={set("documents")} />
+          <Checks keys={docKeysFor(form.project.types, form.documents)} group="doc" value={form.documents} onChange={set("documents")} />
           {form.documents.includes("other") && <Input label={t("erp.intake.field.documentsOther")} value={form.documentsOther} onChange={set("documentsOther")} />}
         </Section>
         <Section title={t("erp.intake.section.scope")}>
-          <Checks keys={SCOPE_KEYS} group="scope" value={form.scope} onChange={set("scope")} />
+          <Checks
+            keys={scopeKeysFor(form.scope)}
+            group="scope"
+            value={form.scope}
+            onChange={(next) => {
+              // "All" ticks the whole list; un-ticking one of them un-ticks "All".
+              const was = form.scope.includes("all");
+              const now = next.includes("all");
+              if (now && !was) return set("scope")([...new Set([...next, ...SCOPE_FORM])]);
+              if (!now && was) return set("scope")(next.filter((k) => !SCOPE_FORM.includes(k)));
+              set("scope")(now && SCOPE_FORM.some((k) => k !== "all" && !next.includes(k)) ? next.filter((k) => k !== "all") : next);
+            }}
+          />
         </Section>
       </div>
 
@@ -501,7 +513,7 @@ function IntakeDetail({ id, planner, finance, proposer, onClose, onChanged, onEd
 
           <Card>
             <p className="mb-2 font-semibold">{t("erp.intake.section.requirements")}</p>
-            {REQUIREMENT_KEYS.map((k) => (
+            {REQUIREMENT_KEYS.filter((k) => i.requirements?.[k]).map((k) => (
               <Row key={k} label={t(`erp.intake.req.${k}`)}>
                 {i.requirements?.[k]}
               </Row>

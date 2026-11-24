@@ -472,7 +472,7 @@ export default function ChatPane({
             setSearchText("");
           }}
           className={`flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/10 hover:text-white ${searchOpen ? "bg-white/10 text-white" : "text-white/60"}`}
-          aria-label={t("erp.search")}
+          aria-label={t("erp.searchHint")}
         >
           <Search size={17} />
         </button>

@@ -6,7 +6,7 @@ import { ChevronDown, Loader2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
 import { formatDateTime } from "@/lib/formatTime";
-import { Button, ErrorText, PageHeader, Select } from "@/components/erp/ui/fields";
+import { Button, ErrorText, Select } from "@/components/erp/ui/fields";
 import { SkeletonList } from "@/components/erp/ui/Loading";
 import { EmptyState } from "@/components/erp/ui/DataTools";
 
@@ -56,8 +56,6 @@ export default function AuditLogView() {
 
   return (
     <div>
-      <PageHeader title={t("erp.nav.audit")} subtitle={t("erp.audit.subtitle")} />
-
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <SearchBox value={q} onChange={setQ} className="w-64" />
         <div className="w-64">

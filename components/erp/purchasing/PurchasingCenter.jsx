@@ -7,7 +7,8 @@ import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
 import { formatMoney } from "@/components/erp/intake/MoneyFields";
 import Modal from "@/components/erp/ui/Modal";
-import { Button, Card, ErrorText, Input, PageHeader, Select } from "@/components/erp/ui/fields";
+import { Button, Card, ErrorText, Input, Select } from "@/components/erp/ui/fields";
+import { ordersChanged } from "@/components/erp/orders/ordersChanged";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { useAsk, useConfirm, useToast } from "@/components/erp/ui/Feedback";
 import { Checkbox, EmptyState, ShowMore, TableToolbar, useTableTools } from "@/components/erp/ui/DataTools";
@@ -25,11 +26,25 @@ const ASSET_STATUSES = ["in_use", "in_stock", "repair", "retired"];
 
 // Purchasing: ask to buy (optionally holding a task until it arrives), approve, order,
 // receive, book the expense, and the register of company equipment and licences.
-export default function PurchasingCenter() {
+// Where it's shown:
+//   orders      the Requests page: ask, and answer what waits
+//   ordersFull  the same plus the record, suppliers and assets (no access to Finance)
+//   queue       only what waits for this person
+//   finance     Finance: the record (order, receive, book the expense), suppliers, assets
+const MODE_TABS = {
+  orders: ["mine", "queue"],
+  ordersFull: ["mine", "queue", "all", "suppliers", "assets"],
+  queue: ["queue"],
+  finance: ["all", "suppliers", "assets"],
+};
+export default function PurchasingCenter({ mode = "ordersFull" }) {
   const { t } = useLanguage();
   const params = useSearchParams();
   const lookups = useTaskLookups();
-  const [tab, setTab] = useState(params.get("tab") || "mine");
+  const [tab, setTab] = useState(() => {
+    const asked = params.get(mode === "finance" ? "view" : "tab");
+    return MODE_TABS[mode].includes(asked) ? asked : MODE_TABS[mode][0];
+  });
   const [data, setData] = useState(null);
   const [suppliers, setSuppliers] = useState([]);
   const [asking, setAsking] = useState(false);
@@ -52,6 +67,7 @@ export default function PurchasingCenter() {
     try {
       await api(`/api/purchasing/requests/${r.id}`, { method: "PATCH", body });
       load();
+      ordersChanged();
     } catch (err) {
       setError(errorText(t, err));
     }
@@ -74,6 +90,7 @@ export default function PurchasingCenter() {
     }
     toast({ text: t("erp.ux.bulkDone", { n: done, total: rows.length }), tone: done === rows.length ? "success" : "error" });
     load();
+    ordersChanged();
   };
   const exportColumns = [
     { label: "#", value: (r) => r.number },
@@ -84,21 +101,17 @@ export default function PurchasingCenter() {
     { label: t("erp.reports.col.total"), value: (r) => r.total ?? "" },
   ];
 
-  const tabs = ["mine", data?.canApprove && "queue", (data?.canApprove || data?.canManageAssets) && "all", data?.canApprove && "suppliers", data?.canManageAssets && "assets"].filter(Boolean);
+  const tabs = ["mine", data?.canApprove && "queue", (data?.canApprove || data?.canManageAssets) && "all", data?.canApprove && "suppliers", data?.canManageAssets && "assets"].filter((k) => k && MODE_TABS[mode].includes(k));
   return (
     <div>
-      <PageHeader
-        title={t("erp.nav.purchasing")}
-        subtitle={t("erp.purchasing.subtitle")}
-        actions={
-          data?.canRequest && (
-            <Button onClick={() => setAsking(true)}>
-              <Plus size={16} /> {t("erp.purchasing.ask")}
-            </Button>
-          )
-        }
-      />
-      <div className="mb-5 flex gap-1 overflow-x-auto border-b border-white/10">
+      {mode.startsWith("orders") && data?.canRequest && (
+        <div className="mb-4 flex justify-end">
+          <Button onClick={() => setAsking(true)}>
+            <Plus size={16} /> {t("erp.purchasing.ask")}
+          </Button>
+        </div>
+      )}
+      <div className={`mb-5 gap-1 overflow-x-auto border-b border-white/10 ${tabs.length > 1 ? "flex" : "hidden"}`}>
         {tabs.map((k) => (
           <button key={k} type="button" onClick={() => setTab(k)} className={`-mb-px shrink-0 border-b-2 px-4 py-2.5 text-sm ${tab === k ? "border-brand-orange text-white" : "border-transparent text-white/50 hover:text-white"}`}>
             {t(`erp.purchasing.tab.${k}`)}
@@ -112,7 +125,7 @@ export default function PurchasingCenter() {
           {requests.length > 0 && (
             <TableToolbar
               tools={tools}
-              exportFile={t("erp.nav.purchasing")}
+              exportFile={t("erp.finance.tab.purchases")}
               exportColumns={exportColumns}
               actions={decidable.length ? [{ label: t("erp.ux.approveSelected"), icon: Check, onClick: approveMany }] : []}
             >
@@ -140,7 +153,7 @@ export default function PurchasingCenter() {
           )}
           <ul className="divide-y divide-white/5">
             {tools.shown.map((r) => (
-              <li key={r.id} className="flex flex-wrap items-start gap-3 py-3 text-sm">
+              <li key={r.id} data-entity={`purchase:${r.id}`} className="flex flex-wrap items-start gap-3 py-3 text-sm">
                 {decidable.length > 0 && (
                   <span className="pt-0.5">{r.canDecide && r.status === "pending" ? <Checkbox checked={tools.selected.has(r.id)} onChange={() => tools.toggle(r.id)} label={r.title} /> : <span className="block w-5" />}</span>
                 )}
@@ -384,7 +397,7 @@ function Assets({ lookups }) {
             </thead>
             <tbody>
               {shown.map((a) => (
-                <tr key={a.id} onClick={() => setEditing(a)} className="cursor-pointer border-b border-white/5 hover:bg-white/[0.03]">
+                <tr key={a.id} data-entity={`asset:${a.id}`} onClick={() => setEditing(a)} className="cursor-pointer border-b border-white/5 hover:bg-white/[0.03]">
                   <td className="px-2 py-2 font-mono text-xs" dir="ltr">
                     {a.tag}
                   </td>

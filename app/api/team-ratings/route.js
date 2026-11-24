@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { todayIn } from "@/lib/hr";
-import { departmentManagers } from "@/lib/leave";
+import { personManagers } from "@/lib/reporting";
 import { canRateManagers, isDeptManager, managerRoleKeys } from "@/lib/managerKpi";
 import { pickName, viewerLang } from "@/lib/personName";
 import { getSettings } from "@/lib/settings";
@@ -30,7 +30,7 @@ export async function GET() {
   const month = todayIn(settings.hr.timezone).slice(0, 7);
   const lang = await viewerLang();
 
-  const headIds = (await departmentManagers(user.department, user.id)).filter((id) => id !== user.id);
+  const headIds = (await personManagers({ id: user.id, department: user.department })).filter((id) => id !== user.id);
   const heads = await User.find({ _id: { $in: headIds } }, { name: 1, nameAr: 1, email: 1, avatarUrl: 1 }).lean();
   const mine = await TeamRating.find({ month, raterKey: { $in: heads.map((h) => raterKey(user.id, h._id.toString(), month)) } }).lean();
   const myScore = Object.fromEntries(mine.map((r) => [r.head.toString(), r.score]));
@@ -61,7 +61,7 @@ export async function POST(request) {
   const { headId, score } = await readJson(request);
   const s = Math.round(Number(score));
   if (!isObjectId(headId) || !(s >= 1 && s <= 5)) return fail("invalid_request");
-  if (!(await departmentManagers(user.department, user.id)).includes(headId)) return forbidden();
+  if (!(await personManagers({ id: user.id, department: user.department })).includes(headId)) return forbidden();
   const month = todayIn((await getSettings()).hr.timezone).slice(0, 7);
   // No audit entry: it would say who rated.
   await TeamRating.updateOne({ month, head: headId, raterKey: raterKey(user.id, headId, month) }, { $set: { score: s } }, { upsert: true });

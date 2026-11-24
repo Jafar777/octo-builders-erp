@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { api, errorText } from "@/lib/clientApi";
 import { Button, ErrorText, Input, Label, Select } from "@/components/erp/ui/fields";
 import { canRouteStages } from "@/components/erp/projects/StageRouting";
+import { useConfirm } from "@/components/erp/ui/Feedback";
 import { Timer } from "lucide-react";
 import { ReviewBoxes } from "@/components/erp/projects/ProjectForm";
 
@@ -19,6 +20,7 @@ const KINDS = ["task", "meeting", "personal"];
 export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
+  const confirm = useConfirm();
   const canAssign = user?.permissions?.includes("tasks.assign");
   const isScheduler = canRouteStages(user);
   const parent = preset.parent || null;
@@ -30,12 +32,12 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
     projectId: preset.projectId || "",
     stage: preset.stage || "",
     type: "",
-    title: "",
+    title: preset.title || "",
     // Chosen in the list (a preset employee from the Gantt's free time, else nobody yet).
     assigneeId: preset.assigneeId || "",
     hours: "",
     priority: "normal",
-    description: "",
+    description: preset.description || "",
     review: { manager: true, gm: false, customer: false }, // who reviews project work (GM / CEO choose)
   });
   const [saving, setSaving] = useState(false);
@@ -55,12 +57,15 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
   const myDepartments = user?.departments?.length ? user.departments : [user?.department].filter(Boolean);
   // ...and employees of other departments the CEO opened this work's department to.
   const workDepartment = stage?.department || project?.department || null;
+  // Someone the CEO moved to a manager in the chart is only that manager's (lib/reporting.js).
   const assignable = lookups.people.filter(
     (p) =>
       isScheduler ||
       p.id === user?.id ||
-      myDepartments.includes(p.department) ||
-      (workDepartment && myDepartments.includes(workDepartment) && (p.work === "all" || p.work?.includes(workDepartment)))
+      (p.chartManager
+        ? p.chartManager === user?.id
+        : myDepartments.includes(p.department) ||
+          (workDepartment && myDepartments.includes(workDepartment) && (p.work === "all" || p.work?.includes(workDepartment))))
   );
   // Someone who can't give work to others is the task's employee themselves.
   const assigneeId = canAssign ? form.assigneeId : user?.id;
@@ -71,7 +76,7 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
   // The department manager always reviews (lib/reviewFlow): nothing can be missing.
   const missingReview = false;
 
-  async function save() {
+  async function save(duplicateOk = false) {
     setSaving(true);
     setError("");
     try {
@@ -85,12 +90,14 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
       if (body.kind !== "task" && !body.projectId) {
         body.stage = "";
       }
+      if (duplicateOk) body.duplicateOk = true;
       if (parent) body.parentTaskId = parent.id;
       if (picksReview) body.review = review;
       else delete body.review;
       const { task } = await api("/api/tasks", { method: "POST", body });
       onCreated(task);
     } catch (err) {
+      if (err.message === "place_open" && !duplicateOk && (await confirm({ text: errorText(t, err) }))) return save(true);
       setError(errorText(t, err));
     } finally {
       setSaving(false);
@@ -189,6 +196,15 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
         )}
       </div>
 
+      {canAssign && lookups.peopleFailed && (
+        <p className="flex flex-wrap items-center gap-3 text-sm text-red-300">
+          {t("erp.tasks.peopleFailed")}
+          <Button variant="ghost" onClick={lookups.reloadPeople}>
+            {t("erp.tasks.peopleRetry")}
+          </Button>
+        </p>
+      )}
+
       {needsHours && (
         <p className="flex items-start gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2.5 text-sm text-sky-100">
           <Timer size={16} className="mt-0.5 shrink-0" />
@@ -220,7 +236,7 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
         <Button variant="ghost" onClick={onCancel}>
           {t("common.cancel")}
         </Button>
-        <Button onClick={save} disabled={saving || missingHours || missingReview || missingAssignee}>
+        <Button onClick={() => save()} disabled={saving || missingHours || missingReview || missingAssignee}>
           {t("erp.tasks.create")}
         </Button>
       </div>

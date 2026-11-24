@@ -6,7 +6,7 @@ import { attendanceForMonth, hrStaff, MONTH_RE, todayIn } from "@/lib/hr";
 import { notify } from "@/lib/notify";
 import { canDecideAny, isOvertimeAdmin } from "@/lib/overtime";
 import { isTopRole } from "@/lib/permissions";
-import { userDepartments } from "@/lib/scope";
+import { loadLinks, reachesPerson } from "@/lib/reporting";
 import { getSettings } from "@/lib/settings";
 import { fromLocal } from "@/lib/attendance";
 import OvertimeRequest from "@/models/OvertimeRequest";
@@ -16,12 +16,14 @@ import TaskActivity from "@/models/TaskActivity";
 const idStr = (v) => (v ? v.toString() : null);
 const WORK = ["started", "resumed", "submitted", "paused"];
 
-// The people whose overtime `user` decides: everyone (CEO) or their departments.
+// The people whose overtime `user` decides: everyone (CEO) or their people (their
+// departments', minus anyone moved to another manager in the chart, plus anyone moved
+// to them — lib/reporting.js).
 async function decidable(user) {
   const staff = (await hrStaff({ status: "active" })).filter((s) => s.id !== user.id && !isTopRole(s.role));
   if (isOvertimeAdmin(user)) return staff;
-  const deps = userDepartments(user);
-  return staff.filter((s) => deps.includes(s.department));
+  const ctx = await loadLinks();
+  return staff.filter((s) => reachesPerson(user, s, ctx));
 }
 
 // ?month=YYYY-MM → days someone worked past their hours without asking for overtime,
@@ -97,7 +99,7 @@ export async function POST(request) {
       recipients: [body.userId],
       actor: user,
       params: { actor: user.name || user.email, hours, date: body.date },
-      link: "/dashboard/overtime",
+      link: "/dashboard/orders?type=overtime",
       entityType: "overtime",
       entityId: saved._id,
     });

@@ -9,6 +9,7 @@ import { canEditGantt } from "@/lib/gantt";
 import { publish } from "@/lib/realtime/server";
 import Task from "@/models/Task";
 import WorkProject from "@/models/WorkProject";
+import Invoice from "@/models/Invoice";
 import { serializeMilestone } from "@/lib/ganttServer";
 
 async function load(user, params) {
@@ -43,6 +44,18 @@ async function fields(body, project, billing = false) {
     out.billAmount = Math.max(0, Number(body.billAmount) || 0);
   }
   return { value: out };
+}
+
+// A milestone that stops being billed (deleted, or no longer reached): its draft invoice
+// goes with it; an issued one has to be voided first (Finance), so nothing points at a
+// milestone that's gone. Returns an error code or null.
+async function releaseInvoice(milestone) {
+  if (!milestone.invoice) return null;
+  const invoice = await Invoice.findById(milestone.invoice, { status: 1 }).lean();
+  if (invoice?.status === "issued") return "milestone_invoiced";
+  if (invoice?.status === "draft") await Invoice.deleteOne({ _id: invoice._id, status: "draft" });
+  milestone.invoice = null;
+  return null;
 }
 
 async function done(user, project, action, summary) {
@@ -86,9 +99,16 @@ export async function PATCH(request, { params }) {
   if (!milestone) return notFound();
   const f = await fields(body, project, hasPermission(user, "invoices.manage"));
   if (f.error) return fail(f.error);
+  // Not reached any more, or billed differently: the old invoice can't stay as it was.
+  const billingChanged = "billPercent" in f.value && (f.value.billPercent !== milestone.billPercent || f.value.billAmount !== milestone.billAmount);
+  if ((body.done === false && milestone.doneAt) || (billingChanged && milestone.invoice)) {
+    const err = await releaseInvoice(milestone);
+    if (err) return fail(err, 409);
+  }
   milestone.set(f.value);
   // Reached: a milestone with billing drafts its invoice, and finance is told.
-  if (f.value.doneAt) {
+  // (Billed differently after it was reached: the new invoice is drafted again.)
+  if (f.value.doneAt || (billingChanged && milestone.doneAt)) {
     const invoice = await draftMilestoneInvoice(project, milestone, user.id);
     if (invoice) {
       await notify({
@@ -113,6 +133,8 @@ export async function DELETE(request, { params }) {
   const milestone = project.milestones.id(new URL(request.url).searchParams.get("milestoneId"));
   if (!milestone) return notFound();
   const name = milestone.name;
+  const err = await releaseInvoice(milestone);
+  if (err) return fail(err, 409);
   milestone.deleteOne();
   return done(user, project, "project.milestone_deleted", name);
 }

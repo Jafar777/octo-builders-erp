@@ -6,7 +6,7 @@ import { ExternalLink, Plus, Star, UserCheck } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
 import Modal from "@/components/erp/ui/Modal";
-import { Button, Card, ErrorText, Input, PageHeader, Select } from "@/components/erp/ui/fields";
+import { Button, Card, ErrorText, Input, Select } from "@/components/erp/ui/fields";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { useConfirm } from "@/components/erp/ui/Feedback";
 
@@ -43,15 +43,12 @@ export default function RecruitmentCenter() {
 
   return (
     <div>
-      <PageHeader
-        title={t("erp.nav.recruitment")}
-        subtitle={t("erp.recruitment.subtitle")}
-        actions={
-          <Button onClick={() => setOpeningForm(true)}>
-            <Plus size={16} /> {t("erp.recruitment.newOpening")}
-          </Button>
-        }
-      />
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-white/60">{t("erp.recruitment.subtitle")}</p>
+        <Button onClick={() => setOpeningForm(true)}>
+          <Plus size={16} /> {t("erp.recruitment.newOpening")}
+        </Button>
+      </div>
       <ErrorText>{error}</ErrorText>
       {data && (
         <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
@@ -108,7 +105,7 @@ export default function RecruitmentCenter() {
                       {candidates
                         .filter((c) => c.stage === s)
                         .map((c) => (
-                          <button key={c.id} type="button" onClick={() => setCandidate(c)} className="w-full rounded-xl border border-white/10 bg-brand-navy p-2.5 text-start hover:border-white/30">
+                          <button key={c.id} data-entity={`candidate:${c.id}`} type="button" onClick={() => setCandidate(c)} className="w-full rounded-xl border border-white/10 bg-brand-navy p-2.5 text-start hover:border-white/30">
                             <p className="truncate text-sm">{c.name}</p>
                             {c.rating > 0 && (
                               <p className="mt-0.5 flex items-center gap-0.5 text-[11px] text-amber-300">

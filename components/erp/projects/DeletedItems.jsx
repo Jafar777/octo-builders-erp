@@ -16,6 +16,14 @@ export const useCanDelete = () => {
   const { user } = useAuth();
   return Boolean(user?.isStaff && user.permissions?.includes("projects.delete"));
 };
+// ...and only what's inside their role's data scope (the server checks the same).
+const useCanDeleteIn = (departmentId) => {
+  const { user } = useAuth();
+  const can = useCanDelete();
+  if (!can || user.scope === "all") return can;
+  const mine = user.departments?.length ? user.departments : [user.department];
+  return user.scope === "department" && Boolean(departmentId) && mine.includes(departmentId);
+};
 
 // "Delete project" (project settings). Goes back to the projects list afterwards.
 export function DeleteProjectButton({ project }) {
@@ -24,7 +32,7 @@ export function DeleteProjectButton({ project }) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  if (!useCanDelete()) return null;
+  if (!useCanDeleteIn(project.department)) return null;
   async function remove() {
     if (!(await confirm({ text: t("erp.trash.confirmProject", { name: project.name?.ar || project.name?.en || "" }), kind: "delete" }))) return;
     setBusy(true);
@@ -53,7 +61,7 @@ export function DeleteTaskButton({ task, onDeleted }) {
   const { t } = useLanguage();
   const confirm = useConfirm();
   const [error, setError] = useState("");
-  if (!useCanDelete()) return null;
+  if (!useCanDeleteIn(task.department)) return null;
   async function remove() {
     if (!(await confirm({ text: t("erp.trash.confirmTask", { n: task.number }), kind: "delete" }))) return;
     try {

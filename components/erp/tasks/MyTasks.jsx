@@ -4,7 +4,7 @@ import PageLinks from "@/components/dashboard/PageLinks";
 import { TASK_PAGES } from "@/components/erp/tasks/taskPages";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Play, Plus } from "lucide-react";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/context/LanguageContext";
 import { usePollingFallback, useRealtimeEvent, userChannelName } from "@/context/RealtimeContext";
@@ -12,6 +12,7 @@ import { api, peekApi } from "@/lib/clientApi";
 import Modal from "@/components/erp/ui/Modal";
 import { Button, PageHeader } from "@/components/erp/ui/fields";
 import TaskRow from "@/components/erp/tasks/TaskRow";
+import StartWork from "@/components/erp/tasks/StartWork";
 import TaskForm from "@/components/erp/tasks/TaskForm";
 import TaskDrawer from "@/components/erp/tasks/TaskDrawer";
 import Stars from "@/components/erp/tasks/Stars";
@@ -38,6 +39,14 @@ export default function MyTasks({ meId }) {
   const [loaded, setLoaded] = useState(() => Boolean(peekApi(MINE_URL)));
   const [tab, setTab] = useState(searchParams.get("tab") === LOG ? LOG : "active");
   const [creating, setCreating] = useState(false);
+  // "Start work": where the CEO lets employees start work themselves (lib/hybrid.js).
+  const [canStart, setCanStart] = useState(false);
+  const [starting, setStarting] = useState(false);
+  useEffect(() => {
+    api("/api/tasks/self-start")
+      .then((d) => setCanStart(d.on))
+      .catch(() => {});
+  }, []);
   const [openId, setOpenId] = useState(searchParams.get("task"));
 
   const load = useCallback(async () => {
@@ -105,7 +114,12 @@ export default function MyTasks({ meId }) {
         actions={
           <>
             <PageLinks pages={TASK_PAGES} current="tasks" />
-            <Button onClick={() => setCreating(true)}>
+            {canStart && (
+              <Button onClick={() => setStarting(true)}>
+                <Play size={16} /> {t("erp.startWork.open")}
+              </Button>
+            )}
+            <Button variant={canStart ? "ghost" : undefined} onClick={() => setCreating(true)}>
               <Plus size={16} /> {t("erp.tasks.new")}
             </Button>
           </>
@@ -182,6 +196,24 @@ export default function MyTasks({ meId }) {
             onCancel={() => setCreating(false)}
             onCreated={(task) => {
               setCreating(false);
+              load();
+              open(task.id);
+            }}
+          />
+        )}
+      </Modal>
+
+      <Modal open={starting} onClose={() => setStarting(false)} title={t("erp.startWork.open")} wide>
+        {starting && (
+          <StartWork
+            lookups={lookups}
+            onClose={() => setStarting(false)}
+            onOpenTask={(id) => {
+              setStarting(false);
+              open(id);
+            }}
+            onStarted={(task) => {
+              setStarting(false);
               load();
               open(task.id);
             }}

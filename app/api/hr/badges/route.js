@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { protectedBadges, protectedRecord } from "@/lib/hrAccess";
 import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
@@ -46,6 +47,8 @@ export async function PUT(request) {
   const badgeId = cleanBadge(body.badgeId);
   if (!badgeId) return fail("invalid_request");
   if (body.userId !== null && !isObjectId(body.userId)) return fail("invalid_request");
+  // An ID can't be given to (or taken from) oneself or an HR person: the CEO does that.
+  if ((await protectedBadges(user, [badgeId])) || (body.userId && (await protectedRecord(user, body.userId)))) return forbidden();
 
   const previous = await User.find({ badgeId }, { name: 1, nameAr: 1 }).lean();
   await User.updateMany({ badgeId, ...(body.userId ? { _id: { $ne: body.userId } } : {}) }, { $set: { badgeId: "" } });

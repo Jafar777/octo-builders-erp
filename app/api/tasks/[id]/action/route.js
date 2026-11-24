@@ -8,14 +8,18 @@ import WorkProject from "@/models/WorkProject";
 import PurchaseRequest from "@/models/PurchaseRequest";
 import { scaledDue } from "@/lib/projectScale";
 import { replanPaused, setHoursLeft, trackDelays } from "@/lib/projectDelay";
-import { addWorkHours, cancelNeedsApproval, holdsTime, isRedo, nextWorkMoment } from "@/lib/gantt";
+import { workMsBetween, addWorkHours, cancelNeedsApproval, holdsTime, isRedo, nextWorkMoment } from "@/lib/gantt";
 import { cancelTask, rejectCancel, requestCancel, restoreTask } from "@/lib/taskCancel";
-import { reviewTask, reviseApproved, startReview } from "@/lib/taskReview";
+import { reviewTask, startReview } from "@/lib/taskReview";
+import { claimed, hybridPerson, pauseRunning } from "@/lib/hybridServer";
+import { closeItemsForTask } from "@/lib/officeServer";
 import {
   applyTransition,
   canManageTask,
   enrichTask,
   logActivity,
+  canStartNow,
+  changeBlockers,
   notifyUnblocked,
   openBlockers,
   publishTaskChange,
@@ -26,6 +30,11 @@ import { nextNumber } from "@/models/Counter";
 import Task from "@/models/Task";
 import { cleanDelivery, serverDeliveryRequired } from "@/lib/fileServer";
 import User from "@/models/User";
+import Role from "@/models/Role";
+import { canWorkIn, TOP_ROLES } from "@/lib/permissions";
+import { withWorkDepartments } from "@/lib/roles";
+
+const idOf = (v) => (v ? v.toString() : null);
 
 const ASSIGNEE_ACTIONS = ["start", "undo_start", "pause", "resume", "help", "submit", "hours_left"];
 
@@ -50,23 +59,34 @@ export async function POST(request, { params }) {
   if (!user) return forbidden();
   const { id } = await params;
   if (!isObjectId(id)) return notFound();
+  const body = await readJson(request);
+  try {
+    // One start / resume at a time per employee (a double click, two tabs).
+    if (["start", "resume"].includes(body.action)) {
+      const owner = await Task.findById(id, { assignee: 1 }).lean();
+      if (!owner) return notFound();
+      const res = await claimed([`user:${owner.assignee}`], () => act(user, id, body));
+      return res?.busy ? fail("start_busy", 409) : res;
+    }
+    return await act(user, id, body);
+  } catch (err) {
+    // Saved by someone else in the same moment.
+    if (err?.name === "VersionError") return fail("task_changed", 409);
+    throw err;
+  }
+}
+
+async function act(user, id, body) {
   const task = await Task.findById(id);
   if (!task) return notFound();
 
-  const body = await readJson(request);
   const action = body.action;
   const isAssignee = task.assignee.toString() === user.id;
   const actorName = user.name || user.email;
   const now = new Date();
 
   if (action === "review") return review(user, task, body, now);
-  // revise { notes, hours } → a new revision of an approved task (a change from the client).
-  if (action === "revise") {
-    if (!canRouteStages(user) && !canManageTask(user, task) && !(await managesAssignee(user, task))) return forbidden();
-    const res = await reviseApproved(user, task, body);
-    if (res.error) return fail(res.error, 409);
-    return NextResponse.json({ ok: true, revisionTaskId: res.revisionTaskId });
-  }
+  // (A change from the client after approval: app/api/tasks/[id]/client-change.)
   if (["cancel", "cancel_decision", "restore"].includes(action)) return cancelling(user, task, body, isAssignee);
 
   if (!ASSIGNEE_ACTIONS.includes(action)) return fail("invalid_action");
@@ -85,11 +105,24 @@ export async function POST(request, { params }) {
     return NextResponse.json({ task: await enrichTask(task) });
   }
 
+  // Held for a client change to work it builds on: it goes on once that's handed in.
+  if (["resume", "submit"].includes(action)) {
+    const held = await changeBlockers(task);
+    if (held.length) return fail("waiting_client_change", 409, { numbers: held.map((h) => h.number) });
+  }
+
   let helper = null;
   if (action === "help") {
     if (!isObjectId(body.helperId) || body.helperId === user.id) return fail("invalid_helper");
-    helper = await User.findOne({ _id: body.helperId, status: "active", role: { $ne: "user" } }).lean();
+    helper = await User.findOne({ _id: body.helperId, status: "active", role: { $nin: ["user", ...TOP_ROLES] } }).lean();
     if (!helper) return fail("invalid_helper");
+    // A colleague who can work on it: not the GM / restricted roles (no task pages), and of
+    // the task's department, the asker's own, or one the CEO opened to them (or merged).
+    const helperRole = await Role.findOne({ key: helper.role }, { limited: 1 }).lean();
+    if (!helperRole || helperRole.limited) return fail("invalid_helper");
+    const [worker] = await withWorkDepartments([helper]);
+    const sameTeam = Boolean(user.department) && idOf(helper.department) === user.department;
+    if (!sameTeam && !canWorkIn(worker.work, task.department)) return fail("helper_other_department", 403);
   }
   if (action === "submit") {
     if (typeof body.deliveryLink === "string") task.deliveryLink = body.deliveryLink.trim().slice(0, 1000);
@@ -113,7 +146,7 @@ export async function POST(request, { params }) {
     // Ordered / mixed projects: a waiting stage can't start before the earlier stages finish.
     if (task.project && task.stage) {
       const project = await WorkProject.findById(task.project).lean();
-      if (project && (await isStageLocked(project, task.stage))) return fail("stage_waiting", 409);
+      if (project && (await isStageLocked(project, task.stage, task))) return fail("stage_waiting", 409);
     }
     // Waiting for something to be bought (Purchasing): it can't start until it arrives.
     const purchase = await PurchaseRequest.findOne({ task: task._id, status: { $in: ["pending", "approved", "ordered"] } }, { number: 1 }).lean();
@@ -121,21 +154,37 @@ export async function POST(request, { params }) {
   }
 
   // An employee works on one task at a time: pause the running one first.
+  let switchFrom = null;
   if ((action === "start" || action === "resume") && task.kind !== "meeting") {
     const running = await Task.findOne({ assignee: task.assignee, status: "in_progress", kind: { $ne: "meeting" }, _id: { $ne: task._id } }, { number: 1 }).lean();
-    if (running) return fail("another_task_running", 409, { number: running.number });
+    // Where employees start their own work, the one they were on is paused for them (below,
+    // once this one is sure to start).
+    if (running) {
+      if (!(await hybridPerson(task.assignee))) return fail("another_task_running", 409, { number: running.number });
+      switchFrom = running._id;
+    }
   }
   // Rejected work comes first: with a redo waiting, the next task to start is the redo.
   // Work already going (paused, waiting for help) can still be resumed and finished.
   if (action === "start" && task.kind !== "meeting" && !isRedo(task)) {
-    const redo = await Task.findOne({ assignee: task.assignee, status: "todo", revision: { $gt: 0 }, kind: { $ne: "meeting" }, _id: { $ne: task._id } }, { number: 1 })
+    const redos = await Task.find({ assignee: task.assignee, status: "todo", revision: { $gt: 0 }, revisionCause: { $nin: ["improvement", "correction"] }, kind: { $ne: "meeting" }, _id: { $ne: task._id }, "legacy.source": { $ne: "excel-redo" } })
       .sort({ createdAt: 1 })
       .lean();
-    if (redo) return fail("redo_first", 409, { number: redo.number });
+    // A redo that itself waits for other work can't be started, so it doesn't come first.
+    for (const redo of redos) if (await canStartNow(redo)) return fail("redo_first", 409, { number: redo.number });
   }
 
+  // Held for a client change: the time it waited isn't the employee's.
+  const heldSince = action === "resume" && task.waitsForChange?.length && task.promisedAt ? task.pausedAt : null;
+  const madeByStart = action === "undo_start" && task.origin === "self" && !task.startUndo?.plannedStart;
   const error = applyTransition(task, action, now);
   if (error) return fail(error, 409);
+  if (heldSince) {
+    const pc = await personCalendar(task.assignee, await getWorkCalendar());
+    task.promisedAt = new Date(addWorkHours(task.promisedAt.getTime(), workMsBetween(heldSince.getTime(), now.getTime(), pc) / 3600000, pc));
+  }
+  if (["start", "resume"].includes(action)) task.autoPausedAt = null;
+  if (switchFrom) await pauseRunning(task.assignee, task._id, user);
   // Scaled project: the allowed hours count from the moment work starts.
   if (action === "start" && task.maxHours > 0 && !task.dueManual) {
     task.dueAt = scaledDue(now, task.maxHours, await personCalendar(task.assignee, await getWorkCalendar()));
@@ -145,6 +194,9 @@ export async function POST(request, { params }) {
   // Handed in: a cancellation it was waiting on no longer applies.
   if (action === "submit" && task.cancelRequest?.status === "pending") task.cancelRequest.status = "";
   await task.save();
+  // Finished without a review (a meeting, a personal task): an office request made into
+  // it is done too, and the office hears it.
+  if (task.status === "done") await closeItemsForTask(task, user).catch((err) => console.error("closeItemsForTask", err));
   // Its new due time can run into the employee's next planned tasks: they move later.
   // The tasks waiting for it (in anyone's plan) move after its new finish too.
   if (action === "start" && holdsTime(task)) {
@@ -154,6 +206,8 @@ export async function POST(request, { params }) {
   }
   // Paused work can only go on after what the employee works on now.
   // Back to its plan: other work it pushed may sit there now, and paused work moves up.
+  // Work they started themselves by mistake was never planned: it goes away.
+  if (action === "undo_start" && madeByStart) await cancelTask(task, user, "");
   if (action === "undo_start") {
     const cal = await getWorkCalendar();
     const moved = await clearOverlaps(task.assignee, cal, user);
@@ -207,7 +261,11 @@ export async function POST(request, { params }) {
       estimatedHours: helpHours,
     });
     const shifted = await clearOverlaps(helper._id, cal, user);
-    if (shifted.length) await cascadeFrom(shifted, cal, user);
+    if (shifted.length) {
+      await cascadeFrom(shifted, cal, user);
+      // The helper's moved work can move their projects' delivery.
+      await trackDelays({ cause: "task_added", task: helpTask }, user);
+    }
     await logActivity(helpTask._id, user, "created", "", { helpFor: task.number });
     await notify({
       type: "task.help_requested",

@@ -1,9 +1,6 @@
-import { requirePermission } from "@/lib/currentUser";
-import RecruitmentCenter from "@/components/erp/recruitment/RecruitmentCenter";
-import NoAccess from "@/components/erp/NoAccess";
+import { redirect } from "next/navigation";
 
-export default async function RecruitmentPage() {
-  const user = await requirePermission("recruitment.manage");
-  if (!user || user.limited) return <NoAccess />;
-  return <RecruitmentCenter />;
+// Moved into the HR page (older links).
+export default function RecruitmentPage() {
+  redirect("/dashboard/hr?tab=recruitment");
 }

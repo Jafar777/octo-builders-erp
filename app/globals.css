@@ -395,6 +395,44 @@ html {
 .erp-light .org-tree ul ul::before {
   border-color: rgb(19 40 58 / 0.2);
 }
+/* Faint text in the light theme: the see-through greys were chosen for black and fade
+   out on light paper, so each step is a little stronger here. */
+.erp-light .text-white\/25:not(.keep-dark *) {
+  color: color-mix(in oklab, var(--color-white) 50%, transparent);
+}
+.erp-light .text-white\/30:not(.keep-dark *) {
+  color: color-mix(in oklab, var(--color-white) 55%, transparent);
+}
+.erp-light .text-white\/35:not(.keep-dark *) {
+  color: color-mix(in oklab, var(--color-white) 58%, transparent);
+}
+.erp-light .text-white\/40:not(.keep-dark *) {
+  color: color-mix(in oklab, var(--color-white) 62%, transparent);
+}
+.erp-light .text-white\/45:not(.keep-dark *) {
+  color: color-mix(in oklab, var(--color-white) 66%, transparent);
+}
+.erp-light .text-white\/50:not(.keep-dark *) {
+  color: color-mix(in oklab, var(--color-white) 70%, transparent);
+}
+.erp-light .text-white\/55:not(.keep-dark *) {
+  color: color-mix(in oklab, var(--color-white) 74%, transparent);
+}
+.erp-light .text-white\/60:not(.keep-dark *) {
+  color: color-mix(in oklab, var(--color-white) 78%, transparent);
+}
+.erp-light .text-white\/65:not(.keep-dark *) {
+  color: color-mix(in oklab, var(--color-white) 81%, transparent);
+}
+.erp-light .text-white\/70:not(.keep-dark *) {
+  color: color-mix(in oklab, var(--color-white) 84%, transparent);
+}
+.erp-light .text-white\/75:not(.keep-dark *) {
+  color: color-mix(in oklab, var(--color-white) 87%, transparent);
+}
+.erp-light .text-white\/80:not(.keep-dark *) {
+  color: color-mix(in oklab, var(--color-white) 90%, transparent);
+}
 html.erp-light,
 html.erp-light body {
   background: #f4f2ee;
@@ -430,4 +468,55 @@ html.erp-light body {
   background-color: #000000;
   border-radius: 1.25rem;
   padding: 0.75rem;
+}
+
+/* ---- Appearance page (lib/appearance.js) ----
+   With an animated background the frame lets it show through, and the sidebar, header
+   and cards become tinted glass: --panel-tint of the page colour, blurred by --glass-blur. */
+.erp-root.has-bg {
+  background: transparent;
+}
+.erp-root.has-bg > aside,
+.erp-root.has-bg header,
+.erp-root.has-bg :is([class*="bg-white/[0.0"], [class*="bg-white/5"], [class*="bg-brand-navy-light"]) {
+  background-color: color-mix(in srgb, var(--color-brand-navy) var(--panel-tint, 72%), transparent);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 10px));
+  backdrop-filter: blur(var(--glass-blur, 10px));
+}
+/* Inputs keep a little of the ink on top, so fields stay visible on the glass. */
+.erp-root.has-bg :is(input, select, textarea)[class*="bg-white/5"] {
+  background-color: color-mix(in srgb, var(--color-white) 6%, color-mix(in srgb, var(--color-brand-navy) var(--panel-tint, 72%), transparent));
+}
+/* Motion off: no moving parts anywhere in the dashboard. */
+.erp-still *,
+.erp-still *::before,
+.erp-still *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* The thing a notification is about, pointed at on its page (components/dashboard/focusEntity.js):
+   a pulsing ring in the accent colour for a few seconds. */
+@keyframes entity-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brand-orange) 0%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--color-brand-orange) 85%, transparent),
+      0 0 26px 6px color-mix(in srgb, var(--color-brand-orange) 45%, transparent);
+  }
+}
+.entity-glow {
+  /* (No position change: timeline bars are placed absolutely.) */
+  z-index: 6;
+  border-radius: var(--radius-lg, 0.5rem);
+  background-color: color-mix(in srgb, var(--color-brand-orange) 14%, transparent) !important;
+  animation: entity-glow 1.2s ease-in-out 5;
+}
+.erp-still .entity-glow {
+  box-shadow: 0 0 0 3px var(--color-brand-orange);
 }

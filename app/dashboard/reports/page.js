@@ -1,9 +1,6 @@
-import { requirePermission } from "@/lib/currentUser";
-import ReportBuilder from "@/components/erp/reports/ReportBuilder";
-import NoAccess from "@/components/erp/NoAccess";
+import { redirect } from "next/navigation";
 
-export default async function ReportsPage() {
-  const user = await requirePermission("reports.build");
-  if (!user || user.limited) return <NoAccess />;
-  return <ReportBuilder />;
+// The report builder was removed (older bookmarks).
+export default function ReportsPage() {
+  redirect("/dashboard");
 }

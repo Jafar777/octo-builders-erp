@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/currentUser";
 import { fail, forbidden, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
-import { departmentManagers } from "@/lib/leave";
+import { loadLinks, personManagers } from "@/lib/reporting";
 import { notify } from "@/lib/notify";
 import { outsideRoleKeys } from "@/lib/scope";
 import Appraisal, { AppraisalCycle } from "@/models/Appraisal";
@@ -11,7 +11,7 @@ import User from "@/models/User";
 const dateOk = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || "");
 
 // Opens a cycle: { name, from, to, dueDate, selfReview }. Every employee (not the
-// restricted or hidden accounts, not the CEO) gets a review by their department manager,
+// restricted or hidden accounts, not the CEO) gets a review by their manager (lib/reporting.js),
 // or by the person opening the cycle when the department has none.
 export async function POST(request) {
   const user = await requirePermission("appraisals.manage");
@@ -22,8 +22,10 @@ export async function POST(request) {
   const cycle = await AppraisalCycle.create({ name, from: b.from, to: b.to, dueDate: dateOk(b.dueDate) ? b.dueDate : "", selfReview: b.selfReview !== false, createdBy: user.id });
   const staff = await User.find({ status: "active", role: { $nin: [...(await outsideRoleKeys()), "ceo"] } }, { department: 1 }).lean();
   const docs = [];
+  const ctx = await loadLinks();
   for (const s of staff) {
-    const managers = await departmentManagers(s.department, s._id.toString());
+    // Their manager: the one the chart moved them to, else their department's.
+    const managers = await personManagers(s, ctx);
     docs.push({ cycle: cycle._id, employee: s._id, reviewer: managers[0] || user.id });
   }
   if (docs.length) await Appraisal.insertMany(docs, { ordered: false }).catch(() => {});

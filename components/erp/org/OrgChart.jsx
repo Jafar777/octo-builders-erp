@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronLeft, Crown, Hand, Minus, Plus, Search, Users } from "lucide-react";
+import { ChevronDown, ChevronLeft, Crown, Hand, Merge, Minus, Plus, Search, Users } from "lucide-react";
+import { formatDate } from "@/lib/formatTime";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { useOnlineUsers } from "@/context/RealtimeContext";
@@ -17,7 +18,7 @@ const topRank = (p) => ({ gm: 0, ceo: 1 })[p.role] ?? 2;
 
 // One person on the chart.
 // `depts`: their own department first, then any other they manage.
-function PersonCard({ person, depts = [], lang, t, isMe, selected, online, reports, collapsed, onSelect, onToggle, showManual }) {
+function PersonCard({ person, depts = [], merge = null, lang, t, isMe, selected, online, reports, collapsed, onSelect, onToggle, showManual }) {
   const dept = depts[0] || null;
   const top = !person.managerId;
   return (
@@ -54,6 +55,15 @@ function PersonCard({ person, depts = [], lang, t, isMe, selected, online, repor
             </span>
           )}
         </span>
+        {/* Leads departments merged for now (Organization → Departments). */}
+        {merge && (
+          <span
+            className="inline-flex items-center gap-1 rounded-full bg-brand-orange/15 px-2 py-0.5 text-[11px] text-brand-orange"
+            title={`${t("erp.org.merge.badgeHint")}${merge.endsAt ? ` · ${t("erp.org.merge.until", { date: formatDate(merge.endsAt, lang) })}` : ""}`}
+          >
+            <Merge size={10} /> {t("erp.org.merge.badge", { n: merge.departments.length })}
+          </span>
+        )}
         {(isMe || (showManual && person.source === "manual")) && (
           <span className="flex flex-wrap justify-center gap-1">
             {isMe && <span className="rounded-full bg-brand-orange/20 px-2 py-0.5 text-[11px] text-brand-orange">{t("erp.hierarchy.you")}</span>}
@@ -104,7 +114,7 @@ export default function OrgChart() {
     load();
   }, [load]);
 
-  const { byId, childrenOf, roots, deptOf, deptsOf } = useMemo(() => {
+  const { byId, childrenOf, roots, deptOf, deptsOf, mergeLedBy } = useMemo(() => {
     const people = data?.people || [];
     const map = new Map(people.map((p) => [p.id, p]));
     const kids = {};
@@ -121,6 +131,8 @@ export default function OrgChart() {
       deptOf: (p) => (p?.department ? depts[p.department] : null),
       // Their own department, then the others they head.
       deptsOf: (p) => [p?.department, ...(p?.managedDepartments || [])].filter(Boolean).map((id) => depts[id]).filter(Boolean),
+      // The temporary merge this person leads, if any.
+      mergeLedBy: (p) => (data?.merges || []).find((m) => m.manager === p?.id) || null,
     };
   }, [data]);
 
@@ -187,6 +199,7 @@ export default function OrgChart() {
       <PersonCard
         person={p}
         depts={deptsOf(p)}
+        merge={mergeLedBy(p)}
         lang={lang}
         t={t}
         isMe={p.id === meId}
@@ -240,6 +253,14 @@ export default function OrgChart() {
                 <p className="text-sm text-white/55">
                   {[focus.jobTitle?.[lang] || focus.roleName?.[lang], deptsOf(focus).map((d) => d.name?.[lang]).join(" + ")].filter(Boolean).join(" · ")}
                 </p>
+                {mergeLedBy(focus) && (
+                  <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-brand-orange/15 px-2.5 py-0.5 text-xs text-brand-orange">
+                    <Merge size={12} />
+                    {t("erp.org.merge.badge", { n: mergeLedBy(focus).departments.length })}
+                    {" · "}
+                    {mergeLedBy(focus).endsAt ? t("erp.org.merge.until", { date: formatDate(mergeLedBy(focus).endsAt, lang) }) : t("erp.org.merge.untilEnded")}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -315,9 +336,19 @@ export default function OrgChart() {
                 disabled={saving}
                 onChange={setManager}
                 placeholder={t("erp.hierarchy.automatic")}
-                options={data.people.filter((p) => p.id !== focus.id).map((p) => ({ value: p.id, label: p.name }))}
+                options={data.people
+                  .filter((p) => p.id !== focus.id)
+                  .map((p) => ({ value: p.id, label: p.managesPeople ? p.name : `${p.name} ${t("erp.hierarchy.chartOnlyOption")}` }))}
               />
               <p className="text-xs text-white/60">{t("erp.hierarchy.autoHint")}</p>
+              {/* What the hand-set link really changes (lib/reporting.js). */}
+              {focus.source === "manual" && boss && (
+                <p
+                  className={`rounded-lg px-3 py-2 text-xs sm:col-span-2 ${boss.managesPeople ? "bg-emerald-500/10 text-emerald-200" : "bg-amber-500/10 text-amber-200"}`}
+                >
+                  {t(boss.managesPeople ? "erp.hierarchy.moveEffect" : "erp.hierarchy.chartOnly", { manager: boss.name, name: focus.name })}
+                </p>
+              )}
             </div>
           )}
           <ErrorText>{error}</ErrorText>

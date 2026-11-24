@@ -70,7 +70,8 @@ export function DocumentsCard({ userId, data, onChanged }) {
       }
       setUploading((n) => n + 1);
       try {
-        const r = await uploadFile(file);
+        // Kept in the person's own HR folder: only people who may see their file open it.
+        const r = await uploadFile(file, { folder: `/octabuilders/hr/${userId}` });
         await api(`/api/hr/employees/${userId}/documents`, {
           method: "POST",
           body: { name: file.name, url: r.url, fileId: r.fileId, mime: file.type, size: file.size },

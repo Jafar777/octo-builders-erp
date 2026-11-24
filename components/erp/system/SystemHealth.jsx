@@ -10,7 +10,8 @@ import { LoginHistory } from "@/components/erp/security/SecurityCard";
 const fmt = (d, lang) => new Date(d).toLocaleString(lang === "ar" ? "ar" : "en-GB", { dateStyle: "medium", timeStyle: "short" });
 
 // The System page: errors on the live site, grouped, and everyone's recent sign-ins.
-export default function SystemHealth() {
+// `embedded`: inside the System page's tab (its header is the page's).
+export default function SystemHealth({ embedded = false }) {
   const { t, lang } = useLanguage();
   const [data, setData] = useState(null);
   const [showResolved, setShowResolved] = useState(false);
@@ -31,7 +32,7 @@ export default function SystemHealth() {
   const stats = data?.stats;
   return (
     <div className="space-y-6">
-      <PageHeader title={t("erp.nav.system")} subtitle={t("erp.system.subtitle")} />
+      {!embedded && <PageHeader title={t("erp.nav.system")} subtitle={t("erp.system.subtitle")} />}
       {stats && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {[

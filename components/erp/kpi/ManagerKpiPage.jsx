@@ -13,6 +13,7 @@ import { SkeletonCards } from "@/components/erp/ui/Loading";
 import Stars from "@/components/erp/tasks/Stars";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { TEAM_METRICS } from "@/lib/kpi/hybrid";
+import OfficeRating from "@/components/erp/kpi/OfficeRating";
 
 const tone = (v) => (v === null || v === undefined ? "text-white/60" : v >= 80 ? "text-emerald-300" : v >= 60 ? "text-amber-200" : "text-red-300");
 
@@ -456,6 +457,7 @@ export default function ManagerKpiPage({ initialMonth }) {
             <ManagerCard key={m.id} manager={m} data={data} month={month} departmentName={lookups.departmentName} onSaved={load} />
           ))}
           {data.managers.length === 0 && <Card className="text-center text-white/50">{t("erp.managerKpi.none")}</Card>}
+          {data.canRate && <OfficeRating month={month} />}
         </div>
       )}
     </div>

@@ -5,7 +5,7 @@ const tags = [{ key: "exc", kind: "excellent" }, { key: "err", kind: "error" }];
 const due = new Date("2026-01-10T12:00:00Z");
 const early = new Date("2026-01-10T10:00:00Z");
 const late = new Date("2026-01-11T10:00:00Z");
-const task = (assignee, o = {}) => ({ assignee, kind: "task", status: "approved", revision: 0, dueAt: due, submittedAt: early, activeMs: 3600000, ratings: [], ...o });
+const task = (assignee, o = {}) => ({ assignee, kind: "task", status: "approved", revision: 0, dueAt: due, submittedAt: early, activeMs: 3600000, maxHours: 1, ratings: [], ...o });
 
 // A: fast, on time, approved first time, rated excellent. B: slow, late, rejected once.
 const tasks = [

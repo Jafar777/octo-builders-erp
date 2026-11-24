@@ -3,7 +3,7 @@ import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
 import { todayIn } from "@/lib/hr";
-import { canSeePerson } from "@/lib/hrAccess";
+import { canSeePerson, protectedBadges } from "@/lib/hrAccess";
 import { fromLocal, localParts } from "@/lib/attendance";
 import { canManageFingerprint, cleanBadge, closedMonthOf, punchTime, replacePunch, serializePunch } from "@/lib/fingerprint";
 import { getSettings } from "@/lib/settings";
@@ -68,6 +68,8 @@ export async function POST(request) {
     badgeId = cleanBadge(body.badgeId);
   }
   if (!badgeId) return fail("invalid_request");
+  // Not on one's own ID, nor an HR person's (the CEO's to correct).
+  if (await protectedBadges(user, [badgeId])) return forbidden();
 
   const time = body.date ? punchTime(body, tz) : punchTime({ at: body.time }, tz);
   if (!time || time > new Date(Date.now() + 60000)) return fail("invalid_date");
@@ -100,6 +102,7 @@ export async function PATCH(request) {
   const { hr } = await getSettings();
   const punches = await RawPunch.find({ _id: { $in: ids } });
   if (await closedMonthOf(punches.map((p) => p.time), hr.timezone)) return fail("month_closed", 409);
+  if (await protectedBadges(user, [...punches.map((p) => p.badgeId), body.action === "move" ? cleanBadge(body.badgeId) : ""])) return forbidden();
 
   let changed = 0;
   let skipped = 0;

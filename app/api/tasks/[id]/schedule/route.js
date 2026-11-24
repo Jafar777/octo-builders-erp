@@ -108,6 +108,9 @@ export async function PATCH(request, { params }) {
     if (early.length) return fail("before_dependency", 409, { numbers: early.map((p) => p.number) });
   }
 
+  // The CEO gave it a new time: that's the new promise. (A new employee isn't held to a fixed place.)
+  if (changes.dueAt) changes.promisedAt = changes.dueAt;
+  if (reassign) changes.fixed = false;
   const before = task.assignee.toString();
   if (Object.keys(changes).length) {
     task.set(changes);

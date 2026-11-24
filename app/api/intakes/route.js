@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
-import { canUseIntake, intakeNames, serializeIntake } from "@/lib/intake";
+import { canUseIntake, intakeNames, intakeScope, serializeIntake } from "@/lib/intake";
 import { cleanIntake } from "@/lib/intakeRules";
 import { notify } from "@/lib/notify";
 import { usersWithPermissionFor, usersWithRolePermission } from "@/lib/scope";
@@ -15,9 +15,11 @@ export async function GET(request) {
   const user = await requireStaff({ limited: true });
   if (!user || !canUseIntake(user)) return forbidden();
   const status = new URL(request.url).searchParams.get("status");
-  const query = INTAKE_STATUSES.includes(status) ? { status: status === "ready" ? { $in: ["ready", "converting"] } : status } : {};
+  // A department manager: their departments' forms and the ones still to take on (lib/intake.js).
+  const scope = intakeScope(user) || {};
+  const query = { ...scope, ...(INTAKE_STATUSES.includes(status) ? { status: status === "ready" ? { $in: ["ready", "converting"] } : status } : {}) };
   const list = await ProjectIntake.find(query).sort({ createdAt: -1 }).limit(500).lean();
-  const counts = Object.fromEntries((await ProjectIntake.aggregate([{ $group: { _id: "$status", n: { $sum: 1 } } }])).map((c) => [c._id, c.n]));
+  const counts = Object.fromEntries((await ProjectIntake.aggregate([{ $match: scope }, { $group: { _id: "$status", n: { $sum: 1 } } }])).map((c) => [c._id, c.n]));
   counts.ready = (counts.ready || 0) + (counts.converting || 0);
   delete counts.converting;
   const names = await intakeNames(list);

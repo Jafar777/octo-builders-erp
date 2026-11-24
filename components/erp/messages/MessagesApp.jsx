@@ -111,7 +111,7 @@ export default function MessagesApp({ meId, canAnnounce, switcher = null }) {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={t("erp.search")}
+              placeholder={t("erp.searchHint")}
               className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pe-3 ps-9 text-sm outline-none focus:border-white/30"
             />
           </div>

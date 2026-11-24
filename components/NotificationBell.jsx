@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { entityKey, focusEntities } from "@/components/dashboard/focusEntity";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -43,6 +44,9 @@ export default function NotificationBell() {
   const { user } = useAuth();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  // The ones that were new when the panel opened: still marked while it's open, though
+  // opening it already counted them as read.
+  const [justSeen, setJustSeen] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [toast, setToast] = useState(null);
@@ -161,11 +165,25 @@ export default function NotificationBell() {
     if (data && Number.isFinite(data.unreadCount)) setUnreadCount(data.unreadCount);
   }
 
+  // Opening the panel reads everything in it: no "mark as read" to press.
+  function togglePanel() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const fresh = notifications.filter((n) => !n.read).map((n) => n.id);
+    setJustSeen(fresh);
+    setOpen(true);
+    if (unreadCount > 0) markRead();
+  }
+
   function openNotification(n) {
     if (!n.read) markRead([n.id]);
     setOpen(false);
     setToast(null);
     if (n.link) router.push(n.link);
+    // Its page then scrolls to the thing it's about and makes it glow.
+    focusEntities([entityKey(n)]);
   }
 
   const panel = (
@@ -183,11 +201,6 @@ export default function NotificationBell() {
         >
           <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3">
             <span className="text-sm font-semibold text-white">{t("notifications.title")}</span>
-            {unreadCount > 0 && (
-              <button type="button" onClick={() => markRead()} className="text-xs text-brand-orange hover:underline">
-                {t("notifications.markAllRead")}
-              </button>
-            )}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain sm:max-h-96">
             {notifications.length === 0 ? (
@@ -199,11 +212,11 @@ export default function NotificationBell() {
                   key={n.id}
                   onClick={() => openNotification(n)}
                   className={`block w-full border-b border-white/5 px-4 py-3.5 text-start text-sm leading-relaxed text-white/80 last:border-none hover:bg-white/5 ${
-                    !n.read ? "bg-white/[0.06]" : ""
+                    !n.read || justSeen.includes(n.id) ? "bg-white/[0.06]" : ""
                   }`}
                 >
                   <span className="flex items-start gap-2">
-                    {!n.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-orange" />}
+                    {(!n.read || justSeen.includes(n.id)) && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-orange" />}
                     <span className="min-w-0 break-words">
                       {n.message?.[lang] || n.message?.en || ""}
                       <span className="mt-1 block text-xs text-white/60">{formatRelative(n.createdAt, lang)}</span>
@@ -251,7 +264,7 @@ export default function NotificationBell() {
     <div className="relative" ref={ref}>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={togglePanel}
         aria-expanded={open}
         className="relative flex h-10 w-10 items-center justify-center rounded-full text-white/90 transition-colors hover:bg-white/10"
         aria-label={t("notifications.title")}

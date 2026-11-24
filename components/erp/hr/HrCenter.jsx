@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { motion } from "framer-motion";
 import Link from "next/link";
 import { Gift, Lock, LockOpen, Plus, Trash2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
@@ -15,9 +14,11 @@ import { Button, Card, ErrorText, Input, PageHeader, Select, Toggle } from "@/co
 import { hm, money, MonthPicker } from "@/components/erp/hr/hrUi";
 import PersonMonth from "@/components/erp/hr/PersonMonth";
 import FingerprintCenter from "@/components/erp/hr/FingerprintCenter";
-import LeaveList from "@/components/erp/hr/LeaveList";
 import SalaryUnlock from "@/components/erp/hr/SalaryUnlock";
-import { SkeletonList, SkeletonTable } from "@/components/erp/ui/Loading";
+import HrTabs from "@/components/erp/hr/HrTabs";
+import { hrTabsOf } from "@/components/erp/hr/hrPages";
+import RecruitmentCenter from "@/components/erp/recruitment/RecruitmentCenter";
+import { SkeletonTable } from "@/components/erp/ui/Loading";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 import { useConfirm } from "@/components/erp/ui/Feedback";
 
@@ -271,23 +272,18 @@ function Rules({ settings, onSaved }) {
   );
 }
 
-const TABS = ["attendance", "leave", "payroll", "devices", "rules"];
-
 export default function HrCenter({ initialMonth }) {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState(TABS.includes(searchParams.get("tab")) ? searchParams.get("tab") : "attendance");
+  const [picked, setTab] = useState(searchParams.get("tab") || "attendance");
   const [month, setMonth] = useState(/^\d{4}-\d{2}$/.test(searchParams.get("month") || "") ? searchParams.get("month") : initialMonth);
   const [data, setData] = useState(null);
   const [settings, setSettings] = useState(null);
   const [departments, setDepartments] = useState([]);
-  const [leaves, setLeaves] = useState(null);
   const router = useRouter();
   const [viewing, setViewing] = useState(null);
   const perms = useMemo(() => user?.permissions || [], [user]);
-  // HR / GM decide leave last; department managers decide it first for their department.
-  const seesLeave = perms.includes("leave.approve") || (user?.scope === "department" && perms.includes("tasks.review"));
   // HR manages each employee (attendance, profile, salary, documents) from their file on
   // the staff page; department heads only get a read-only look at the month.
   const openPerson = (staff) => (perms.includes("attendance.manage") ? router.push(`/dashboard/staff?person=${staff.id}`) : setViewing(staff));
@@ -297,49 +293,30 @@ export default function HrCenter({ initialMonth }) {
     if (personParam && perms.includes("attendance.manage")) router.replace(`/dashboard/staff?person=${personParam}`);
   }, [personParam, perms, router]);
 
+  // Someone who only does the hiring has no attendance to load.
+  const seesAttendance = perms.includes("attendance.view");
   const load = useCallback(() => {
+    if (!seesAttendance) return;
     api(`/api/hr/overview?month=${month}`).then(setData).catch(() => {});
-  }, [month]);
-  const loadLeaves = useCallback(() => {
-    if (seesLeave) api("/api/leave?view=all").then((d) => setLeaves(d.leaves)).catch(() => setLeaves([]));
-    else setLeaves([]);
-  }, [seesLeave]);
+  }, [month, seesAttendance]);
   const loadSettings = useCallback(() => api("/api/settings").then((d) => setSettings(d.settings)).catch(() => {}), []);
 
   useEffect(() => {
     load();
   }, [load]);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadLeaves();
     loadSettings();
     api("/api/messages/people").then((d) => setDepartments(d.departments)).catch(() => {});
-  }, [loadLeaves, loadSettings]);
+  }, [loadSettings]);
 
   const lookups = { dep: (id) => departments.find((d) => d.id === id)?.name?.[lang] || "—" };
-  const visibleTabs = TABS.filter(
-    (k) =>
-      (k === "leave" && seesLeave) ||
-      (k === "payroll" && perms.includes("payroll.manage") && user?.scope === "all") ||
-      (k === "devices" && perms.includes("attendance.manage") && user?.scope === "all") ||
-      (k === "rules" && perms.includes("payroll.manage") && user?.scope === "all") ||
-      k === "attendance"
-  );
-  const pending = (leaves || []).filter((l) => l.canDecide).length;
+  const visibleTabs = hrTabsOf(user);
+  const tab = visibleTabs.includes(picked) ? picked : visibleTabs[0];
 
   return (
     <div>
+      <HrTabs current={tab} onPick={setTab} />
       <PageHeader title={t("erp.nav.hr")} subtitle={t("erp.hr.subtitle")} actions={(tab === "attendance" || tab === "payroll") && <MonthPicker month={month} onChange={setMonth} />} />
-      <div className="relative mb-6 flex flex-wrap gap-1 border-b border-white/10">
-        {visibleTabs.map((key) => (
-          <button key={key} type="button" onClick={() => setTab(key)} className="relative px-4 py-3 text-sm font-medium text-white/60 data-[active=true]:text-white" data-active={tab === key}>
-            {t(`erp.hr.tab.${key}`)}
-            {key === "leave" && pending > 0 && <span className="ms-1.5 rounded-full bg-brand-orange px-1.5 text-[11px] text-white">{pending}</span>}
-            {tab === key && <motion.span layoutId="hr-tab" className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-brand-orange" />}
-          </button>
-        ))}
-      </div>
-
       {tab === "attendance" &&
         (data ? (
           <div className="animate-fade-up space-y-4">
@@ -349,25 +326,7 @@ export default function HrCenter({ initialMonth }) {
         ) : (
           <SkeletonTable rows={8} cols={7} />
         ))}
-      {tab === "leave" && !leaves && <SkeletonList rows={5} />}
-      {tab === "leave" && leaves && (
-        <div className="animate-fade-up space-y-8">
-          <div>
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/60">{t("erp.leaveFlow.waitingYou")}</h3>
-            <LeaveList leaves={leaves.filter((l) => l.canDecide)} approver onChanged={loadLeaves} empty={t("erp.leaveFlow.nothingForYou")} />
-          </div>
-          {leaves.some((l) => l.status === "pending" && !l.canDecide) && (
-            <div>
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/60">{t("erp.leaveFlow.inProgress")}</h3>
-              <LeaveList leaves={leaves.filter((l) => l.status === "pending" && !l.canDecide)} approver onChanged={loadLeaves} />
-            </div>
-          )}
-          <div>
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/60">{t("erp.hr.leaveHistory")}</h3>
-            <LeaveList leaves={leaves.filter((l) => l.status !== "pending")} approver onChanged={loadLeaves} />
-          </div>
-        </div>
-      )}
+      {tab === "recruitment" && <RecruitmentCenter />}
       {tab === "payroll" &&
         (!data || !settings ? (
           <SkeletonTable rows={8} cols={8} />

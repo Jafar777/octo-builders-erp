@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { inClosedMonth } from "@/lib/financeEntries";
 import { getCurrentUser, hasPermission } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
@@ -28,7 +29,7 @@ export async function PATCH(request, { params }) {
   if (!pr) return notFound();
   const b = await readJson(request);
   const tell = async (type, recipients) =>
-    notify({ type, recipients: recipients.filter(Boolean).map(String).filter((r) => r !== user.id), actor: user, params: { title: pr.title, number: pr.number }, link: "/dashboard/purchasing", entityType: "purchase", entityId: pr._id });
+    notify({ type, recipients: recipients.filter(Boolean).map(String).filter((r) => r !== user.id), actor: user, params: { title: pr.title, number: pr.number }, link: "/dashboard/orders?type=purchase", entityType: "purchase", entityId: pr._id });
 
   if (b.action === "approve" || b.action === "reject") {
     if (pr.status !== "pending" || !canDecidePurchase(user, pr)) return forbidden();
@@ -55,6 +56,7 @@ export async function PATCH(request, { params }) {
     const settings = await getSettings();
     const money = cleanMoney({ amount: b.amount ?? pr.total, currency: pr.currency || settings.currencies.base }, settings.currencies);
     if (money.error || !(money.amount > 0)) return fail(money.error || "invalid_amount");
+    if (await inClosedMonth(/^\d{4}-\d{2}-\d{2}$/.test(b.date || "") ? b.date : new Date().toISOString().slice(0, 10))) return fail("month_closed", 409);
     const category = settings.finance.expenseCategories.some((c) => c.key === b.category) ? b.category : settings.finance.expenseCategories[0]?.key || "";
     const entry = await FinanceEntry.create({
       kind: pr.project ? "project_expense" : "operating_expense",

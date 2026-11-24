@@ -115,6 +115,9 @@ const UserSchema = new mongoose.Schema(
       favorites: { type: [String], default: [] },
       collapsed: { type: [String], default: [] },
       welcomedAt: { type: Date, default: null },
+      // Their own look (Appearance page; lib/appearance.js cleanAppearance), or null to
+      // follow the company default the CEO sets.
+      appearance: { type: mongoose.Schema.Types.Mixed, default: null },
     },
     lastLoginAt: { type: Date },
     lastSeenAt: { type: Date },

@@ -2,12 +2,13 @@
 
 import { matches, SearchBox } from "@/components/erp/ui/ListControls";
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { CalendarClock, CheckCircle2, FileText, Plus, Send, Sparkles, Trash2, XCircle } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
 import { formatMoney } from "@/components/erp/intake/MoneyFields";
 import Modal from "@/components/erp/ui/Modal";
-import { Button, Card, ErrorText, Input, PageHeader, Select } from "@/components/erp/ui/fields";
+import { Button, Card, ErrorText, Input, Select } from "@/components/erp/ui/fields";
 import { useTaskLookups } from "@/components/erp/tasks/useTaskLookups";
 import { useConfirm } from "@/components/erp/ui/Feedback";
 import { DraftBar, useDraft } from "@/components/erp/ui/useDraft";
@@ -17,12 +18,12 @@ const STAGES = ["new", "contacted", "meeting", "proposal", "won", "lost"];
 const SOURCES = ["referral", "website", "social", "walk_in", "repeat", "other"];
 const fmtDate = (d, lang) => (d ? new Date(d).toLocaleDateString(lang === "ar" ? "ar" : "en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—");
 
-// The Sales page: leads on a board by stage, and quotations with the delivery date the
+// Sales (a tab of the Finance page): leads on a board by stage, and quotations with the delivery date the
 // Gantt would give if accepted. An accepted quotation becomes an intake form.
 export default function SalesCenter() {
   const { t } = useLanguage();
   const lookups = useTaskLookups();
-  const [tab, setTab] = useState("leads");
+  const [tab, setTab] = useState(useSearchParams().get("view") === "quotes" ? "quotes" : "leads");
   const [q, setQ] = useState("");
   const [leads, setLeads] = useState(null);
   const [quotes, setQuotes] = useState(null);
@@ -40,20 +41,17 @@ export default function SalesCenter() {
 
   return (
     <div>
-      <PageHeader
-        title={t("erp.nav.sales")}
-        subtitle={t("erp.sales.subtitle")}
-        actions={
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => setOpenQuote("new")}>
-              <FileText size={16} /> {t("erp.sales.newQuote")}
-            </Button>
-            <Button onClick={() => setOpenLead("new")}>
-              <Plus size={16} /> {t("erp.sales.newLead")}
-            </Button>
-          </div>
-        }
-      />
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-white/60">{t("erp.sales.subtitle")}</p>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={() => setOpenQuote("new")}>
+            <FileText size={16} /> {t("erp.sales.newQuote")}
+          </Button>
+          <Button onClick={() => setOpenLead("new")}>
+            <Plus size={16} /> {t("erp.sales.newLead")}
+          </Button>
+        </div>
+      </div>
       <div className="mb-5 flex gap-1 border-b border-white/10">
         {["leads", "quotes"].map((k) => (
           <button key={k} type="button" onClick={() => setTab(k)} className={`-mb-px border-b-2 px-4 py-2.5 text-sm ${tab === k ? "border-brand-orange text-white" : "border-transparent text-white/50 hover:text-white"}`}>
@@ -77,7 +75,7 @@ export default function SalesCenter() {
                   {list.map((l) => {
                     const due = l.nextAction?.date && l.nextAction.date <= new Date().toISOString().slice(0, 10) && !["won", "lost"].includes(l.stage);
                     return (
-                      <button key={l.id} type="button" onClick={() => setOpenLead(l)} className="w-full rounded-xl border border-white/10 bg-brand-navy p-2.5 text-start hover:border-white/30">
+                      <button key={l.id} data-entity={`lead:${l.id}`} type="button" onClick={() => setOpenLead(l)} className="w-full rounded-xl border border-white/10 bg-brand-navy p-2.5 text-start hover:border-white/30">
                         <p className="truncate text-sm font-medium">{l.company || l.name}</p>
                         {l.company && <p className="truncate text-xs text-white/60">{l.name}</p>}
                         {l.nextAction?.date && (

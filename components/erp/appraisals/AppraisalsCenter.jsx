@@ -75,7 +75,8 @@ export default function AppraisalsCenter() {
       {tab === "cycles" && data?.cycles && (
         <div className="space-y-3">
           {data.cycles.map((c) => (
-            <Card key={c.id}>
+            <div key={c.id} data-entity={`appraisal_cycle:${c.id}`} className="rounded-2xl">
+            <Card>
               <div className="flex flex-wrap items-center gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold">{c.name}</p>
@@ -120,6 +121,7 @@ export default function AppraisalsCenter() {
                 ))}
               </ul>
             </Card>
+            </div>
           ))}
           {!data.cycles.length && <EmptyState compact text={t("erp.appraisals.noCycles")} />}
         </div>
@@ -158,7 +160,7 @@ function ReviewCard({ r, mode, onOpen }) {
   const { t } = useLanguage();
   const waiting = mode === "mine" ? r.cycle?.status === "open" && r.cycle?.selfReview && !r.self.at : r.cycle?.status === "open" && !r.manager.at;
   return (
-    <button type="button" onClick={onOpen} className="flex w-full flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-start hover:border-white/25">
+    <button type="button" data-entity={`appraisal:${r.id}`} onClick={onOpen} className="flex w-full flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-start hover:border-white/25">
       <div className="min-w-0 flex-1">
         <p className="font-semibold">{mode === "mine" ? r.cycle?.name : r.employeeName}</p>
         <p className="text-xs text-white/60">

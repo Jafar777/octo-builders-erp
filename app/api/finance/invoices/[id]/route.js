@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { inClosedMonth } from "@/lib/financeEntries";
 import { requirePermission } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
@@ -46,6 +47,9 @@ export async function PATCH(request, { params }) {
 
   if (body.action === "void") {
     if (invoice.status !== "issued") return fail("invoice_not_issued", 409);
+    // Money was already received against it: it can't silently become an advance.
+    const { journal } = await loadBooks();
+    if ((journal.invoices[id]?.paidBase || 0) > 0.004) return fail("invoice_has_payments", 409);
     invoice.status = "void";
     invoice.voidReason = String(body.reason || "").trim().slice(0, 300);
     await invoice.save();
@@ -60,8 +64,12 @@ export async function PATCH(request, { params }) {
   if (body.action === "payment") {
     if (invoice.status !== "issued") return fail("invoice_not_issued", 409);
     if (!dateOk(body.date)) return fail("invalid_date");
+    if (await inClosedMonth(body.date)) return fail("month_closed", 409);
     const money = cleanMoney({ amount: body.amount, currency: invoice.currency, rate: body.rate || invoice.rate }, settings.currencies);
     if (money.error || !(money.amount > 0)) return fail(money.error || "invalid_amount");
+    // No more than what's still owed on it (in the base currency, a cent of rounding allowed).
+    const owed = (await loadBooks()).journal.invoices[id]?.outstandingBase ?? invoice.baseTotal;
+    if (money.baseAmount > owed + 0.01) return fail("payment_over_invoice", 409, { owed });
     const branch = isObjectId(body.branch) ? body.branch : invoice.branch;
     const entry = await FinanceEntry.create({
       kind: "payment",

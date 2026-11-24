@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
-import { cleanEntry, serializeEntry } from "@/lib/financeEntries";
+import { cleanEntry, inClosedMonth, serializeEntry } from "@/lib/financeEntries";
+import PurchaseRequest from "@/models/PurchaseRequest";
 import { getSettings } from "@/lib/settings";
 import FinanceEntry from "@/models/FinanceEntry";
 
@@ -21,6 +22,7 @@ export async function PATCH(request, { params }) {
   const body = { ...serializeEntry(entry.toObject()), ...(await readJson(request)) };
   const result = await cleanEntry(body, settings);
   if (result.error) return fail(result.error);
+  if (await inClosedMonth(entry.date, result.value.date)) return fail("month_closed", 409);
 
   const before = serializeEntry(entry.toObject());
   entry.set(result.value);
@@ -32,7 +34,10 @@ export async function PATCH(request, { params }) {
 export async function DELETE(request, { params }) {
   const { user, entry, error } = await load(params);
   if (error) return error;
+  if (await inClosedMonth(entry.date)) return fail("month_closed", 409);
   await entry.deleteOne();
+  // A purchase booked as this expense can be booked again.
+  await PurchaseRequest.updateMany({ expense: entry._id }, { $set: { expense: null } });
   await audit(user, "finance.entry_deleted", {
     entityType: "finance",
     entityId: entry._id,

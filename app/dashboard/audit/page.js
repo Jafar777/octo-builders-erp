@@ -1,8 +1,6 @@
-import { requirePermission } from "@/lib/currentUser";
-import AuditLogView from "@/components/erp/audit/AuditLogView";
-import NoAccess from "@/components/erp/NoAccess";
+import { redirect } from "next/navigation";
 
-export default async function AuditPage() {
-  if (!(await requirePermission("audit.view"))) return <NoAccess />;
-  return <AuditLogView />;
+// Moved into the System page (older links).
+export default function AuditPage() {
+  redirect("/dashboard/system?tab=audit");
 }

@@ -132,7 +132,7 @@ export default function Invoices({ lookups }) {
               </thead>
               <tbody>
                 {tools.shown.map((i) => (
-                  <tr key={i.id} className="border-b border-white/5 align-top">
+                  <tr key={i.id} data-entity={`invoice:${i.id}`} className="border-b border-white/5 align-top">
                     <td className="px-2 py-2.5 font-mono text-xs" dir="ltr">
                       {i.number || <span className="text-white/55">{t("erp.invoices.draftLabel")}</span>}
                     </td>

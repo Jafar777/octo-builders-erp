@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
-import { canProposeProject, intakeNames, isIntakePlanner, serializeIntake } from "@/lib/intake";
+import { canProposeProject, canSeeIntake, intakeNames, isIntakePlanner, serializeIntake } from "@/lib/intake";
 import { notify } from "@/lib/notify";
 import { prepareProject, proposalBody } from "@/lib/projectCreate";
 import { usersWithPermissionFor, usersWithRolePermission } from "@/lib/scope";
@@ -16,7 +16,8 @@ export async function PUT(request, { params }) {
   if (!user || !canProposeProject(user)) return forbidden();
   const { id } = await params;
   const intake = isObjectId(id) ? await ProjectIntake.findById(id) : null;
-  if (!intake) return notFound();
+  // Not a form already set up for another department (lib/intake.js intakeScope).
+  if (!intake || !canSeeIntake(user, intake)) return notFound();
   if (!["new", "ready"].includes(intake.status)) return fail("intake_locked", 409);
 
   const body = proposalBody(await readJson(request));

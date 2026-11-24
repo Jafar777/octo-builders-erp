@@ -17,12 +17,15 @@ async function isAuthenticated(request) {
 // While the CEO views the dashboard as someone else ("View as…"), that person's chats
 // and their own security settings stay closed.
 const VIEW_AS_BLOCKED = ["/api/messages", "/api/auth/mfa", "/api/auth/salary-code", "/api/auth/salary-unlock"];
+// The staff directory (names, emails, roles, departments; no messages): task, project and HR lists need it.
+const VIEW_AS_DIRECTORY = "/api/messages/people";
 
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
   if (pathname.startsWith("/api/")) {
     if (!request.cookies.get("octa_view_as")) return NextResponse.next();
-    if (VIEW_AS_BLOCKED.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    const directory = pathname === VIEW_AS_DIRECTORY && request.method === "GET";
+    if (!directory && VIEW_AS_BLOCKED.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
       return NextResponse.json({ error: "view_as_blocked" }, { status: 403 });
     }
     // Every change made while viewing as someone is logged (lib/currentUser.js).

@@ -6,10 +6,9 @@ import { hrMonthState } from "@/lib/hr";
 import { notify } from "@/lib/notify";
 import { getSettings } from "@/lib/settings";
 import LeaveRequest from "@/models/LeaveRequest";
-import User from "@/models/User";
-import { departmentManagers, finalApprovers, isFinalApprover, serializeLeaves } from "@/lib/leave";
+import { annualLeft, finalApprovers, isFinalApprover, managerLeaveFilter, serializeLeaves } from "@/lib/leave";
+import { personManagers, reachedIds } from "@/lib/reporting";
 import { isDeptManager } from "@/lib/managerKpi";
-import { inDepartments } from "@/lib/scope";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -22,10 +21,10 @@ export async function GET(request) {
   let query;
   if (view === "mine") query = { user: user.id };
   else if (view === "all" && isFinalApprover(user)) query = {};
-  else if (view === "all" && isDeptManager(user) && user.department) {
-    // Older requests have no department saved; match them by the person's department.
-    const members = await User.find(inDepartments(user), { _id: 1 }).lean();
-    query = { $or: [inDepartments(user), { department: null, user: { $in: members.map((m) => m._id) } }] };
+  else if (view === "all" && isDeptManager(user)) {
+    // The requests naming them, older ones of their departments, and anything from
+    // their people (lib/reporting.js: department, or moved to them in the chart).
+    query = { $or: [managerLeaveFilter(user), { user: { $in: await reachedIds(user) } }] };
   } else return forbidden();
 
   const list = await LeaveRequest.find(query).sort({ createdAt: -1 }).limit(300).lean();
@@ -44,17 +43,25 @@ export async function POST(request) {
   const settings = await getSettings();
   const days = leaveWorkingDays(body.from, body.to, settings.calendar, settings.workHours);
   if (!days) return fail("no_working_days");
+  // Annual leave: no more than what's left this year (approved and waiting requests count).
+  if (body.type === "annual") {
+    const left = await annualLeft(user.id, body.from.slice(0, 4));
+    if (days > left) return fail("leave_balance_exceeded", 409, { left: Math.max(0, left) });
+  }
   const overlap = await LeaveRequest.exists({ user: user.id, status: { $in: ["pending", "approved"] }, from: { $lte: body.to }, to: { $gte: body.from } });
   if (overlap) return fail("leave_overlap", 409);
 
-  // Step 1 goes to the department's managers; without one, straight to HR / GM.
-  const managers = await departmentManagers(user.department, user.id);
+  // Step 1 goes to their manager (the one the chart moved them to, else their
+  // department's); without one, straight to HR / GM.
+  const managers = await personManagers({ id: user.id, department: user.department });
   const stage = managers.length ? "manager" : "final";
 
   const leave = await LeaveRequest.create({
     user: user.id,
     department: user.department || null,
     stage,
+    managers: stage === "manager" ? managers : [],
+    routed: true,
     type: body.type,
     from: body.from,
     to: body.to,
@@ -68,7 +75,8 @@ export async function POST(request) {
     recipients: stage === "manager" ? managers : await finalApprovers(user.id),
     actor: user,
     params: { actor: user.name || user.email, days, from: body.from, to: body.to },
-    link: "/dashboard/hr?tab=leave",
+    // Everyone who decides answers on the Requests page.
+    link: "/dashboard/orders?type=waiting",
     entityType: "leave",
     entityId: leave._id,
   });

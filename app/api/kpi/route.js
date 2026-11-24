@@ -6,6 +6,7 @@ import { canSeePerson, MONTH_OK, staffInScope } from "@/lib/hrAccess";
 import { kpiConfigFor } from "@/lib/kpi/config";
 import { getSettings } from "@/lib/settings";
 import { bonusStanding } from "@/lib/bonus";
+import { userDepartments } from "@/lib/scope";
 
 function previousMonths(month, count) {
   const [y, m] = month.split("-").map(Number);
@@ -59,7 +60,12 @@ export async function GET(request) {
           .map((r) => ({ userId: r.staff.id, name: r.staff.name, avatarUrl: r.staff.avatarUrl, department: r.staff.department, score: r.kpi.score, grade: r.kpi.grade, rank: r.kpi.rank, bonus: r.kpi.bonus }))
           .sort((a, b) => a.rank - b.rank)
       : [],
-    departments: canBoard ? current.departments : {},
+    // Department averages: every department for company-wide scope, else only theirs.
+    departments: !canBoard
+      ? {}
+      : user.scope === "all"
+        ? current.departments
+        : Object.fromEntries(Object.entries(current.departments).filter(([d]) => userDepartments(user).includes(d))),
     people: canBoard ? [...visible] : [],
   });
 }

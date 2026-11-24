@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/currentUser";
+import { getCurrentUser, hasPermission } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
 import { Candidate, JobOpening } from "@/models/Recruitment";
@@ -8,8 +8,9 @@ const link = (v) => (/^https?:\/\//.test(String(v || "")) ? String(v).slice(0, 5
 
 // { opening, name, email, phone, cvUrl, portfolioUrl, source }
 export async function POST(request) {
-  const user = await requirePermission("recruitment.manage");
-  if (!user) return forbidden();
+  // Recruitment, or helping with it (the executive office adds CVs).
+  const user = await getCurrentUser();
+  if (!user?.isStaff || user.limited || !(hasPermission(user, "recruitment.manage") || hasPermission(user, "recruitment.assist"))) return forbidden();
   const b = await readJson(request);
   if (!isObjectId(b.opening) || !(await JobOpening.exists({ _id: b.opening }))) return fail("invalid_request");
   const name = String(b.name || "").trim().slice(0, 150);

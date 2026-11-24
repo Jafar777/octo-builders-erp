@@ -1,10 +1,12 @@
+import { canAskChange, pendingChangeCode } from "@/lib/clientChangeServer";
 import { NextResponse } from "next/server";
 import { reviewAccess } from "@/lib/taskReview";
 import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { notify } from "@/lib/notify";
 import { audit } from "@/lib/audit";
-import { canDelete, trashTask } from "@/lib/trash";
+import { isTopRole } from "@/lib/permissions";
+import { canDelete, canDeleteIn, trashTask } from "@/lib/trash";
 import {
   canManageTask,
   canViewTask,
@@ -86,10 +88,14 @@ export async function GET(request, { params }) {
     permissions: {
       isAssignee: task.assignee.toString() === user.id,
       canPlan: canRouteStages(user),
+      canFix: isTopRole(user.role) && task.status === "todo" && Boolean(task.plannedStart),
       // The level this viewer may review now (null = none); see lib/taskReview.
       review: access,
       canReview: Boolean(access),
       canManage: canManageTask(user, task),
+      // A client change after approval, and a manager's request waiting for the CEO.
+      canChange: task.status === "approved" && (await canAskChange(user, task)),
+      pendingChange: task.status === "approved" ? await pendingChangeCode(task) : null,
       // A department manager: start their employee's task for them, and give a
       // not-started task to another employee of their departments.
       canStartFor: task.assignee.toString() !== user.id && (await managesAssignee(user, task)),
@@ -224,6 +230,10 @@ export async function PATCH(request, { params }) {
     }
   }
 
+  // Fixed in place: the CEO's alone.
+  if (typeof body.fixed === "boolean" && isTopRole(user.role) && task.status === "todo" && task.plannedStart) changes.fixed = body.fixed;
+  if (changes.dueAt && !isAssignee) changes.promisedAt = changes.dueAt;
+  if (reassignedFrom) changes.fixed = false;
   task.set(changes);
   await task.save();
   await logActivity(task._id, user, reassignedFrom ? "reassigned" : "edited", "", { fields: Object.keys(changes) });
@@ -258,6 +268,7 @@ export async function DELETE(request, { params }) {
   if (!isObjectId(id)) return notFound();
   const task = await Task.findById(id).lean();
   if (!task) return notFound();
+  if (!canDeleteIn(user, task.department)) return forbidden();
   await trashTask(id, user);
   await audit(user, "task.deleted", { entityType: "task", entityId: id, summary: `#${task.number}` });
   await publishTaskChange(task).catch(() => {});

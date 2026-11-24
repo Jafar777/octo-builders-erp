@@ -26,6 +26,8 @@ export async function PATCH(request, { params }) {
     a.self = { scores: cleanScores(b.self.scores), comment: String(b.self.comment || "").slice(0, 3000), at: new Date() };
   } else if (b.manager) {
     if (!isReviewer || isEmployee || cycle?.status !== "open") return forbidden();
+    // Once the employee acknowledged it, the review stays as they read it.
+    if (a.acknowledgedAt) return fail("appraisal_acknowledged", 409);
     const scores = cleanScores(b.manager.scores);
     if (Object.keys(scores).length < COMPETENCIES.length) return fail("appraisal_scores_missing");
     a.manager = {

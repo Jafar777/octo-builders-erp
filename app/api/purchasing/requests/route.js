@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { canRouteStages } from "@/lib/projects";
+import { canManageTask, managesAssignee } from "@/lib/tasks";
 import { getCurrentUser, hasPermission } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
@@ -56,6 +58,9 @@ export async function POST(request) {
   if (isObjectId(b.task)) {
     task = await Task.findById(b.task, { status: 1, project: 1, assignee: 1, department: 1 }).lean();
     if (!task || task.status !== "todo") return fail("purchase_task_started");
+    // Only one's own task, one they manage, or (GM / CEO) any: the task waits for it.
+    const mine = String(task.assignee) === user.id;
+    if (!mine && !canRouteStages(user) && !canManageTask(user, task) && !(await managesAssignee(user, task))) return fail("purchase_task_not_yours", 403);
   }
   const year = new Date().getFullYear();
   const pr = await PurchaseRequest.create({
@@ -75,6 +80,6 @@ export async function POST(request) {
   });
   await audit(user, "purchasing.requested", { entityType: "purchase", entityId: pr._id, summary: `${pr.number} · ${title}` });
   const approvers = (await usersWithPermissionFor("purchasing.approve", pr.department)).filter((id) => id !== user.id);
-  await notify({ type: "purchase.requested", recipients: approvers, actor: user, params: { title, number: pr.number }, link: "/dashboard/purchasing?tab=queue", entityType: "purchase", entityId: pr._id });
+  await notify({ type: "purchase.requested", recipients: approvers, actor: user, params: { title, number: pr.number }, link: "/dashboard/orders?type=waiting", entityType: "purchase", entityId: pr._id });
   return NextResponse.json({ id: idStr(pr._id) }, { status: 201 });
 }

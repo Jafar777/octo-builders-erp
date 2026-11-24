@@ -48,6 +48,10 @@ import { evmTone } from "@/lib/evm";
 // The task-name column: narrower on phones so the chart keeps most of the screen.
 const LABEL_W = 270;
 const LABEL_W_PHONE = 150;
+// The names column can be dragged between these widths; the choice is kept per device.
+const LABEL_W_MIN = 150;
+const LABEL_W_MAX = 900;
+const LABEL_W_KEY = "octo.gantt.labelWidth";
 const HEADER_H = 52;
 const GROUP_H = 44;
 const TASK_H = 36;
@@ -141,14 +145,56 @@ export default function ProjectsTimeline({ projects, status, leading = null }) {
   const chartRef = useRef(null);
   const scrolledFor = useRef("");
   const now = useNow(true, 60000);
-  const [labelW, setLabelW] = useState(LABEL_W);
+  // The names column: its usual width (narrower on phones), or the width the person
+  // dragged it to (remembered on this device; a double-click on its edge resets it).
+  const [baseLabelW, setBaseLabelW] = useState(LABEL_W);
+  const [customLabelW, setCustomLabelW] = useState(null);
   useEffect(() => {
     const media = window.matchMedia("(max-width: 639px)");
-    const apply = () => setLabelW(media.matches ? LABEL_W_PHONE : LABEL_W);
+    const apply = () => setBaseLabelW(media.matches ? LABEL_W_PHONE : LABEL_W);
     apply();
     media.addEventListener("change", apply);
+    const saved = Number(window.localStorage.getItem(LABEL_W_KEY));
+    if (saved >= LABEL_W_MIN && saved <= LABEL_W_MAX) setCustomLabelW(saved);
     return () => media.removeEventListener("change", apply);
   }, []);
+  const labelW = customLabelW ?? baseLabelW;
+  const resizeLabels = (e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = labelW;
+    let last = startW;
+    const move = (ev) => {
+      last = Math.round(Math.min(LABEL_W_MAX, Math.max(LABEL_W_MIN, startW + ev.clientX - startX)));
+      setCustomLabelW(last);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      document.body.style.cursor = "";
+      window.localStorage.setItem(LABEL_W_KEY, String(last));
+    };
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  const resetLabels = () => {
+    setCustomLabelW(null);
+    window.localStorage.removeItem(LABEL_W_KEY);
+  };
+  // The handle on the names column's edge: drag to widen or narrow it.
+  const labelHandle = (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      title={t("erp.gantt.resizeNames")}
+      onPointerDown={resizeLabels}
+      onDoubleClick={resetLabels}
+      className="group absolute inset-y-0 -right-1.5 z-30 w-3 cursor-col-resize"
+    >
+      <div className="mx-auto h-full w-0.5 bg-transparent transition-colors group-hover:bg-brand-orange/70" />
+    </div>
+  );
 
   const load = useCallback(() => {
     api(`/api/work-projects/timeline?status=${status}`)
@@ -812,7 +858,9 @@ export default function ProjectsTimeline({ projects, status, leading = null }) {
         <div style={{ width: labelW + width }}>
           {/* Header: time scale */}
           <div className="sticky top-0 z-20 flex border-b border-white/10 bg-brand-navy" style={{ height: HEADER_H }}>
-            <div className="sticky left-0 z-10 shrink-0 border-e border-white/10 bg-brand-navy" style={{ width: labelW }} />
+            <div className="sticky left-0 z-10 shrink-0 border-e border-white/10 bg-brand-navy" style={{ width: labelW }}>
+              {labelHandle}
+            </div>
             <div className="relative" style={{ width }}>
               {topTicks.map((tick) => (
                 <div
@@ -842,10 +890,12 @@ export default function ProjectsTimeline({ projects, status, leading = null }) {
           <div className="flex">
             {/* Y axis */}
             <div className="sticky left-0 z-10 shrink-0 border-e border-white/10 bg-brand-navy" style={{ width: labelW }}>
+              {labelHandle}
               {rows.map((row) =>
                 row.kind === "task" ? (
                   <div
                     key={row.task.id}
+                    data-entity={`task:${row.task.id}`}
                     dir="rtl"
                     className="flex items-center gap-2 border-b border-white/5 pe-3 ps-8 text-xs"
                     style={{ height: TASK_H }}
@@ -866,7 +916,7 @@ export default function ProjectsTimeline({ projects, status, leading = null }) {
                         <ChevronDown size={11} className={`transition-transform ${openRevs.has(row.rev.key) ? "rotate-180" : ""}`} />
                       </button>
                     )}
-                    <span className="hidden max-w-[80px] shrink-0 truncate text-white/40 sm:inline">
+                    <span className="hidden max-w-[35%] shrink-0 truncate text-white/40 sm:inline">
                       {groupBy === "person" ? row.task.project?.code || row.task.project?.name?.[lang] : row.task.assignee?.name}
                     </span>
                   </div>
@@ -1053,7 +1103,7 @@ export default function ProjectsTimeline({ projects, status, leading = null }) {
                 }`;
                 const top = row.y + (TASK_H - BAR_H) / 2;
                 return (
-                  <div key={task.id} data-task-id={task.id} className="absolute" style={{ left, top, width: barW, height: BAR_H }}>
+                  <div key={task.id} data-task-id={task.id} data-entity={`task:${task.id}`} className="absolute" style={{ left, top, width: barW, height: BAR_H }}>
                     <div
                       onPointerDown={(e) => beginDrag(e, task, "move")}
                       onClick={() => !canEdit && setEditing(task)}
@@ -1117,10 +1167,10 @@ export default function ProjectsTimeline({ projects, status, leading = null }) {
                 );
               })}
 
-              <svg className="pointer-events-none absolute inset-0 z-[6]" width={width} height={height}>
+              <svg className="pointer-events-none absolute inset-0 z-[6] text-white" width={width} height={height}>
                 <defs>
                   <marker id="gantt-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
-                    <path d="M0,0 L8,4 L0,8 z" fill="rgba(255,255,255,0.55)" />
+                    <path d="M0,0 L8,4 L0,8 z" fill="currentColor" fillOpacity={0.55} />
                   </marker>
                 </defs>
                 {arrows.map((a) => {
@@ -1128,7 +1178,7 @@ export default function ProjectsTimeline({ projects, status, leading = null }) {
                   const midY = a.y2 > a.y1 ? a.y2 - TASK_H / 2 : a.y2 + TASK_H / 2;
                   const d =
                     a.x2 - 10 >= out ? `M${a.x1},${a.y1} H${out} V${a.y2} H${a.x2 - 1}` : `M${a.x1},${a.y1} H${out} V${midY} H${a.x2 - 10} V${a.y2} H${a.x2 - 1}`;
-                  return <path key={a.key} d={d} fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth={1.5} markerEnd="url(#gantt-arrow)" />;
+                  return <path key={a.key} d={d} fill="none" stroke="currentColor" strokeOpacity={0.4} strokeWidth={1.5} markerEnd="url(#gantt-arrow)" />;
                 })}
                 {drag?.mode === "link" && drag.pointer && taskRows[drag.id] && (
                   <line
@@ -1136,7 +1186,8 @@ export default function ProjectsTimeline({ projects, status, leading = null }) {
                     y1={taskRows[drag.id].y + TASK_H / 2}
                     x2={drag.pointer.x}
                     y2={drag.pointer.y}
-                    stroke="rgba(255,255,255,0.7)"
+                    stroke="currentColor"
+                    strokeOpacity={0.7}
                     strokeWidth="2"
                     strokeDasharray="5 4"
                   />
@@ -1244,6 +1295,7 @@ function GroupLabel({ group, lang, t, collapsed, onToggle, load, today, cal, bas
   const moved = Boolean(last && forecastEnd && Math.abs(new Date(forecastEnd) - new Date(last.end)) >= 60000);
   return (
     <div
+      data-entity={isProject ? `project:${group.project.id}` : `user:${group.person.id}`}
       className={`group relative flex items-center gap-1 border-b border-white/10 bg-white/[0.04] pe-2 ${rank?.dragging ? "opacity-40" : ""}`}
       style={{ height: GROUP_H }}
       draggable={Boolean(rank)}

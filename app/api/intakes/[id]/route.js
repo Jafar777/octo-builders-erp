@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/currentUser";
 import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils";
 import { audit } from "@/lib/audit";
-import { canEditIntake, canUseIntake, intakeNames, isIntakePlanner, serializeIntake } from "@/lib/intake";
+import { canEditIntake, canSeeIntake, canUseIntake, intakeNames, isIntakePlanner, serializeIntake } from "@/lib/intake";
 import { cleanIntake } from "@/lib/intakeRules";
 import ProjectIntake from "@/models/ProjectIntake";
 
@@ -15,7 +15,7 @@ export async function GET(request, { params }) {
   const user = await requireStaff({ limited: true });
   if (!user || !canUseIntake(user)) return forbidden();
   const intake = await load(params);
-  if (!intake) return notFound();
+  if (!intake || !canSeeIntake(user, intake)) return notFound();
   return NextResponse.json({ intake: serializeIntake(intake.toObject(), user, await intakeNames([intake])) });
 }
 
@@ -41,6 +41,7 @@ export async function DELETE(request, { params }) {
   if (!user || !canUseIntake(user)) return forbidden();
   const intake = await load(params);
   if (!intake) return notFound();
+  if (!canSeeIntake(user, intake)) return notFound();
   if (intake.status !== "new") return fail("intake_locked", 409);
   if (!isIntakePlanner(user) && intake.createdBy.toString() !== user.id) return forbidden();
   await ProjectIntake.deleteOne({ _id: intake._id, status: "new" });

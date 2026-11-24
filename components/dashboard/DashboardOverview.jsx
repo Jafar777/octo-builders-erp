@@ -209,7 +209,10 @@ function CustomerHome() {
 // "Needs you": every queue this person can act on, each linking to where they act.
 function NeedsYou({ needs, persona }) {
   const { t } = useLanguage();
-  if (!needs || persona === "employee") return null;
+  if (!needs) return null;
+  // Employees: only what the executive office sent them (no "nothing waiting" note).
+  if (persona === "employee") needs = needs.filter((n) => n.key === "officeInbox");
+  if (persona === "employee" && !needs.length) return null;
   if (!needs.length)
     return (
       <p className="animate-fade-up flex items-center gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3 text-sm text-emerald-200">
@@ -258,19 +261,68 @@ function HeadlineTiles({ d, m }) {
     receivables: d.finance && <StatTile key="recv" label={t("erp.finance.receivables")} value={m(d.finance.receivables)} tone="text-amber-300" />,
     leave: d.hr && <StatTile key="leave" label={t("erp.home.pendingLeave")} value={d.hr.pendingLeave} tone={d.hr.pendingLeave ? "text-brand-orange" : ""} />,
     intakes: d.office && <StatTile key="intakes" label={t("erp.home.openIntakes")} value={d.office.intakesNew} />,
+    officeDue: d.officeDay && <StatTile key="officeDue" label={t("erp.office.board.dueToday")} value={d.officeDay.dueToday} tone={d.officeDay.dueToday ? "text-sky-300" : ""} />,
+    officeOverdue: d.officeDay && <StatTile key="officeOverdue" label={t("erp.office.board.overdue")} value={d.officeDay.overdue} tone={d.officeDay.overdue ? "text-red-300" : ""} />,
+    officeWaiting: d.officeDay && <StatTile key="officeWaiting" label={t("erp.office.board.waiting")} value={d.officeDay.waiting} hint={d.officeDay.meetingsToday ? t("erp.home.officeMeetings", { n: d.officeDay.meetingsToday }) : ""} />,
+    officeCallbacks: d.officeDay && <StatTile key="officeCallbacks" label={t("erp.office.board.callbacks")} value={d.officeDay.callbacks} tone={d.officeDay.callbacks ? "text-amber-300" : ""} />,
     leads: d.office && d.office.leadsOpen !== null && <StatTile key="leads" label={t("erp.home.openLeads")} value={d.office.leadsOpen} hint={d.office.quotesSent ? t("erp.home.quotesSent", { n: d.office.quotesSent }) : ""} />,
   };
   const pick = {
     executive: ["net", "receivables", "projects", "present"],
     projects: ["projects", "atRisk", "late", "reviews"],
     department: ["present", "reviews", "late", "atRisk"],
-    office: ["intakes", "leads", "present"],
+    office: ["officeDue", "officeOverdue", "officeWaiting", "officeCallbacks", "intakes", "leads"],
     hr: ["present", "leave", "reviews"],
   }[d.persona];
   // Fill up to 4 with the person's own numbers.
   const chosen = (pick || []).map((k) => tile[k]).filter(Boolean);
   const list = [...chosen, ...personal].slice(0, 4);
   return <div className="animate-fade-up grid grid-cols-2 gap-3 md:grid-cols-4">{list}</div>;
+}
+
+// The CEO's view of the executive office: complaints, requests late at departments,
+// which departments answer slowest, today's meetings, this week's inquiries.
+function OfficePulse({ p }) {
+  const { t } = useLanguage();
+  const stat = (label, value, tone = "") => (
+    <div className="rounded-xl bg-white/[0.04] px-3 py-2">
+      <p className={`text-xl font-bold ${value ? tone : "text-white/70"}`}>{value}</p>
+      <p className="text-[11px] text-white/55">{label}</p>
+    </div>
+  );
+  return (
+    <section className="animate-fade-up rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <h2 className="text-sm font-semibold">{t("erp.home.officePulse")}</h2>
+        <Link href="/dashboard/office" className="ms-auto flex items-center gap-1 text-xs text-brand-orange hover:underline">
+          {t("erp.nav.office")} <ArrowUpRight size={13} className="rtl:-scale-x-100" />
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        {stat(t("erp.office.board.complaints"), p.complaints, "text-red-300")}
+        {stat(t("erp.home.officeLate"), p.lateAtDepartments, "text-amber-300")}
+        {stat(t("erp.office.board.meetingsToday"), p.meetingsToday, "text-emerald-300")}
+        {stat(t("erp.home.officeInquiries"), p.inquiriesWeek, "text-sky-300")}
+        {stat(t("erp.home.officeIntakes"), p.intakesWeek, "text-sky-300")}
+        {stat(t("erp.office.board.closedToday"), p.closedToday, "text-white")}
+      </div>
+      {p.departments.length > 0 && (
+        <div className="mt-3">
+          <p className="mb-1.5 text-[11px] text-white/50">{t("erp.home.officeSlowest")}</p>
+          <div className="space-y-1">
+            {p.departments.map((dep) => (
+              <div key={dep.id} className="flex items-center gap-2 text-xs">
+                <span className="h-2 w-2 rounded-full" style={{ background: dep.color || "#888" }} />
+                <span className="min-w-0 flex-1 truncate text-white/80">{dep.name}</span>
+                <span className="text-white/45">{t("erp.home.officeRequests", { n: dep.requests })}</span>
+                <span className={dep.avgHours >= 24 ? "text-red-300" : "text-white/70"}>{t("erp.home.officeAvg", { n: dep.avgHours })}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
 }
 
 // New accounts are sent to their profile until the name is filled in both languages.
@@ -360,6 +412,8 @@ export default function DashboardOverview({ user }) {
           <NeedsYou needs={d.needs} persona={d.persona} />
 
           <HeadlineTiles d={d} m={m} />
+
+          {d.officePulse && <OfficePulse p={d.officePulse} />}
 
           <div className="grid gap-6 xl:grid-cols-2">
             <Section title={t("erp.home.myTasks")} href="/dashboard/tasks" linkLabel={t("erp.home.all")} className={mine}>
@@ -461,7 +515,7 @@ export default function DashboardOverview({ user }) {
             {d.hr && (
               <Section title={t("erp.nav.hr")} href="/dashboard/hr" linkLabel={t("erp.home.open")}>
                 <div className="space-y-3 text-sm">
-                  <Link href="/dashboard/hr?tab=leave" className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2.5 hover:bg-white/10">
+                  <Link href="/dashboard/orders?type=leave" className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2.5 hover:bg-white/10">
                     <span className="flex items-center gap-2">
                       <CalendarClock size={15} className="text-white/50" /> {t("erp.home.pendingLeave")}
                     </span>

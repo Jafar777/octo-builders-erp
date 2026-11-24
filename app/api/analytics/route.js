@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { reachedIds } from "@/lib/reporting";
 import { hasPermission, requireStaff } from "@/lib/currentUser";
 import { forbidden } from "@/lib/apiUtils";
 import { localParts } from "@/lib/attendance";
@@ -31,7 +32,10 @@ export async function GET() {
   const today = todayIn(tz);
   const month = today.slice(0, 7);
   const now = Date.now();
-  const deptFilter = user.scope === "all" ? {} : inDepartments(user);
+  // Department scope: their people as the chart has them (lib/reporting.js — moved in
+  // or out), and the work of their departments plus their people's.
+  const people = user.scope === "department" ? await reachedIds(user) : null;
+  const deptFilter = user.scope === "all" ? {} : people ? { $or: [inDepartments(user), { assignee: { $in: people } }] } : inDepartments(user);
 
   // A department head also follows the projects where their department does a stage.
   const projectFilter = user.scope === "all" ? {} : { $or: [inDepartments(user), inDepartments(user, "stages.department")] };
@@ -42,7 +46,7 @@ export async function GET() {
   const [tasks, projects, staff] = await Promise.all([
     Task.find(deptFilter, TASK_FIELDS).lean(),
     WorkProject.find({ ...projectFilter, status: { $in: ["active", "on_hold", "finished"] } }).lean(),
-    hrStaff({ status: "active", ...(user.scope === "all" ? {} : inDepartments(user)) }),
+    hrStaff({ status: "active", ...(user.scope === "all" ? {} : people ? { _id: { $in: people } } : inDepartments(user)) }),
   ]);
   // Project KPIs need every task of the project, whichever department did it.
   const projectTasks = await Task.find({ project: { $in: projects.map((p) => p._id) } }, TASK_FIELDS).lean();

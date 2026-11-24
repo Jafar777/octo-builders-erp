@@ -61,7 +61,7 @@ export async function GET(request) {
   }
   if (hasPermission(user, "sales.manage")) {
     const leads = await Lead.find({ $or: [{ name: re }, { company: re }, { phone: re }] }, { name: 1, company: 1, stage: 1 }).limit(4).lean();
-    for (const l of leads) results.push({ type: "lead", id: idStr(l._id), title: l.company || l.name, sub: l.stage, href: "/dashboard/sales" });
+    for (const l of leads) results.push({ type: "lead", id: idStr(l._id), title: l.company || l.name, sub: l.stage, href: "/dashboard/finance?tab=sales" });
   }
   if (hasPermission(user, "assets.manage")) {
     const assets = await Asset.find({ $or: [{ tag: re }, { name: re }, { serial: re }] }, { tag: 1, name: 1 }).limit(4).lean();

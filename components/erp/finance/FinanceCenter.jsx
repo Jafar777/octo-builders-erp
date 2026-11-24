@@ -17,6 +17,8 @@ import Transfers from "@/components/erp/finance/Transfers";
 import Clients from "@/components/erp/finance/Clients";
 import PricingCalculator from "@/components/erp/finance/PricingCalculator";
 import FinanceSettings from "@/components/erp/finance/FinanceSettings";
+import PurchasingCenter from "@/components/erp/purchasing/PurchasingCenter";
+import SalesCenter from "@/components/erp/sales/SalesCenter";
 import Invoices from "@/components/erp/finance/Invoices";
 import Books from "@/components/erp/finance/Books";
 import Budgets from "@/components/erp/finance/Budgets";
@@ -25,7 +27,7 @@ import BankMatching from "@/components/erp/finance/BankMatching";
 import { useFinanceLookups } from "@/components/erp/finance/useFinanceLookups";
 import { SkeletonCards, SkeletonChart } from "@/components/erp/ui/Loading";
 
-const TABS = ["overview", "projects", "invoices", "books", "budgets", "forecast", "expenses", "transfers", "bank", "clients", "pricing", "settings"];
+const TABS = ["overview", "projects", "sales", "invoices", "books", "budgets", "forecast", "expenses", "purchases", "transfers", "bank", "clients", "pricing", "settings"];
 // Tabs that need more than finance.view: invoices are also open to invoices.manage alone.
 const NEEDS_MANAGE = ["settings", "bank"];
 
@@ -72,7 +74,7 @@ export default function FinanceCenter() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
   const lookups = useFinanceLookups();
-  const [tab, setTab] = useState(TABS.includes(searchParams.get("tab")) ? searchParams.get("tab") : "overview");
+  const [picked, setTab] = useState(searchParams.get("tab") || "overview");
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [summary, setSummary] = useState(null);
   const [projectId, setProjectId] = useState(searchParams.get("project") || null);
@@ -92,7 +94,10 @@ export default function FinanceCenter() {
   }, [load]);
 
   const years = Array.from({ length: 5 }, (_, i) => String(new Date().getFullYear() - i));
-  const visible = TABS.filter((k) => !NEEDS_MANAGE.includes(k) || canManage);
+  // The purchase record, suppliers and assets: those who approve purchases or keep the assets.
+  const seesPurchases = ["purchasing.approve", "assets.manage"].some((p) => user?.permissions?.includes(p));
+  const visible = TABS.filter((k) => (!NEEDS_MANAGE.includes(k) || canManage) && (k !== "purchases" || seesPurchases) && (k !== "sales" || user?.permissions?.includes("sales.manage")));
+  const tab = visible.includes(picked) ? picked : "overview";
 
   return (
     <div>
@@ -134,11 +139,13 @@ export default function FinanceCenter() {
           )}
           {tab === "projects" && <ProjectAccounts lookups={lookups} summary={summary} projectId={projectId} onProject={setProjectId} canManage={canManage} onChanged={load} />}
           {tab === "expenses" && <Expenses lookups={lookups} year={year} canManage={canManage} onChanged={load} />}
+          {tab === "sales" && <SalesCenter />}
           {tab === "invoices" && <Invoices lookups={lookups} />}
           {tab === "books" && <Books lookups={lookups} canManage={canManage} />}
           {tab === "budgets" && <Budgets lookups={lookups} year={year} canManage={canManage} />}
           {tab === "forecast" && <CashForecast />}
           {tab === "bank" && canManage && <BankMatching lookups={lookups} />}
+          {tab === "purchases" && seesPurchases && <PurchasingCenter mode="finance" />}
           {tab === "transfers" && <Transfers lookups={lookups} canManage={canManage} onChanged={load} />}
           {tab === "clients" && <Clients lookups={lookups} canManage={canManage} />}
           {tab === "pricing" && <PricingCalculator embedded />}

@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutGrid,
+  Palette,
   HardDrive,
   Globe2,
   LogOut,
@@ -14,11 +15,7 @@ import {
   X,
   MessagesSquare,
   Bell,
-  Users,
-  ShieldCheck,
-  Building2,
   Settings,
-  History,
   ListChecks,
   ClipboardList,
   FolderKanban,
@@ -26,20 +23,16 @@ import {
   BriefcaseBusiness,
   BarChart3,
   Wallet,
-  Calculator,
   UserRound,
   Gift,
-  UserCheck,
   GraduationCap,
   Activity,
-  FileSpreadsheet,
-  Handshake,
-  ShoppingCart,
+  ClipboardCheck,
   Star,
-  UserPlus,
-  Timer,
   ChevronDown,
   Pin,
+  Inbox,
+  Contact,
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
@@ -52,15 +45,24 @@ import TopProgress from "@/components/erp/ui/TopProgress";
 import MiniChat from "@/components/erp/messages/MiniChat";
 import { TraineeProvider } from "@/components/erp/ui/TraineeBadge";
 import NoAccess from "@/components/erp/NoAccess";
-import { pageForPath, RESTRICTED_PAGES } from "@/lib/permissions";
+import { pageForPath } from "@/lib/permissions";
+import { pageAllowed } from "@/lib/pageAccess";
 import SecurityCard from "@/components/erp/security/SecurityCard";
 import SearchPalette from "@/components/erp/search/SearchPalette";
 import { FeedbackProvider } from "@/components/erp/ui/Feedback";
 import { ShortcutsButton, ShortcutsHelp, ThemeButton, useShortcuts, WelcomeGuide } from "@/components/dashboard/ShellExtras";
 import { api } from "@/lib/clientApi";
 import { TASK_PAGES } from "@/components/erp/tasks/taskPages";
+import { ORDERS_CHANGED } from "@/components/erp/orders/ordersChanged";
+import { HR_PAGES } from "@/components/erp/hr/hrPages";
 import { PROFILE_PAGES } from "@/components/erp/profile/profilePages";
 import { ViewAsBanner, ViewAsButton } from "@/components/dashboard/ViewAs";
+import ChangeRequestBar from "@/components/erp/system/ChangeRequestBar";
+import PageNotifications from "@/components/dashboard/PageNotifications";
+import { entityKey, focusEntities } from "@/components/dashboard/focusEntity";
+import AnimatedBackground from "@/components/erp/appearance/AnimatedBackground";
+import { AppearanceProvider, pageColor, useAppearance, useHtmlAppearance } from "@/components/erp/appearance/AppearanceContext";
+import { appearanceStyle, bgColorsOf } from "@/lib/appearance";
 
 
 // Sidebar entries; `perm` hides an entry from roles without that permission,
@@ -71,6 +73,10 @@ const NAV = [
     group: "main",
     items: [
       { href: "/dashboard", key: "overview", icon: LayoutGrid, exact: true },
+      // The executive office: the secretary's workspace (office.manage, and the CEO).
+      { href: "/dashboard/office", key: "office", icon: Contact, perm: "office.manage" },
+      // Everyone else: their requests to the office, and what it sent them / their department.
+      { href: "/dashboard/office/requests", key: "officeRequests", icon: Inbox, also: ["/dashboard/office/inbox"], when: (u) => !u.permissions.includes("office.manage") },
       // Profile, and attendance & salary as a button in its header (PageLinks).
       { folder: "profile", icon: UserRound, children: PROFILE_PAGES },
       // One "Tasks" link for all the task pages: it opens the first one the person may see,
@@ -92,23 +98,19 @@ const NAV = [
           // Department managers ask for projects here.
           (u.scope === "department" && u.permissions.includes("tasks.review") && u.permissions.includes("projects.manage"))),
       },
-      // Every employee asks; department managers and the CEO decide.
-      { href: "/dashboard/overtime", key: "overtime", icon: Timer, staff: true },
+      // Leave, overtime and purchases: everyone asks here, whoever decides answers here.
+      { href: "/dashboard/orders", key: "orders", icon: ClipboardCheck, staff: true, badge: "orders", also: ["/dashboard/overtime", "/dashboard/purchasing"] },
       { href: "/dashboard/kpi", key: "kpi", icon: Gauge, staff: true },
       { href: "/dashboard/bonus", key: "bonus", icon: Gift, staff: true },
       { href: "/dashboard/messages", key: "messages", icon: MessagesSquare, staff: true, badge: "messages", exact: true },
       // The company file server (office share through the file gateway).
       { href: "/dashboard/files", key: "files", icon: HardDrive, staff: true },
       { href: "/dashboard/notifications", key: "notifications", icon: Bell, show: (u) => u.isStaff || u.isCustomer },
+      // Everyone's own look (and the CEO's company default). Here for everyone without the
+      // System page; for those with it, just before it (Management).
+      { href: "/dashboard/appearance", key: "appearance", icon: Palette, show: (u) => !u.permissions?.includes("system.health") },
       // Trainees and the CEO only (lib/training.js canOpenTraining).
       { href: "/dashboard/training", key: "training", icon: GraduationCap, show: (u) => (u.trainee && !u.limited) || (u.isStaff && u.permissions.includes("training.manage")) },
-      // Ask to buy (everyone with purchasing.request), approve, and the asset register.
-      {
-        href: "/dashboard/purchasing",
-        key: "purchasing",
-        icon: ShoppingCart,
-        when: (u) => ["purchasing.request", "purchasing.approve", "assets.manage"].some((p) => u.permissions.includes(p)),
-      },
       // Performance reviews: everyone's own, managers their team's, appraisals.manage runs the cycles.
       { href: "/dashboard/appraisals", key: "appraisals", icon: Star, staff: true },
     ],
@@ -117,41 +119,21 @@ const NAV = [
     group: "management",
     items: [
       { href: "/dashboard/analytics", key: "analytics", icon: BarChart3, perm: "analytics.view" },
-      { href: "/dashboard/reports", key: "reports", icon: FileSpreadsheet, perm: "reports.build" },
-      { href: "/dashboard/sales", key: "sales", icon: Handshake, perm: "sales.manage" },
-      { href: "/dashboard/recruitment", key: "recruitment", icon: UserPlus, perm: "recruitment.manage" },
-      // GM / CEO (rate) and department managers (see their own).
-      {
-        href: "/dashboard/manager-kpi",
-        key: "managerKpi",
-        icon: UserCheck,
-        when: (u) =>
-          (u.scope === "all" && u.permissions.includes("kpi.manage")) || (u.scope === "department" && u.permissions.includes("tasks.review")),
-      },
-      { href: "/dashboard/hr", key: "hr", icon: BriefcaseBusiness, perm: "attendance.view" },
-      { href: "/dashboard/finance", key: "finance", icon: Wallet, perm: "finance.view" },
-      { href: "/dashboard/pricing", key: "pricing", icon: Calculator, perm: "pricing.use" },
-      { href: "/dashboard/staff", key: "staff", icon: Users, perm: "users.view" },
-      { href: "/dashboard/roles", key: "roles", icon: ShieldCheck, perm: "roles.manage" },
-      // Everyone sees the hierarchy tab; the rest of the page stays with org.manage.
-      { href: "/dashboard/organization", key: "organization", icon: Building2, staff: true },
+      // Human resources: attendance, pay and hiring, the staff, the organization and the
+      // department heads' results — one link, each page by its own permission.
+      { folder: "hrMenu", icon: BriefcaseBusiness, children: HR_PAGES },
+      { href: "/dashboard/finance", key: "finance", icon: Wallet, also: ["/dashboard/sales"], when: (u) => ["finance.view", "sales.manage"].some((p) => u.permissions.includes(p)) },
       // Message review is a view of the Messages page (CEO and department managers).
-      { href: "/dashboard/audit", key: "audit", icon: History, perm: "audit.view" },
       { href: "/dashboard/settings", key: "settings", icon: Settings, perm: "settings.manage" },
       { href: "/dashboard/website", key: "website", icon: Globe2, perm: "website.manage" },
-      { href: "/dashboard/system", key: "system", icon: Activity, perm: "system.health" },
+      { href: "/dashboard/appearance", key: "appearance", icon: Palette, show: (u) => Boolean(u.permissions?.includes("system.health")) },
+      { href: "/dashboard/system", key: "system", icon: Activity, also: ["/dashboard/audit", "/dashboard/roles"], when: (u) => ["system.health", "audit.view", "roles.manage"].some((p) => u.permissions.includes(p)) },
     ],
   },
 ];
 
-// Pages the CEO took away on the Roles page: the role's page list (user.pages, with the
-// person's own hidden pages), and a restricted account (the GM by default) never gets
-// more than RESTRICTED_PAGES.
-export function pageAllowed(user, key) {
-  if (!key) return true;
-  if (user.pages && !user.pages.includes(key)) return false;
-  return !user.limited || RESTRICTED_PAGES.includes(key);
-}
+// Pages the CEO took away on the Roles page (shared with the server: lib/pageAccess.js).
+export { pageAllowed };
 
 // Is a sidebar entry shown to `user`? (Also the Roles page's "what they see" preview.)
 export function navItemVisible(item, user) {
@@ -169,7 +151,7 @@ function visibleEntries(items, user) {
     if (!i.children) return navItemVisible(i, user) ? [i] : [];
     const kids = i.children.filter((c) => navItemVisible(c, user));
     if (kids.length < 2) return kids;
-    return [{ key: i.folder, icon: i.icon, href: kids[0].href, also: kids.slice(1).map((k) => k.href), badge: kids.find((k) => k.badge)?.badge, children: kids }];
+    return [{ key: i.folder, icon: i.icon, href: kids[0].href, also: kids.flatMap((k, n) => [...(n ? [k.href] : []), ...(k.also || [])]), badge: kids.find((k) => k.badge)?.badge, children: kids }];
   });
 }
 const pagesOf = (entries) => entries.flatMap((i) => i.children || [i]);
@@ -177,7 +159,18 @@ const pagesOf = (entries) => entries.flatMap((i) => i.children || [i]);
 // The sidebar keys `user` sees, in order.
 export const visibleNavKeys = (user) => NAV.flatMap((g) => pagesOf(visibleEntries(g.items, user)).map((i) => i.key));
 
-export default function DashboardShell({ user, traineeIds = [], children }) {
+// The dashboard frame, with the person's look (Appearance page) around it.
+export default function DashboardShell({ user, traineeIds = [], companyAppearance = null, children }) {
+  return (
+    <AppearanceProvider initialMine={user.ui?.appearance} initialCompany={companyAppearance} legacyTheme={user.ui?.theme} actingAs={Boolean(user.actingAs)}>
+      <ShellFrame user={user} traineeIds={traineeIds}>
+        {children}
+      </ShellFrame>
+    </AppearanceProvider>
+  );
+}
+
+function ShellFrame({ user, traineeIds = [], children }) {
   const trainees = useMemo(() => new Set(traineeIds), [traineeIds]);
   const { t, lang } = useLanguage();
   const { logout, refresh } = useAuth();
@@ -187,6 +180,7 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [pendingReviews, setPendingReviews] = useState(0);
+  const [waitingOrders, setWaitingOrders] = useState(0);
   // Unread notifications per page address, shown on the sidebar link that page belongs to.
   const [pageCounts, setPageCounts] = useState({});
   const canReview = (user.isStaff && user.permissions.includes("tasks.review")) || user.isCustomer;
@@ -207,6 +201,14 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
       .catch(() => {});
   }, [canReview]);
 
+  const loadOrders = useCallback(() => {
+    if (!user.isStaff || user.limited) return;
+    fetch("/api/orders", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((d) => d && setWaitingOrders(d.counts.leave + d.counts.overtime + d.counts.purchase + (d.counts.work || 0)))
+      .catch(() => {});
+  }, [user.isStaff, user.limited]);
+
   const loadPageCounts = useCallback(() => {
     fetch("/api/notifications/pages", { cache: "no-store" })
       .then((res) => res.json())
@@ -217,23 +219,21 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
   useEffect(() => {
     loadUnread();
     loadReviews();
-  }, [loadUnread, loadReviews]);
+    loadOrders();
+    window.addEventListener(ORDERS_CHANGED, loadOrders);
+    return () => window.removeEventListener(ORDERS_CHANGED, loadOrders);
+  }, [loadUnread, loadReviews, loadOrders]);
 
-  // Opening a page counts its notifications as seen, which clears that link's badge.
-  useEffect(() => {
-    if (!pathname?.startsWith("/dashboard")) return;
-    fetch("/api/notifications/pages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: pathname }) })
-      .catch(() => {})
-      .finally(loadPageCounts);
-  }, [pathname, loadPageCounts]);
   usePollingFallback(loadPageCounts, 30000);
   usePollingFallback(loadUnread, 20000);
   usePollingFallback(loadReviews, 30000);
+  usePollingFallback(loadOrders, 60000);
 
   const channel = userChannelName(user.id);
   useRealtimeEvent(channel, "conversation:updated", loadUnread);
   useRealtimeEvent(channel, "task:updated", loadReviews);
   useRealtimeEvent(channel, "notification:new", loadPageCounts);
+  useRealtimeEvent(channel, "notification:new", loadOrders);
   useRealtimeEvent(channel, "notification:read", loadPageCounts);
   // Role or permissions changed by the GM: reload server data and navigation.
   useRealtimeEvent(channel, "user:updated", () => {
@@ -259,6 +259,38 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
   }
   // The page on screen: the longest sidebar address that matches.
   const current = allItems.filter(isActive).sort((a, b) => b.href.length - a.href.length)[0] || null;
+
+  // Opening a sidebar page lists, on top of it, everything its badge counted
+  // (PageNotifications) — its own address, the ones it also covers (Projects: the intake
+  // forms) and the pages under it (lib/pageLinks.js) — then counts them as seen, which
+  // clears the badge. A page outside the sidebar: its own address.
+  const noteScope = JSON.stringify(current ? { paths: [current.href, ...(current.also || [])], exact: Boolean(current.exact) } : { paths: [pathname], exact: true });
+  const [pageNotes, setPageNotes] = useState({ scope: null, list: [] });
+  useEffect(() => {
+    if (!pathname?.startsWith("/dashboard")) return undefined;
+    const scope = JSON.parse(noteScope);
+    let gone = false;
+    fetch(`/api/notifications?unread=1&paths=${encodeURIComponent(scope.paths.join(","))}${scope.exact ? "&exact=1" : ""}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (gone) return;
+        const list = data.notifications || [];
+        setPageNotes({ scope: noteScope, list });
+        // Scroll to the things they're about on this page, and make them glow.
+        focusEntities(list.map(entityKey));
+      })
+      .catch(() => {})
+      .finally(() =>
+        fetch("/api/notifications/pages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(scope) })
+          .catch(() => {})
+          .finally(loadPageCounts)
+      );
+    return () => {
+      gone = true;
+    };
+    // Only when the sidebar page changes: moving inside it keeps the list on screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noteScope, loadPageCounts]);
   const pageKeys = allItems.map((i) => i.key).join(",");
   const pages = useMemo(
     () => allItems.map((i) => ({ key: i.key, href: i.href, icon: i.icon, label: t(`erp.nav.${i.key}`) })),
@@ -269,7 +301,9 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
 
   // Their own set-up: theme, pinned pages and folded groups are saved on the account
   // (every device).
-  const [theme, setTheme] = useState(user.ui?.theme || "dark");
+  // Light / dark and the rest of the look: lib/appearance.js (the Appearance page).
+  const { appearance, setMode } = useAppearance();
+  const theme = appearance.mode;
   const [favorites, setFavorites] = useState(user.ui?.favorites || []);
   const [collapsed, setCollapsed] = useState(user.ui?.collapsed || []);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -277,10 +311,7 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
   // Viewing as someone (CEO) never changes their screen set-up.
   const savePrefs = useCallback((ui) => (user.actingAs ? Promise.resolve() : api("/api/auth/me", { method: "PATCH", body: { ui }, quiet: true }).catch(() => {})), [user.actingAs]);
 
-  const changeTheme = (next) => {
-    setTheme(next);
-    savePrefs({ theme: next });
-  };
+  const changeTheme = (next) => setMode(next);
   const togglePin = (key) => {
     const next = favorites.includes(key) ? favorites.filter((k) => k !== key) : [...favorites, key];
     setFavorites(next);
@@ -303,6 +334,10 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
     root.classList.toggle("erp-light", theme === "light");
     return () => root.classList.remove("erp-light", "erp-dash");
   }, [theme]);
+  const dir = lang === "ar" ? "rtl" : "ltr";
+  useHtmlAppearance(appearance, dir);
+  const frameStyle = useMemo(() => appearanceStyle(appearance, dir), [appearance, dir]);
+  const animated = appearance.background.kind !== "none";
 
 
   const openHelp = () => setHelpOpen(true);
@@ -323,7 +358,7 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
     // Task reviews show the waiting queue itself (pendingReviews), not its notifications.
     const notified = keys.reduce((sum, k) => sum + (k === "reviews" ? 0 : notifByKey[k] || 0), 0);
     // Messages count their own way (unread chats), so their notifications aren't added.
-    const badge = link.badge === "messages" ? unreadMessages : notified + (keys.includes("reviews") ? pendingReviews : 0);
+    const badge = link.badge === "messages" ? unreadMessages : link.badge === "orders" && waitingOrders > 0 ? waitingOrders : notified + (keys.includes("reviews") ? pendingReviews : 0);
     const isPinned = favorites.includes(link.key);
     return (
       <div key={`${place}-${link.key}`} className="group relative">
@@ -415,12 +450,31 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
 
   return (
     <FeedbackProvider>
-    <div className={`erp-root flex min-h-screen bg-brand-navy text-white ${theme === "light" ? "erp-light" : ""}`}>
+    <div
+      className={`erp-root flex min-h-screen bg-brand-navy text-white ${theme === "light" ? "erp-light" : ""} ${animated ? "has-bg" : ""} ${appearance.effects.motion ? "" : "erp-still"}`}
+      style={frameStyle}
+    >
+      {/* The animated background (Appearance page), behind everything. */}
+      {animated && (
+        <AnimatedBackground
+          settings={{ ...appearance.background, colors: bgColorsOf(appearance) }}
+          bg={pageColor(appearance)}
+          still={!appearance.effects.motion}
+          className="pointer-events-none fixed inset-0 z-0 h-full w-full"
+        />
+      )}
       <TopProgress />
       <aside className="sticky top-0 hidden h-screen w-72 shrink-0 border-e border-white/10 lg:block">{Sidebar}</aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col">
         {user.actingAs && <ViewAsBanner user={user} />}
+        {/* The CEO's orange line: ask the programmer for a change from any page — also
+            while viewing as someone (the request keeps whose view it was). */}
+        {(user.role === "ceo" || user.actingAs?.role === "ceo") && (
+          <Suspense fallback={null}>
+            <ChangeRequestBar pageKey={pageForPath(pathname)} viewAs={user.actingAs?.role === "ceo" ? user.name || user.email : ""} />
+          </Suspense>
+        )}
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-white/10 bg-brand-navy/90 px-4 backdrop-blur sm:px-6">
           <button
             type="button"
@@ -468,7 +522,13 @@ export default function DashboardShell({ user, traineeIds = [], children }) {
             <div className="mx-auto max-w-xl">
               <SecurityCard forced />
             </div>
-          ) : !pageAllowed(user, pageForPath(pathname)) ? <NoAccess /> : <TraineeProvider ids={trainees}>{children}</TraineeProvider>}
+          ) : !pageAllowed(user, pageForPath(pathname)) ? <NoAccess /> : (
+            <>
+              {/* What this page's sidebar badge was about. */}
+              {pageNotes.scope === noteScope && <PageNotifications list={pageNotes.list} onClose={() => setPageNotes({ scope: null, list: [] })} />}
+              <TraineeProvider ids={trainees}>{children}</TraineeProvider>
+            </>
+          )}
         </main>
       </div>
 

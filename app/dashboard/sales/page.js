@@ -1,9 +1,7 @@
-import { requirePermission } from "@/lib/currentUser";
-import SalesCenter from "@/components/erp/sales/SalesCenter";
-import NoAccess from "@/components/erp/NoAccess";
+import { redirect } from "next/navigation";
 
-export default async function SalesPage() {
-  const user = await requirePermission("sales.manage");
-  if (!user || user.limited) return <NoAccess />;
-  return <SalesCenter />;
+// Moved into the Finance page (older links).
+export default async function SalesPage({ searchParams }) {
+  const { tab } = await searchParams;
+  redirect(`/dashboard/finance?tab=sales${tab === "quotes" ? "&view=quotes" : ""}`);
 }

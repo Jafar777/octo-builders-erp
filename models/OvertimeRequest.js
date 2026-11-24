@@ -7,7 +7,13 @@ const { ObjectId } = mongoose.Schema.Types;
 const OvertimeRequestSchema = new mongoose.Schema(
   {
     user: { type: ObjectId, ref: "User", required: true },
-    department: { type: ObjectId, ref: "Department", default: null }, // whose manager decides
+    department: { type: ObjectId, ref: "Department", default: null },
+    // The managers who decide, fixed when it was asked (lib/reporting.js: their chart
+    // manager, else their department's). Empty on older requests: those go by department.
+    managers: [{ type: ObjectId, ref: "User" }],
+    // True from the day managers were named on requests: `managers` is then the whole
+    // answer (empty = only the CEO), never the department.
+    routed: { type: Boolean, default: false },
     date: { type: String, required: true }, // YYYY-MM-DD, HR time zone: the day it was asked
     hours: { type: Number, required: true, min: 0.5, max: 16 }, // asked for
     reason: { type: String, default: "" },

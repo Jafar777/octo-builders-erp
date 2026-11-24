@@ -31,8 +31,9 @@ import {
 } from "@/components/erp/tasks/taskUi";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 import { ExternalReviewBox } from "@/components/erp/tasks/ExternalReview";
+import ClientChange from "@/components/erp/tasks/ClientChange";
 import TaskChecklist from "@/components/erp/tasks/TaskChecklist";
-import { useAsk, useConfirm } from "@/components/erp/ui/Feedback";
+import { useConfirm } from "@/components/erp/ui/Feedback";
 
 const TAG_KINDS = ["neutral", "excellent", "contribution", "error"];
 
@@ -233,7 +234,6 @@ function ReviewChain({ task }) {
 }
 
 export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpenTask }) {
-  const ask = useAsk();
   const { t, lang } = useLanguage();
   const confirm = useConfirm();
   const { user } = useAuth();
@@ -241,6 +241,7 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [panel, setPanel] = useState(null); // "help" | "submit"
+  const [changing, setChanging] = useState(null); // the task a client change is being set up for
   const [helperId, setHelperId] = useState("");
   const [note, setNote] = useState("");
   const [helpHours, setHelpHours] = useState("1");
@@ -495,20 +496,46 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
 
           </div>
 
-          {/* A change the client asks for after approval: a new revision of this task. */}
-          {task.status === "approved" && ["task", "revision"].includes(task.kind) && p.canManage && (
+          {p.pendingChange && <p className="rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-200">{t("erp.clientChange.pendingBanner", { code: p.pendingChange })}</p>}
+          {task.waitsForChange?.length > 0 && <p className="rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-200">{t("erp.tasks.waitingChange")} <span dir="ltr">{task.waitsForChange.map((x) => `#${x.number}`).join(", ")}</span></p>}
+          {changing === task.id && (
+            <ClientChange
+              key={task.id}
+              taskId={task.id}
+              lookups={lookups}
+              onClose={() => setChanging(null)}
+              onDone={() => {
+                setChanging(null);
+                load();
+                onChanged?.();
+              }}
+            />
+          )}
+          {/* A change the client asks for after approval: new revisions of what it affects. */}
+          {task.status === "approved" && ["task", "revision"].includes(task.kind) && p.canChange && (
             <button
               type="button"
               disabled={busy}
-              onClick={async () => {
-                const notes = await ask({ text: t("erp.tasks.reviseApprovedAsk"), confirmLabel: t("erp.tasks.reviseApproved") });
-                if (notes === null || notes === undefined || notes === false) return;
-                act("revise", { notes });
-              }}
+              onClick={() => setChanging(task.id)}
               className="flex items-center gap-1.5 text-sm text-amber-200 hover:text-amber-100"
             >
-              <RotateCcw size={14} /> {t("erp.tasks.reviseApproved")}
+              <RotateCcw size={14} /> {t("erp.clientChange.open")}
             </button>
+          )}
+
+          {/* The hybrid way of working (lib/hybrid.js). */}
+          {task.origin === "self" && (
+            <p className="rounded-xl bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
+              {t("erp.startWork.selfBadge")}
+              {task.pushed?.length > 0 && ` · ${t("erp.workRequests.pushedRow", { list: task.pushed.map((n) => `#${n}`).join(" · "), reason: task.startReason })}`}
+            </p>
+          )}
+          {task.autoPausedAt && <p className="rounded-xl bg-white/5 px-4 py-3 text-sm text-white/70">{t("erp.startWork.autoPaused")}</p>}
+          {task.promisedAt && task.dueAt && new Date(task.promisedAt).getTime() !== new Date(task.dueAt).getTime() && <p className="text-xs text-white/60">{t("erp.startWork.promised", { at: formatDateTime(task.promisedAt, lang) })}</p>}
+          {p.canFix ? (
+            <Toggle checked={Boolean(task.fixed)} onChange={(v) => patch({ fixed: v })} label={t("erp.startWork.fix")} />
+          ) : (
+            task.fixed && s === "todo" && <p className="text-xs text-amber-200">{t("erp.startWork.fixedBadge")}</p>
           )}
 
           <DeleteTaskButton
@@ -614,7 +641,17 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
                     value={helperId}
                     onChange={setHelperId}
                     placeholder="—"
-                    options={lookups.people.filter((x) => x.id !== user?.id).map((x) => ({ value: x.id, label: x.name }))}
+                    // Colleagues who can work on it (the server checks the same): not the
+                    // CEO / GM, of the task's department, mine, or opened to them.
+                    options={lookups.people
+                      .filter(
+                        (x) =>
+                          x.id !== user?.id &&
+                          x.active !== false &&
+                          !["ceo", "gm", "coder"].includes(x.role) &&
+                          ((user?.department && x.department === user.department) || x.work === "all" || (Array.isArray(x.work) && x.work.includes(task.department)))
+                      )
+                      .map((x) => ({ value: x.id, label: x.name }))}
                   />
                   <Input label={t("erp.tasks.helpNote")} value={note} onChange={setNote} />
                   <Input type="number" min="0.5" max="8" step="0.5" label={t("erp.tasks.helpHours")} value={helpHours} onChange={setHelpHours} dir="ltr" />
@@ -691,7 +728,9 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
                 value={manage.assigneeId}
                 onChange={(v) => setManage((m) => ({ ...m, assigneeId: v }))}
                 options={lookups.people
-                  .filter((x) => !p.departments || p.departments.includes(x.department))
+                  // Their departments' people, minus anyone the chart moved to another
+                  // manager, plus the people moved to them (lib/reporting.js).
+                  .filter((x) => !p.departments || (x.chartManager ? x.chartManager === user?.id : p.departments.includes(x.department)))
                   .map((x) => ({ value: x.id, label: x.name }))}
               />
               <Button variant="ghost" onClick={() => patch({ assigneeId: manage.assigneeId })} disabled={!manage.assigneeId || manage.assigneeId === task.assignee?.id}>

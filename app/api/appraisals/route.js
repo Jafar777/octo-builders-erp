@@ -5,6 +5,8 @@ import { peopleNames } from "@/lib/sales";
 import Appraisal, { AppraisalCycle, COMPETENCIES } from "@/models/Appraisal";
 
 const idStr = (v) => (v ? v.toString() : null);
+// Read with lean(), a Map field is a plain object.
+const scoresOf = (part) => (part?.scores instanceof Map ? Object.fromEntries(part.scores) : { ...(part?.scores || {}) });
 const avg = (m) => {
   const v = Object.values(m || {}).filter((x) => x > 0);
   return v.length ? Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 10) / 10 : 0;
@@ -22,9 +24,9 @@ function serialize(a, cycles, names, viewer) {
     employeeName: names[idStr(a.employee)] || "",
     reviewer: idStr(a.reviewer),
     reviewerName: names[idStr(a.reviewer)] || "",
-    self: { scores: Object.fromEntries(a.self?.scores || []), comment: a.self?.comment || "", at: a.self?.at || null },
+    self: { scores: scoresOf(a.self), comment: a.self?.comment || "", at: a.self?.at || null },
     manager: showManager
-      ? { scores: Object.fromEntries(a.manager?.scores || []), comment: a.manager?.comment || "", strengths: a.manager?.strengths || "", goals: a.manager?.goals || "", at: a.manager?.at || null, overall: avg(Object.fromEntries(a.manager?.scores || [])) }
+      ? { scores: scoresOf(a.manager), comment: a.manager?.comment || "", strengths: a.manager?.strengths || "", goals: a.manager?.goals || "", at: a.manager?.at || null, overall: avg(scoresOf(a.manager)) }
       : { at: null },
     acknowledgedAt: a.acknowledgedAt,
   };
