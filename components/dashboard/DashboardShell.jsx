@@ -4,15 +4,12 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutGrid,
   Palette,
   HardDrive,
   Globe2,
   LogOut,
-  Menu,
-  X,
   MessagesSquare,
   Bell,
   Settings,
@@ -57,6 +54,7 @@ import { ORDERS_CHANGED } from "@/components/erp/orders/ordersChanged";
 import { HR_PAGES } from "@/components/erp/hr/hrPages";
 import { PROFILE_PAGES } from "@/components/erp/profile/profilePages";
 import { ViewAsBanner, ViewAsButton } from "@/components/dashboard/ViewAs";
+import { BottomTabs, MoreSheet, pickTabs, useActiveTabIntoView } from "@/components/dashboard/MobileNav";
 import ChangeRequestBar from "@/components/erp/system/ChangeRequestBar";
 import PageNotifications from "@/components/dashboard/PageNotifications";
 import { entityKey, focusEntities } from "@/components/dashboard/focusEntity";
@@ -177,7 +175,9 @@ function ShellFrame({ user, traineeIds = [], children }) {
   const { connected } = useRealtime();
   const router = useRouter();
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const closeMore = useCallback(() => setMoreOpen(false), []);
+  useActiveTabIntoView(pathname);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [pendingReviews, setPendingReviews] = useState(0);
   const [waitingOrders, setWaitingOrders] = useState(0);
@@ -351,20 +351,28 @@ function ShellFrame({ user, traineeIds = [], children }) {
     router.push("/");
   }
 
-  function renderLink(link, place, small = false) {
-    const active = isActive(link);
-    const Icon = link.icon;
+  function badgeOf(link) {
     const keys = link.children ? link.children.map((c) => c.key) : [link.key];
     // Task reviews show the waiting queue itself (pendingReviews), not its notifications.
     const notified = keys.reduce((sum, k) => sum + (k === "reviews" ? 0 : notifByKey[k] || 0), 0);
     // Messages count their own way (unread chats), so their notifications aren't added.
-    const badge = link.badge === "messages" ? unreadMessages : link.badge === "orders" && waitingOrders > 0 ? waitingOrders : notified + (keys.includes("reviews") ? pendingReviews : 0);
+    return link.badge === "messages" ? unreadMessages : link.badge === "orders" && waitingOrders > 0 ? waitingOrders : notified + (keys.includes("reviews") ? pendingReviews : 0);
+  }
+  // Phones: the bottom tabs, and what the "More" sheet adds up (the pages not on a tab).
+  const entries = groups.flatMap((g) => g.items);
+  const tabs = pickTabs(entries);
+  const moreBadge = entries.filter((e) => !tabs.includes(e)).reduce((sum, e) => sum + badgeOf(e), 0);
+  const messagesTab = tabs.some((x) => x.key === "messages");
+
+  function renderLink(link, place, small = false) {
+    const active = isActive(link);
+    const Icon = link.icon;
+    const badge = badgeOf(link);
     const isPinned = favorites.includes(link.key);
     return (
       <div key={`${place}-${link.key}`} className="group relative">
         <Link
           href={link.href}
-          onClick={() => setMobileOpen(false)}
           aria-current={active ? "page" : undefined}
           className={`flex items-center gap-3 rounded-xl px-4 ${small ? "py-2" : "py-2.5"} pe-10 text-sm font-medium transition-colors ${
             active ? "bg-brand-orange text-white" : "text-white/75 hover:bg-white/10 hover:text-white"
@@ -475,14 +483,11 @@ function ShellFrame({ user, traineeIds = [], children }) {
             <ChangeRequestBar pageKey={pageForPath(pathname)} viewAs={user.actingAs?.role === "ceo" ? user.name || user.email : ""} />
           </Suspense>
         )}
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-white/10 bg-brand-navy/90 px-4 backdrop-blur sm:px-6">
-          <button
-            type="button"
-            onClick={() => setMobileOpen(true)}
-            className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-white/10 lg:hidden"
-          >
-            <Menu size={20} />
-          </button>
+        <header className="erp-topbar sticky top-0 z-30 flex min-h-14 items-center justify-between border-b border-white/10 bg-brand-navy/90 px-3 pt-[env(safe-area-inset-top)] backdrop-blur-xl sm:px-6 lg:h-16">
+          {/* Phones: the app's mark at the start of the bar (the pages are in the bottom tabs). */}
+          <Link href="/dashboard" aria-label={t("erp.nav.overview")} className="flex h-9 w-9 shrink-0 items-center justify-center lg:hidden">
+            <Image src="/brand/00-Icon.png" alt="" width={28} height={28} className="h-7 w-7" />
+          </Link>
           {/* Where you are: the section and the page. */}
           <div className="flex min-w-0 flex-1 items-center gap-2 px-2 text-sm lg:px-0">
             {current && current.key !== "overview" ? (
@@ -491,33 +496,42 @@ function ShellFrame({ user, traineeIds = [], children }) {
                 <span className="hidden text-white/50 sm:inline" aria-hidden>
                   /
                 </span>
-                <span className="flex min-w-0 items-center gap-2 font-semibold">
-                  <current.icon size={16} className="shrink-0 text-brand-orange" />
+                <span className="flex min-w-0 items-center gap-2 text-base font-semibold sm:text-sm">
+                  <current.icon size={16} className="hidden shrink-0 text-brand-orange sm:block" />
                   <span className="truncate">{t(`erp.nav.${current.key}`)}</span>
                 </span>
               </>
             ) : (
-              <span className="hidden truncate text-white/60 sm:inline">
-                {t("dashboard.welcome")}, {user.name || user.email}
+              <span className="truncate text-base font-semibold sm:text-sm sm:font-normal sm:text-white/60">
+                <span className="hidden sm:inline">{t("dashboard.welcome")}, </span>
+                {user.name || user.email}
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex shrink-0 items-center gap-0.5 sm:gap-2">
             <span
               title={connected ? t("erp.realtimeOn") : t("erp.realtimeOff")}
-              className={`h-2.5 w-2.5 rounded-full ${connected ? "bg-emerald-400" : "bg-white/25"}`}
+              className={`hidden h-2.5 w-2.5 rounded-full lg:block ${connected ? "bg-emerald-400" : "bg-white/25"}`}
             />
             {user.isStaff && !user.limited && <SearchPalette pages={pages} />}
-            {["ceo", "coder"].includes(user.role) && !user.actingAs && <ViewAsButton />}
-            <ThemeButton theme={theme} onChange={changeTheme} />
-            <ShortcutsButton onClick={openHelp} />
-            <LanguageSwitch compact />
-            {!user.actingAs && <MessagesButton />}
+            {/* On phones these live in the "More" sheet. */}
+            <span className="hidden items-center gap-2 lg:flex">
+              {["ceo", "coder"].includes(user.role) && !user.actingAs && <ViewAsButton />}
+              <ThemeButton theme={theme} onChange={changeTheme} />
+              <ShortcutsButton onClick={openHelp} />
+              <LanguageSwitch compact />
+            </span>
+            {/* Phones with a Messages tab don't need the button too. */}
+            {!user.actingAs && (
+              <span className={messagesTab ? "hidden lg:contents" : "contents"}>
+                <MessagesButton />
+              </span>
+            )}
             <NotificationBell />
           </div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-10">
+        <main className="erp-main min-w-0 flex-1 px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:pt-6 lg:p-10">
           {user.mfaRequired && !user.mfaEnabled && !user.actingAs && !pathname.startsWith("/dashboard/profile") ? (
             <div className="mx-auto max-w-xl">
               <SecurityCard forced />
@@ -532,40 +546,32 @@ function ShellFrame({ user, traineeIds = [], children }) {
         </main>
       </div>
 
+      {/* The floating chat is for large screens; phones have the Messages tab. */}
       {user.isStaff && !user.actingAs && !pathname.startsWith("/dashboard/messages") && (
-        <MiniChat meId={user.id} canAnnounce={user.permissions.includes("messages.announce")} unread={unreadMessages} />
+        <div className="hidden lg:block">
+          <MiniChat meId={user.id} canAnnounce={user.permissions.includes("messages.announce")} unread={unreadMessages} />
+        </div>
       )}
 
-      <AnimatePresence>
-        {mobileOpen && (
+      <BottomTabs tabs={tabs} isActive={isActive} badgeOf={badgeOf} moreOpen={moreOpen} moreBadge={moreBadge} onMore={() => setMoreOpen((o) => !o)} />
+      <MoreSheet
+        open={moreOpen}
+        onClose={closeMore}
+        groups={groups}
+        pinned={pinned}
+        isActive={isActive}
+        badgeOf={badgeOf}
+        user={user}
+        theme={theme}
+        onTheme={changeTheme}
+        onLogout={handleLogout}
+        extras={
           <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setMobileOpen(false)}
-              // Starts under the header, so the bell and messages stay usable with the menu open.
-              className="fixed inset-x-0 bottom-0 top-16 z-40 bg-black/60 lg:hidden"
-            />
-            <motion.div
-              initial={{ x: lang === "ar" ? "100%" : "-100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: lang === "ar" ? "100%" : "-100%" }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-              className="fixed inset-y-0 start-0 z-50 w-72 bg-brand-navy lg:hidden"
-            >
-              <button
-                type="button"
-                onClick={() => setMobileOpen(false)}
-                className="absolute end-4 top-4 flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/10"
-              >
-                <X size={18} />
-              </button>
-              {Sidebar}
-            </motion.div>
+            <LanguageSwitch compact />
+            {["ceo", "coder"].includes(user.role) && !user.actingAs && <ViewAsButton />}
           </>
-        )}
-      </AnimatePresence>
+        }
+      />
     </div>
     <ShortcutsHelp
       open={helpOpen}

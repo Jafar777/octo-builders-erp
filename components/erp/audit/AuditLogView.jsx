@@ -74,10 +74,10 @@ export default function AuditLogView() {
             <button
               type="button"
               onClick={() => setOpen(open === log.id ? null : log.id)}
-              className="flex w-full items-center gap-4 px-4 py-3 text-start text-sm"
+              className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-start text-sm sm:flex-nowrap"
             >
-              <span className="w-40 shrink-0 text-xs text-white/60">{formatDateTime(log.createdAt, lang)}</span>
-              <span className="min-w-0 flex-1">
+              <span className="order-first w-full shrink-0 text-xs text-white/60 sm:w-40">{formatDateTime(log.createdAt, lang)}</span>
+              <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
                 <span className="font-medium">{log.actorName}</span>
                 <span className="text-white/60"> · {label(log.action)}</span>
                 {log.summary && <span className="text-white/60"> · {log.summary}</span>}

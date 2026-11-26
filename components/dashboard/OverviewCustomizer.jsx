@@ -55,10 +55,10 @@ export default function OverviewCustomizer({ blocks, defaultOrder, tiles, layout
 
   const arrows = (i, list, set) => (
     <span className="flex gap-1">
-      <button type="button" aria-label={t("erp.home.customize.up")} disabled={i === 0} onClick={() => set(move(list, i, -1))} className="rounded p-1 text-white/60 hover:bg-white/10 disabled:opacity-25">
+      <button type="button" aria-label={t("erp.home.customize.up")} disabled={i === 0} onClick={() => set(move(list, i, -1))} className="flex h-9 w-9 items-center justify-center rounded-lg text-white/60 hover:bg-white/10 active:bg-white/15 disabled:opacity-25 sm:h-7 sm:w-7">
         <ArrowUp size={14} />
       </button>
-      <button type="button" aria-label={t("erp.home.customize.down")} disabled={i === list.length - 1} onClick={() => set(move(list, i, 1))} className="rounded p-1 text-white/60 hover:bg-white/10 disabled:opacity-25">
+      <button type="button" aria-label={t("erp.home.customize.down")} disabled={i === list.length - 1} onClick={() => set(move(list, i, 1))} className="flex h-9 w-9 items-center justify-center rounded-lg text-white/60 hover:bg-white/10 active:bg-white/15 disabled:opacity-25 sm:h-7 sm:w-7">
         <ArrowDown size={14} />
       </button>
     </span>

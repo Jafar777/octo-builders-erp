@@ -231,7 +231,7 @@ export default function ProjectFiles({ project }) {
         </Card>
       ))}
       {progress !== null && (
-        <div className="fixed bottom-6 end-6 z-50 rounded-xl border border-white/10 bg-brand-navy px-4 py-3 text-sm shadow-xl">
+        <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] end-4 z-50 rounded-xl lg:bottom-6 lg:end-6 border border-white/10 bg-brand-navy px-4 py-3 text-sm shadow-xl">
           {t("erp.files.uploading", { n: progress })}
         </div>
       )}

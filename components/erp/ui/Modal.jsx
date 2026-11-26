@@ -52,7 +52,7 @@ export default function Modal({ open, onClose, title, children, wide = false }) 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-6"
+          className="fixed inset-0 z-[70] m-0 flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-6"
           onMouseDown={onClose}
         >
           <motion.div
@@ -65,11 +65,15 @@ export default function Modal({ open, onClose, title, children, wide = false }) 
             role="dialog"
             aria-modal="true"
             aria-label={typeof title === "string" ? title : undefined}
-            className={`flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl border border-white/10 bg-brand-navy shadow-2xl sm:rounded-3xl ${
+            className={`flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-white/10 bg-brand-navy shadow-2xl sm:rounded-3xl ${
               wide ? "sm:max-w-3xl" : "sm:max-w-lg"
             }`}
           >
-            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+            {/* Phones: a sheet from the bottom, with its handle. */}
+            <div className="flex justify-center pt-2 sm:hidden" aria-hidden>
+              <span className="h-1.5 w-10 rounded-full bg-white/20" />
+            </div>
+            <div className="flex items-center justify-between border-b border-white/10 px-5 pb-3 pt-2 sm:py-4">
               <h2 className="text-base font-semibold text-white">{title}</h2>
               <button
                 type="button"
@@ -80,7 +84,7 @@ export default function Modal({ open, onClose, title, children, wide = false }) 
                 <X size={18} />
               </button>
             </div>
-            <div className="overflow-y-auto p-5">{children}</div>
+            <div className="overflow-y-auto overscroll-contain p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-5">{children}</div>
           </motion.div>
         </motion.div>
       )}

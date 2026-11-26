@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Box, Briefcase, FileText, FolderKanban, Handshake, ListChecks, Search, User, X } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
@@ -80,8 +81,10 @@ export default function SearchPalette({ pages = [] }) {
         <span className="hidden text-xs xl:inline">{t("erp.search.open")}</span>
         <kbd className="hidden rounded border border-white/15 px-1.5 text-[11px] text-white/60 xl:inline">Ctrl K</kbd>
       </button>
-      {open && (
-        <div className="fixed inset-0 z-[80] flex items-start justify-center bg-black/60 p-4 pt-[12vh] backdrop-blur-sm" onMouseDown={() => setOpen(false)}>
+      {/* On the page itself, not inside the top bar (whose layer would keep it under the
+          phone's tab bar). */}
+      {open && createPortal(
+        <div className="fixed inset-0 z-[80] m-0 flex items-start justify-center bg-black/60 p-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] backdrop-blur-sm sm:p-4 sm:pt-[12vh]" onMouseDown={() => setOpen(false)}>
           <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-white/10 bg-brand-navy shadow-2xl" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t("erp.search.open")}>
             <div className="flex items-center gap-3 border-b border-white/10 px-4">
               <Search size={18} className="text-white/60" />
@@ -124,13 +127,14 @@ export default function SearchPalette({ pages = [] }) {
                 );
               })}
             </ul>
-            <p className="flex flex-wrap gap-x-4 gap-y-1 border-t border-white/10 px-4 py-2.5 text-[11px] text-white/50">
+            <p className="hidden flex-wrap gap-x-4 gap-y-1 border-t border-white/10 px-4 py-2.5 text-[11px] text-white/50 sm:flex">
               <span><kbd className="rounded border border-white/20 px-1">↑</kbd> <kbd className="rounded border border-white/20 px-1">↓</kbd> {t("erp.ux.kbMove")}</span>
               <span><kbd className="rounded border border-white/20 px-1">Enter</kbd> {t("erp.ux.kbOpen")}</span>
               <span><kbd className="rounded border border-white/20 px-1">Esc</kbd> {t("erp.ux.kbClose")}</span>
             </p>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

@@ -321,7 +321,7 @@ function Client360({ id, onClose, onOpenItem, onChanged, onDeleted }) {
 
           <div className="flex flex-wrap gap-1 border-b border-white/10">
             {SECTIONS.map((s) => (
-              <button key={s} type="button" onClick={() => setSection(s)} className={`px-3 py-2 text-xs ${section === s ? "border-b-2 border-brand-orange text-white" : "text-white/55 hover:text-white"}`}>
+              <button key={s} type="button" onClick={() => setSection(s)} data-active={section === s} className={`px-3 py-2 text-xs ${section === s ? "border-b-2 border-brand-orange text-white" : "text-white/55 hover:text-white"}`}>
                 {t(`erp.office.clients.section.${s}`)} <span className="text-white/40">{counts[s]}</span>
               </button>
             ))}

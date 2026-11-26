@@ -78,7 +78,7 @@ export default function OrdersCenter() {
                   key={k}
                   type="button"
                   onClick={() => pick(k)}
-                  className={`-mb-px flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium ${tab === k ? "border-brand-orange text-white" : "border-transparent text-white/60 hover:text-white"}`}
+                  data-active={tab === k} className={`-mb-px flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium ${tab === k ? "border-brand-orange text-white" : "border-transparent text-white/60 hover:text-white"}`}
                 >
                   <Icon size={16} /> {t(`erp.orders.tab.${k}`)}
                   {badge[k] > 0 && <span className="rounded-full bg-brand-orange px-1.5 text-[11px] text-white">{badge[k]}</span>}

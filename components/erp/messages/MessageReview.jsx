@@ -52,7 +52,7 @@ export default function MessageReview({ meId, departments = null, switcher = nul
   const active = conversations.find((c) => c.id === activeId);
 
   return (
-    <div className="-m-4 flex h-[calc(100vh-4rem)] sm:-m-6 lg:-m-10">
+    <div className="-mx-4 -mt-4 -mb-[calc(5.5rem+env(safe-area-inset-bottom))] flex h-[calc(100dvh-3.5rem-env(safe-area-inset-top))] pb-[var(--erp-bottom)] sm:-mx-6 sm:-mt-6 lg:-m-10 lg:h-[calc(100vh-4rem)] lg:pb-0">
       <aside className={`flex w-full shrink-0 flex-col border-e border-white/10 md:w-96 ${active ? "hidden md:flex" : "flex"}`}>
         {switcher}
         <div className="space-y-3 border-b border-white/10 p-3">

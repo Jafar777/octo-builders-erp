@@ -70,7 +70,7 @@ export function StatTile({ label, value, hint, tone = "" }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
       <p className="text-xs text-white/50">{label}</p>
-      <p className={`mt-1 text-2xl font-bold tabular-nums ${tone}`}>{value}</p>
+      <p className={`mt-1 text-xl font-bold tabular-nums sm:text-2xl ${tone}`}>{value}</p>
       {hint && <p className="mt-0.5 text-xs text-white/60">{hint}</p>}
     </div>
   );

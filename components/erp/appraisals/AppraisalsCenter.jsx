@@ -55,7 +55,7 @@ export default function AppraisalsCenter() {
       <TeamRatings />
       <div className="mb-5 flex gap-1 border-b border-white/10">
         {tabs.map((k) => (
-          <button key={k} type="button" onClick={() => setTab(k)} className={`-mb-px border-b-2 px-4 py-2.5 text-sm ${tab === k ? "border-brand-orange text-white" : "border-transparent text-white/50 hover:text-white"}`}>
+          <button key={k} type="button" onClick={() => setTab(k)} data-active={tab === k} className={`-mb-px border-b-2 px-4 py-2.5 text-sm ${tab === k ? "border-brand-orange text-white" : "border-transparent text-white/50 hover:text-white"}`}>
             {t(`erp.appraisals.tab.${k}`)}
             {k === "team" && teamCount > 0 && <span className="ms-1.5 text-xs text-white/60">{teamCount}</span>}
           </button>

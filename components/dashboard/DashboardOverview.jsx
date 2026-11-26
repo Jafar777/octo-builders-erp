@@ -556,7 +556,7 @@ export default function DashboardOverview({ user }) {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start gap-3">
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 basis-full sm:basis-0">
         <h1 className="min-h-8 text-2xl font-bold">
           {today ? `${today.greeting}${lang === "ar" ? "، " : ", "}` : ""}
           {user?.name?.split(" ")[0] || user?.email}
@@ -567,7 +567,7 @@ export default function DashboardOverview({ user }) {
         </p>
       </div>
         {user?.isStaff && data && (
-          <div className="flex flex-wrap gap-2">
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
             {/* Adding a task straight from here (change request CR-5). */}
             <Button onClick={() => setAdding(true)}>
               <Plus size={16} /> {t("erp.tasks.new")}

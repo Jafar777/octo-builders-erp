@@ -97,7 +97,7 @@ export function FeedbackProvider({ children }) {
       {children}
       {mounted &&
         createPortal(
-          <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-4 z-[95] flex flex-col items-center gap-2 px-4 sm:bottom-6">
+          <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[95] flex flex-col items-center gap-2 px-4 lg:bottom-6">
             {toasts.map((x) => (
               <ToastItem key={x.id} item={x} onClose={() => dismiss(x.id)} />
             ))}
@@ -157,7 +157,7 @@ function ConfirmWindow({ ask, onAnswer, t }) {
   const danger = del || Boolean(ask.danger);
   const Icon = del ? Trash2 : AlertTriangle;
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onMouseDown={() => finish(false)}>
+    <div className="fixed inset-0 z-[90] m-0 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onMouseDown={() => finish(false)}>
       <div
         role="alertdialog"
         aria-modal="true"

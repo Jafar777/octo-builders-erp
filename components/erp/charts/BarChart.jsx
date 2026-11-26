@@ -46,7 +46,7 @@ export function GroupedBarChart({ categories, series, height = 220, unit = "", m
             </span>
           ))}
         </div>
-        <div className="relative flex-1">
+        <div className="relative min-w-0 flex-1">
           {ticks.map((tk) => (
             <div key={tk} className="absolute inset-x-0 border-t border-white/[0.07]" style={{ bottom: `${(tk / max) * 100}%` }} />
           ))}
@@ -54,7 +54,7 @@ export function GroupedBarChart({ categories, series, height = 220, unit = "", m
             {categories.map((c) => (
               <div
                 key={c.key}
-                className="relative flex h-full flex-1 items-end justify-center gap-[2px]"
+                className="relative flex h-full min-w-0 flex-1 items-end justify-center gap-[2px]"
                 onMouseEnter={() => setHover(c.key)}
                 onMouseLeave={() => setHover(null)}
               >
@@ -64,8 +64,8 @@ export function GroupedBarChart({ categories, series, height = 220, unit = "", m
                   return (
                     <div
                       key={s.key}
-                      className="relative rounded-t-[4px] transition-[height] duration-500"
-                      style={{ width: barW, height: `${((v || 0) / max) * 100}%`, background: SERIES_COLORS[i], minHeight: v ? 2 : 0 }}
+                      className="relative min-w-[3px] rounded-t-[4px] transition-[height] duration-500"
+                      style={{ flex: `0 1 ${barW}px`, height: `${((v || 0) / max) * 100}%`, background: SERIES_COLORS[i], minHeight: v ? 2 : 0 }}
                     />
                   );
                 })}

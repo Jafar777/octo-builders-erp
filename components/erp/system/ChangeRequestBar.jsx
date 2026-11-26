@@ -52,7 +52,7 @@ export default function ChangeRequestBar({ pageKey, viewAs = "" }) {
 
   return (
     <>
-    <div data-change-bar className="flex flex-wrap items-center justify-center gap-3 bg-brand-orange px-4 py-2 text-sm font-medium text-black">
+    <div data-change-bar className="flex items-center justify-center gap-2 bg-brand-orange px-3 py-1.5 text-xs font-medium text-black sm:flex-wrap sm:gap-3 sm:px-4 sm:py-2 sm:text-sm">
       <MessageSquarePlus size={16} className="shrink-0" />
       <span className="min-w-0 truncate">
         {t("erp.changes.bar", { page: where })}

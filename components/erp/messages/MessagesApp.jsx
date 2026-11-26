@@ -82,6 +82,12 @@ export default function MessagesApp({ meId, canAnnounce, switcher = null }) {
   }
 
   const active = conversations.find((c) => c.id === activeId) || null;
+  // Phones: an open chat takes the whole screen (no bottom tabs), like a chat app.
+  const chatOpen = Boolean(active);
+  useEffect(() => {
+    document.documentElement.classList.toggle("erp-chat-open", chatOpen);
+    return () => document.documentElement.classList.remove("erp-chat-open");
+  }, [chatOpen]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -99,7 +105,7 @@ export default function MessagesApp({ meId, canAnnounce, switcher = null }) {
   }
 
   return (
-    <div className="-m-4 flex h-[calc(100vh-4rem)] sm:-m-6 lg:-m-10">
+    <div className="-mx-4 -mt-4 -mb-[calc(5.5rem+env(safe-area-inset-bottom))] flex h-[calc(100dvh-3.5rem-env(safe-area-inset-top))] pb-[var(--erp-bottom)] sm:-mx-6 sm:-mt-6 lg:-m-10 lg:h-[calc(100vh-4rem)] lg:pb-0">
       {/* Conversation list — hidden on mobile while a chat is open */}
       <aside
         className={`flex w-full shrink-0 flex-col border-e border-white/10 md:w-80 ${active ? "hidden md:flex" : "flex"}`}

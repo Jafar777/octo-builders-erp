@@ -78,6 +78,18 @@ const extraFonts = [inter, poppins, rubik, spaceGrotesk, nunito, quicksand, lexe
 export const metadata = {
   title: "Octo Builders",
   description: "Octo Builders — construction & contracting excellence.",
+  // Saved to an iPhone's home screen it opens full screen, like an app (app/manifest.js).
+  appleWebApp: { capable: true, title: "Octo ERP", statusBarStyle: "black-translucent" },
+  icons: { apple: "/app-icons/apple-touch-icon.png" },
+};
+
+// The page runs under the phone's notch and home bar (the dashboard pads for them with
+// env(safe-area-inset-*)); the browser bar takes the app's colour.
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0f2331",
 };
 
 export default function RootLayout({ children }) {

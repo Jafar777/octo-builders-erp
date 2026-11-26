@@ -1,7 +1,9 @@
 "use client";
 
 export default function Avatar({ name, src, size = 40, online }) {
-  const initial = (name || "?").trim().charAt(0).toUpperCase();
+  // The first whole character (an emoji is two code units; letters come first if any).
+  const text = (name || "?").trim();
+  const initial = (text.match(/\p{L}/u)?.[0] || Array.from(text)[0] || "?").toUpperCase();
   return (
     <span className="relative inline-flex shrink-0" style={{ width: size, height: size }}>
       <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-white/10 text-sm font-semibold text-white">
