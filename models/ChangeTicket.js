@@ -21,6 +21,8 @@ const ChangeTicketSchema = new mongoose.Schema(
     type: { type: String, enum: CHANGE_TYPES, default: "bug" },
     title: { type: String, default: "" },
     summary: { type: String, required: true },
+    // Pictures of the problem (screenshots), in the private uploads folder "changes".
+    images: [{ url: { type: String, required: true }, name: { type: String, default: "" } }],
     // Where the CEO was when they asked: the page's path, its key (lib/permissions.js
     // PAGES), and the page / tab names as shown on screen.
     page: {

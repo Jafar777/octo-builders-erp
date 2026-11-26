@@ -1,3 +1,5 @@
+import { pauseNeedsApproval } from "@/lib/hybridServer";
+import WorkRequest from "@/models/WorkRequest";
 import { canAskChange, pendingChangeCode } from "@/lib/clientChangeServer";
 import { NextResponse } from "next/server";
 import { reviewAccess } from "@/lib/taskReview";
@@ -100,6 +102,9 @@ export async function GET(request, { params }) {
       // not-started task to another employee of their departments.
       canStartFor: task.assignee.toString() !== user.id && (await managesAssignee(user, task)),
       canReassign: task.status === "todo" && (canRouteStages(user) || (await managesAssignee(user, task))),
+      // Pausing this project work is asked for first (and whether that's waiting now).
+      pauseNeedsApproval: pauseNeedsApproval(user, task),
+      pausePending: task.status === "in_progress" ? Boolean(await WorkRequest.exists({ kind: "pause", task: task._id, status: "pending" })) : false,
       departments: canRouteStages(user) ? null : userDepartments(user),
     },
     activity: activity.map((a) => {

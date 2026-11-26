@@ -4,9 +4,11 @@ import PageLinks from "@/components/dashboard/PageLinks";
 import { TASK_PAGES } from "@/components/erp/tasks/taskPages";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Play, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAuth } from "@/context/AuthContext";
+import { canRouteStages } from "@/components/erp/projects/StageRouting";
 import { usePollingFallback, useRealtimeEvent, userChannelName } from "@/context/RealtimeContext";
 import { api, peekApi } from "@/lib/clientApi";
 import Modal from "@/components/erp/ui/Modal";
@@ -41,6 +43,10 @@ export default function MyTasks({ meId }) {
   const [creating, setCreating] = useState(false);
   // "Start work": where the CEO lets employees start work themselves (lib/hybrid.js).
   const [canStart, setCanStart] = useState(false);
+  const { user } = useAuth();
+  // The task form gives work to others (or is the GM / CEO's planning); an employee's
+  // own new task is asked for in "Start work" (the stage's manager gives its hours).
+  const plans = canRouteStages(user) || Boolean(user?.permissions?.includes("tasks.assign"));
   const [starting, setStarting] = useState(false);
   useEffect(() => {
     api("/api/tasks/self-start")
@@ -114,14 +120,16 @@ export default function MyTasks({ meId }) {
         actions={
           <>
             <PageLinks pages={TASK_PAGES} current="tasks" />
-            {canStart && (
+            {(canStart || !plans) && (
               <Button onClick={() => setStarting(true)}>
-                <Play size={16} /> {t("erp.startWork.open")}
+                <Plus size={16} /> {t("erp.tasks.new")}
               </Button>
             )}
-            <Button variant={canStart ? "ghost" : undefined} onClick={() => setCreating(true)}>
-              <Plus size={16} /> {t("erp.tasks.new")}
-            </Button>
+            {plans && (
+              <Button variant={canStart ? "ghost" : undefined} onClick={() => setCreating(true)}>
+                <Plus size={16} /> {t(canStart ? "erp.startWork.assign" : "erp.tasks.new")}
+              </Button>
+            )}
           </>
         }
       />
@@ -203,7 +211,7 @@ export default function MyTasks({ meId }) {
         )}
       </Modal>
 
-      <Modal open={starting} onClose={() => setStarting(false)} title={t("erp.startWork.open")} wide>
+      <Modal open={starting} onClose={() => setStarting(false)} title={t("erp.tasks.new")} wide>
         {starting && (
           <StartWork
             lookups={lookups}

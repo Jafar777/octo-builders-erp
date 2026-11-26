@@ -33,6 +33,13 @@ const UserSchema = new mongoose.Schema(
       digest: { type: Boolean, default: true }, // daily email of unread notifications
       sound: { type: Boolean, default: true },
     },
+    // Their own Overview (change request CR-4): the order of its parts, the parts hidden,
+    // and the headline numbers chosen (in order; empty = chosen for their job).
+    homeLayout: {
+      order: [{ type: String }],
+      hidden: [{ type: String }],
+      tiles: [{ type: String }],
+    },
     // HR file: emergency contact and documents (contract, ID copy, certificates...).
     emergencyContact: {
       name: { type: String, default: "" },

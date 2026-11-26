@@ -189,7 +189,7 @@ export default function PermissionMatrix({ roles, viewer, onSaved }) {
                     value={cur(r).scope}
                     disabled={lockedRole(r)}
                     onChange={(e) => patch(r, { scope: e.target.value })}
-                    className={`rounded-md border bg-transparent px-1.5 py-1 text-[11px] outline-none [&>option]:bg-brand-navy ${
+                    className={`rounded-md border bg-transparent px-1.5 py-1 text-[11px] outline-none [&_option]:bg-brand-navy [&_optgroup]:bg-brand-navy ${
                       cur(r).scope !== r.scope
                         ? "border-sky-400"
                         : "border-white/15"

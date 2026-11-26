@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, Download, FileUp, HardDrive, History, ListPlus, Trash2, Upload } from "lucide-react";
+import { ChevronDown, Download, FileText, FileUp, HardDrive, History, ListPlus, Lock, Trash2, Upload } from "lucide-react";
+import FileAccessPanel from "@/components/erp/projects/FileAccessPanel";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
 import { uploadFile } from "@/lib/uploadFile";
@@ -14,6 +15,33 @@ import { gatewayErrorText, isPreviewable, openServerRef } from "@/components/erp
 import { GatewayError } from "@/components/erp/files/gatewayClient";
 import { ServerFolderButton, ServerPicker } from "@/components/erp/files/ServerRefs";
 import { useFileServer, useFileSession } from "@/components/erp/files/useFileServer";
+
+const ext = (name) => (String(name || "").match(/\.([a-z0-9]{1,6})$/i)?.[1] || "").toUpperCase();
+
+// What's inside a file (change request CR-3): a small picture of images and PDFs (made by
+// the server, so it shows even without the right to download), else the file's type.
+function FileThumb({ projectId, file, version, onOpen }) {
+  const [failed, setFailed] = useState(false);
+  const label = ext(version.fileName || file.name);
+  const box = "relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white/[0.04]";
+  const inner =
+    version.preview && !failed ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={`/api/work-projects/${projectId}/files/preview?fileId=${file.id}&n=${version.n}`} alt="" loading="lazy" onError={() => setFailed(true)} className="h-full w-full object-cover" />
+    ) : (
+      <span className="flex flex-col items-center gap-0.5 text-white/50">
+        <FileText size={18} />
+        {label && <span className="text-[9px] font-semibold tracking-wide">{label}</span>}
+      </span>
+    );
+  return onOpen ? (
+    <button type="button" onClick={onOpen} className={`${box} hover:border-white/40`}>
+      {inner}
+    </button>
+  ) : (
+    <span className={box}>{inner}</span>
+  );
+}
 
 const size = (b) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
@@ -87,6 +115,7 @@ export default function ProjectFiles({ project }) {
 
   return (
     <div className="space-y-4">
+      {(!data || data.rights?.upload) && (
       <Card>
         <div className="grid gap-3 sm:grid-cols-[200px_minmax(0,1fr)_auto] sm:items-end">
           <Select label={t("erp.files.stage")} value={stage} onChange={setStage} placeholder={t("erp.files.general")} options={(project.stages || []).map((s) => ({ value: s.key, label: s.name?.[lang] }))} />
@@ -112,8 +141,16 @@ export default function ProjectFiles({ project }) {
         </div>
         <ErrorText>{error}</ErrorText>
       </Card>
+      )}
+      {data && !data.rights?.upload && <ErrorText>{error}</ErrorText>}
 
-      {data && !data.files.length && <EmptyState compact text={t("erp.files.none")} />}
+      {data?.access && <FileAccessPanel projectId={project.id} access={data.access} onSaved={load} />}
+      {data && !data.rights?.view && (
+        <p className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/65">
+          <Lock size={15} /> {t("erp.files.locked")}
+        </p>
+      )}
+      {data?.rights?.view && !data.files.length && <EmptyState compact text={t("erp.files.none")} />}
       {Object.entries(groups).map(([key, files]) => (
         <Card key={key}>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-white/60">{stageName(key)}</p>
@@ -121,26 +158,32 @@ export default function ProjectFiles({ project }) {
             {files.map((f) => {
               const latest = f.versions[0];
               return (
-                <li key={f.id} className="py-2.5">
+                <li key={f.id} className="flex gap-3 py-2.5">
+                  <FileThumb projectId={project.id} file={f} version={latest} onOpen={data.rights?.download ? () => openVersion(latest, f.name) : null} />
+                  <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-3 text-sm">
                     <span className="min-w-0 flex-1 truncate font-medium">{f.name}</span>
                     <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px]">v{latest.n}</span>
                     <span className="text-xs text-white/60">
                       {latest.by} · {new Date(latest.at).toLocaleDateString(lang === "ar" ? "ar" : "en-GB")}
                     </span>
-                    {latest.server && <HardDrive size={13} className="text-emerald-300/80" aria-label={t("erp.files.onServer")} />}
-                    <button type="button" onClick={() => openVersion(latest, f.name)} className="text-white/60 hover:text-brand-orange" aria-label={t("erp.files.download")} title={t("erp.files.download")}>
-                      <Download size={15} />
-                    </button>
-                    {serverOn && (
+                    {latest.onServer && <HardDrive size={13} className="text-emerald-300/80" aria-label={t("erp.files.onServer")} />}
+                    {data.rights?.download && (
+                      <button type="button" onClick={() => openVersion(latest, f.name)} className="text-white/60 hover:text-brand-orange" aria-label={t("erp.files.download")} title={t("erp.files.download")}>
+                        <Download size={15} />
+                      </button>
+                    )}
+                    {serverOn && data.rights?.upload && (
                       <button type="button" onClick={() => setPicking({ existing: f })} className="text-white/60 hover:text-brand-orange" title={t("erp.files.versionFromServer")} aria-label={t("erp.files.versionFromServer")}>
                         <ListPlus size={15} />
                       </button>
                     )}
-                    <label className="cursor-pointer text-white/60 hover:text-brand-orange" title={t("erp.files.newVersion")}>
-                      <FileUp size={15} />
-                      <input type="file" className="hidden" disabled={progress !== null} onChange={(e) => e.target.files?.[0] && upload(e.target.files[0], f)} />
-                    </label>
+                    {data.rights?.upload && (
+                      <label className="cursor-pointer text-white/60 hover:text-brand-orange" title={t("erp.files.newVersion")}>
+                        <FileUp size={15} />
+                        <input type="file" className="hidden" disabled={progress !== null} onChange={(e) => e.target.files?.[0] && upload(e.target.files[0], f)} />
+                      </label>
+                    )}
                     {f.versions.length > 1 && (
                       <button type="button" onClick={() => setOpen(open === f.id ? null : f.id)} className="flex items-center gap-1 text-xs text-white/50 hover:text-white">
                         <History size={13} /> {f.versions.length} <ChevronDown size={12} className={open === f.id ? "rotate-180" : ""} />
@@ -171,13 +214,16 @@ export default function ProjectFiles({ project }) {
                           <span>{new Date(v.at).toLocaleString(lang === "ar" ? "ar" : "en-GB", { dateStyle: "medium", timeStyle: "short" })}</span>
                           {v.size > 0 && <span>{size(v.size)}</span>}
                           {v.note && <span className="text-white/60">— {v.note}</span>}
-                          <button type="button" onClick={() => openVersion(v, f.name)} className="text-brand-orange hover:underline">
-                            {t("erp.files.download")}
-                          </button>
+                          {data.rights?.download && (
+                            <button type="button" onClick={() => openVersion(v, f.name)} className="text-brand-orange hover:underline">
+                              {t("erp.files.download")}
+                            </button>
+                          )}
                         </li>
                       ))}
                     </ul>
                   )}
+                  </div>
                 </li>
               );
             })}

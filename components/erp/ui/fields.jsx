@@ -19,7 +19,7 @@ export function Select({ label, value, onChange, options, placeholder, disabled 
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className={`${inputClass} [&>option]:bg-brand-navy disabled:cursor-not-allowed disabled:opacity-50`}
+        className={`${inputClass} [&_option]:bg-brand-navy [&_optgroup]:bg-brand-navy disabled:cursor-not-allowed disabled:opacity-50`}
       >
         {placeholder !== undefined && <option value="">{placeholder}</option>}
         {options.map((o) => (

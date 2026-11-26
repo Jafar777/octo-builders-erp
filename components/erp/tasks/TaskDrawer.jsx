@@ -240,7 +240,8 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [panel, setPanel] = useState(null); // "help" | "submit"
+  const [panel, setPanel] = useState(null); // "help" | "submit" | "pause"
+  const [pauseWhy, setPauseWhy] = useState("");
   const [changing, setChanging] = useState(null); // the task a client change is being set up for
   const [helperId, setHelperId] = useState("");
   const [note, setNote] = useState("");
@@ -612,9 +613,15 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
                     <Play size={16} /> {t("erp.tasks.start")}
                   </Button>
                 )}
-                {s === "in_progress" && (
+                {s === "in_progress" && !p.pauseNeedsApproval && (
                   <Button variant="ghost" onClick={() => act("pause")} disabled={busy}>
                     <Pause size={16} /> {t("erp.tasks.pause")}
+                  </Button>
+                )}
+                {/* Project work pauses only once the manager (or the CEO) approves. */}
+                {s === "in_progress" && p.pauseNeedsApproval && !p.pausePending && (
+                  <Button variant="ghost" onClick={() => setPanel(panel === "pause" ? null : "pause")} disabled={busy}>
+                    <Pause size={16} /> {t("erp.tasks.pauseAsk")}
                   </Button>
                 )}
                 {(s === "on_hold" || s === "help") && (
@@ -634,6 +641,25 @@ export default function TaskDrawer({ taskId, lookups, onClose, onChanged, onOpen
                 )}
               </div>
 
+              {s === "in_progress" && p.pausePending && (
+                <p className="rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">{t("erp.tasks.pausePending")}</p>
+              )}
+              {panel === "pause" && (
+                <div className="space-y-3 rounded-2xl border border-amber-400/30 bg-amber-400/[0.06] p-4">
+                  <Input label={t("erp.tasks.pauseWhy")} value={pauseWhy} onChange={setPauseWhy} />
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={async () => {
+                        await act("pause", { reason: pauseWhy });
+                        setPauseWhy("");
+                      }}
+                      disabled={busy || !pauseWhy.trim()}
+                    >
+                      <Send size={16} className="rtl:rotate-180" /> {t("erp.tasks.pauseSend")}
+                    </Button>
+                  </div>
+                </div>
+              )}
               {panel === "help" && (
                 <div className="space-y-3 rounded-2xl border border-violet-500/30 bg-violet-500/[0.06] p-4">
                   <Select

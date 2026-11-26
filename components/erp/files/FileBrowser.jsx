@@ -300,7 +300,7 @@ export default function FileBrowser({ fs, start, root = null, pick = null, onPic
           <select
             value={loc.vol}
             onChange={(e) => go(e.target.value, "/")}
-            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-sm outline-none [&>option]:bg-brand-navy"
+            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-sm outline-none [&_option]:bg-brand-navy [&_optgroup]:bg-brand-navy"
             aria-label={t("erp.files.share")}
           >
             {volumes.filter((v) => canSee(grants, v.key, "/")).map((v) => (

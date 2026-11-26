@@ -177,6 +177,33 @@ function MeetingForm({ meeting = null, lookup, onSaved, onCancel }) {
           list={lookup.people.filter((p) => !f.participants.includes(p.id))}
           placeholder={t("erp.office.pick.participant")}
         />
+        {/* Everyone (or a whole department) in one click. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={lookup.people.every((p) => f.participants.includes(p.id))}
+            onClick={() => set("participants")([...new Set([...f.participants, ...lookup.people.map((p) => p.id)])])}
+            className="rounded-lg border border-white/15 px-2.5 py-1 text-xs text-white/80 hover:bg-white/10 disabled:opacity-40"
+          >
+            {t("erp.office.meetings.addAll")}
+          </button>
+          {lookup.departments.length > 0 && (
+            <PickSelect
+              value=""
+              onChange={(dept) => {
+                if (dept) set("participants")([...new Set([...f.participants, ...lookup.people.filter((p) => p.department === dept).map((p) => p.id)])]);
+              }}
+              list={lookup.departments.filter((d) => lookup.people.some((p) => p.department === d.id && !f.participants.includes(p.id)))}
+              placeholder={t("erp.office.meetings.addDepartment")}
+              className="!w-auto py-1 text-xs"
+            />
+          )}
+          {f.participants.length > 0 && (
+            <button type="button" onClick={() => set("participants")([])} className="rounded-lg px-2.5 py-1 text-xs text-white/50 hover:bg-red-500/20 hover:text-white">
+              {t("erp.office.meetings.clearAll")}
+            </button>
+          )}
+        </div>
       </div>
       <input value={f.guests} onChange={(e) => set("guests")(e.target.value)} placeholder={t("erp.office.meetings.guests")} className={inputCls} />
       <div className="grid gap-2 sm:grid-cols-2">

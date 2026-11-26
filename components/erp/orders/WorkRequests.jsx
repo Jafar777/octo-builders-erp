@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, XCircle, Zap } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAuth } from "@/context/AuthContext";
 import { api, errorText } from "@/lib/clientApi";
 import { formatDateTime } from "@/lib/formatTime";
-import { Button, Card, ErrorText } from "@/components/erp/ui/fields";
+import { Button, Card, ErrorText, Input } from "@/components/erp/ui/fields";
 import { EmptyState } from "@/components/erp/ui/DataTools";
 import { SkeletonList } from "@/components/erp/ui/Loading";
 import { useAsk } from "@/components/erp/ui/Feedback";
@@ -19,14 +20,19 @@ const TONE = { pending: "text-amber-300", approved: "text-emerald-300", declined
 export default function WorkRequests({ decides = false, only = "" }) {
   const { t, lang } = useLanguage();
   const ask = useAsk();
+  const { user } = useAuth();
+  // The CEO alone sees what interrupted the plan (approved pauses, urgent work).
+  const isCeo = user?.role === "ceo";
   const [data, setData] = useState({});
   const [error, setError] = useState("");
+  // New work: the hours the manager gives (the employee's estimate until changed).
+  const [hours, setHours] = useState({});
   const load = useCallback(() => {
-    const tabs = only ? [only] : ["mine", ...(decides ? ["queue", "activity"] : [])];
+    const tabs = only ? [only] : ["mine", ...(decides ? ["queue", "activity"] : []), ...(isCeo ? ["interrupted"] : [])];
     Promise.all(tabs.map((tab) => api(`/api/work-requests?tab=${tab}`).then((d) => [tab, d])))
       .then((list) => setData(Object.fromEntries(list)))
       .catch((err) => setError(errorText(t, err)));
-  }, [decides, only, t]);
+  }, [decides, only, isCeo, t]);
   useEffect(() => {
     load();
   }, [load]);
@@ -36,7 +42,7 @@ export default function WorkRequests({ decides = false, only = "" }) {
     if (note === null) return;
     setError("");
     try {
-      await api(`/api/work-requests/${r.id}`, { method: "PATCH", body: { decision, note } });
+      await api(`/api/work-requests/${r.id}`, { method: "PATCH", body: { decision, note, ...(r.kind === "start" && decision === "approve" ? { hours: hours[r.id] ?? r.hours } : {}) } });
     } catch (err) {
       setError(errorText(t, err));
     }
@@ -56,12 +62,30 @@ export default function WorkRequests({ decides = false, only = "" }) {
           </Link>
         )}
         {r.kind === "hours" && <span className="text-white/70">{t("erp.workRequests.hours", { from: r.currentHours, to: r.hours })}</span>}
+        {r.kind === "start" && !r.canDecide && r.hours > 0 && <span className="text-white/70 tabular-nums">{r.hours} h</span>}
+        {r.urgent && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-200">
+            <Zap size={12} /> {t("erp.workRequests.urgent")}
+          </span>
+        )}
+        {r.pauseNumber && <span className="text-xs text-amber-200">{t("erp.workRequests.pausesTask", { n: r.pauseNumber, title: r.pauseTitle })}</span>}
         <span className={`ms-auto text-xs ${TONE[r.status]}`}>{t(`erp.workRequests.status.${r.status}`)}</span>
       </div>
       {r.reason && <p className="text-sm text-white/70">{r.reason}</p>}
+      {r.canDecide && r.pauses && <p className="text-xs text-white/55">{t("erp.workRequests.pauses30", r.pauses)}</p>}
+      {r.fixedHit && (
+        <p className="flex items-center gap-1 text-xs text-amber-200">
+          <AlertTriangle size={13} /> {t("erp.workRequests.fixedHit")}
+        </p>
+      )}
       {r.kind === "client" && r.canDecide && <p className="text-xs text-white/60">{t("erp.workRequests.clientHint")}</p>}
       {r.decidedBy && <p className="text-xs text-white/60">{[r.decidedBy, r.note].filter(Boolean).join(" — ")}</p>}
       <div className="flex flex-wrap gap-2">
+        {r.canDecide && r.kind === "start" && (
+          <div className="w-28">
+            <Input type="number" min="0.5" max="200" step="0.5" dir="ltr" aria-label={t("erp.workRequests.giveHours")} placeholder={t("erp.workRequests.giveHours")} value={hours[r.id] ?? String(r.hours || "")} onChange={(v) => setHours((h) => ({ ...h, [r.id]: v }))} />
+          </div>
+        )}
         {r.canDecide && (
           <>
             <Button onClick={() => decide(r, "approve")}>
@@ -141,6 +165,28 @@ export default function WorkRequests({ decides = false, only = "" }) {
         </section>
       )}
       {data.mine && section(t("erp.workRequests.mine"), data.mine.requests, t("erp.workRequests.none"))}
+      {data.interrupted && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-white/60">{t("erp.workRequests.interrupted")}</h2>
+          {data.interrupted.requests.map((x) => (
+            <div key={x.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-white/10 px-4 py-2.5 text-sm">
+              <span className="font-medium">{x.by}</span>
+              <span className="text-white/60">{t(`erp.workRequests.kind.${x.kind}`)}</span>
+              <span className="min-w-0 flex-1 truncate">{[x.project?.[lang] || x.project?.ar, x.title].filter(Boolean).join(" · ")}</span>
+              <span className="text-white/60">{formatDateTime(x.decidedAt, lang)}</span>
+              <span className="basis-full text-xs text-amber-200">
+                {t("erp.workRequests.interruptedRow", {
+                  paused: x.interrupted?.paused ? t("erp.workRequests.pausedPart", { n: x.interrupted.paused }) : "",
+                  pushed: x.interrupted?.pushed?.length ? t("erp.workRequests.pushedPart", { list: x.interrupted.pushed.map((n) => `#${n}`).join(" · ") }) : "",
+                  by: x.decidedBy,
+                })}
+                {x.reason ? ` — ${x.reason}` : ""}
+              </span>
+            </div>
+          ))}
+          {!data.interrupted.requests.length && <EmptyState compact text={t("erp.workRequests.noInterrupted")} />}
+        </section>
+      )}
     </div>
   );
 }

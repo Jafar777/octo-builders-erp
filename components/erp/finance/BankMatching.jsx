@@ -183,7 +183,7 @@ export default function BankMatching({ lookups }) {
                             defaultValue=""
                             aria-label={t("erp.bank.bookExpense")}
                             onChange={(e) => e.target.value && act(l, { createExpense: { category: e.target.value } })}
-                            className="rounded-lg border border-white/10 bg-transparent px-2 py-1 [&>option]:bg-brand-navy"
+                            className="rounded-lg border border-white/10 bg-transparent px-2 py-1 [&_option]:bg-brand-navy [&_optgroup]:bg-brand-navy"
                           >
                             <option value="">{t("erp.bank.bookExpense")}</option>
                             {categories.map((c) => (

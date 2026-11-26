@@ -27,7 +27,7 @@ export function useLookup(enabled = true) {
 }
 
 export const inputCls =
-  "w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/40 focus:border-white/30 [&>option]:bg-brand-navy";
+  "w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/40 focus:border-white/30 [&_option]:bg-brand-navy [&_optgroup]:bg-brand-navy";
 
 // A plain select over a list of { id, name }.
 export function PickSelect({ value, onChange, list, placeholder, className = "", ariaLabel }) {

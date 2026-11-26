@@ -259,5 +259,8 @@ export async function GET() {
   }
 
   await Promise.all(jobs);
+  // Their own arrangement of this page (app/api/home/layout).
+  const saved = await User.findById(user.id, { homeLayout: 1 }).lean();
+  out.layout = { order: saved?.homeLayout?.order || [], hidden: saved?.homeLayout?.hidden || [], tiles: saved?.homeLayout?.tiles || [] };
   return NextResponse.json(out);
 }

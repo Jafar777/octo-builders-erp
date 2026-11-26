@@ -39,6 +39,31 @@ function playChime() {
   } catch {}
 }
 
+// The alert for a decision waiting (a start or pause request): three louder, sharper
+// beeps, twice, so a manager away from the screen hears it. Rings even when the soft
+// chime is switched off.
+function playAlert() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const beeps = [0, 0.22, 0.44, 1.2, 1.42, 1.64];
+    beeps.forEach((at, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.value = i % 3 === 2 ? 1568 : 1175;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime + at);
+      gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + at + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + 0.18);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(ctx.currentTime + at);
+      osc.stop(ctx.currentTime + at + 0.2);
+    });
+    setTimeout(() => ctx.close(), 2500);
+  } catch {}
+}
+
 export default function NotificationBell() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
@@ -98,13 +123,15 @@ export default function NotificationBell() {
     setNotifications((prev) => [n, ...prev.filter((p) => p.id !== n.id)].slice(0, 20));
     setUnreadCount((c) => c + 1);
     setToast(n);
-    if (soundOn.current) playChime();
+    if (n.alert) playAlert();
+    else if (soundOn.current) playChime();
   });
   useRealtimeEvent(channel, "notification:read", ({ unreadCount: count }) => setUnreadCount(count));
 
   useEffect(() => {
     if (!toast) return undefined;
-    const timer = setTimeout(() => setToast(null), 5000);
+    // A decision waiting stays up longer.
+    const timer = setTimeout(() => setToast(null), toast.alert ? 20000 : 5000);
     return () => clearTimeout(timer);
   }, [toast]);
 

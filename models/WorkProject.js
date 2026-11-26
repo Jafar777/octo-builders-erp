@@ -34,6 +34,26 @@ const WorkProjectSchema = new mongoose.Schema(
     // The project's folder on the company file server ({ vol, path }; empty = the
     // default one, see lib/fileServerPaths.js projectFolder).
     serverFolder: { vol: { type: String, default: "" }, path: { type: String, default: "" } },
+    // Who may use the project's files (Files tab, change request CR-2). Open to everyone
+    // who can open the project until the CEO restricts it; then only the people and
+    // departments listed, each with their levels (lib/projectFileAccess.js).
+    fileAccess: {
+      restricted: { type: Boolean, default: false },
+      people: [
+        {
+          _id: false,
+          user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+          levels: { type: [String], default: [] },
+        },
+      ],
+      departments: [
+        {
+          _id: false,
+          department: { type: mongoose.Schema.Types.ObjectId, ref: "Department", required: true },
+          levels: { type: [String], default: [] },
+        },
+      ],
+    },
     notes: { type: String, default: "" },
     // Board: one row of stages. (`items` = former board rows, no longer used; kept so old data survives.)
     stages: [StageSchema],

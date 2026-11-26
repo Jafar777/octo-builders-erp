@@ -12,7 +12,7 @@ import { StatusBadge } from "@/components/erp/tasks/TaskRow";
 import { CHECK_HOURS } from "@/lib/clientChange";
 import { useAsk } from "@/components/erp/ui/Feedback";
 
-const input = "w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/45 focus:border-white/30 [&>option]:bg-brand-navy";
+const input = "w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/45 focus:border-white/30 [&_option]:bg-brand-navy [&_optgroup]:bg-brand-navy";
 const NEW_WORK = ["revise", "check"];
 
 // A change the client asks for after approval: what they want, what to do with every

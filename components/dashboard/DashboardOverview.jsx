@@ -14,7 +14,9 @@ import {
   Clock,
   Flame,
   Loader2,
+  Plus,
   ShieldAlert,
+  SlidersHorizontal,
   UserPlus,
   Wallet,
   WifiOff,
@@ -32,6 +34,9 @@ import { StatusBadge, TaskName } from "@/components/erp/tasks/TaskRow";
 import { Skeleton, SkeletonCards, SkeletonList } from "@/components/erp/ui/Loading";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 import { EmptyState } from "@/components/erp/ui/DataTools";
+import { Button } from "@/components/erp/ui/fields";
+import OverviewCustomizer, { orderBlocks } from "@/components/dashboard/OverviewCustomizer";
+import QuickNewTask from "@/components/dashboard/QuickNewTask";
 
 // Risk levels: status colours always come with an icon and a label.
 const LEVEL = {
@@ -235,9 +240,10 @@ function NeedsYou({ needs, persona }) {
   );
 }
 
-// The 4 headline numbers, chosen by the person's job (lib/homePersona.js).
-function HeadlineTiles({ d, m }) {
-  const { t } = useLanguage();
+// The headline numbers: by default 4 chosen by the person's job (lib/homePersona.js);
+// each person may pick their own and their order (OverviewCustomizer). Returns
+// { all: { key: tile }, defaults: [keys] } — only numbers this person's data has.
+function tileSet(d, m, t) {
   const need = (k) => d.needs?.find((n) => n.key === k)?.count || 0;
   const personal = [
     <StatTile key="open" label={t("erp.home.openTasks")} value={d.myTasks?.open ?? 0} hint={d.myTasks?.submitted ? t("erp.home.waitingReview", { n: d.myTasks.submitted }) : ""} />,
@@ -274,9 +280,16 @@ function HeadlineTiles({ d, m }) {
     office: ["officeDue", "officeOverdue", "officeWaiting", "officeCallbacks", "intakes", "leads"],
     hr: ["present", "leave", "reviews"],
   }[d.persona];
+  const all = { ...Object.fromEntries(Object.entries(tile).filter(([, v]) => v)), ...Object.fromEntries(personal.map((x) => [x.key, x])) };
   // Fill up to 4 with the person's own numbers.
-  const chosen = (pick || []).map((k) => tile[k]).filter(Boolean);
-  const list = [...chosen, ...personal].slice(0, 4);
+  const chosen = (pick || []).filter((k) => tile[k]);
+  const defaults = [...chosen, ...personal.map((x) => x.key)].slice(0, 4);
+  return { all, defaults };
+}
+
+function HeadlineTiles({ set, keys }) {
+  const list = keys.map((k) => set.all[k]).filter(Boolean);
+  if (!list.length) return null;
   return <div className="animate-fade-up grid grid-cols-2 gap-3 md:grid-cols-4">{list}</div>;
 }
 
@@ -367,56 +380,18 @@ export default function DashboardOverview({ user }) {
 
   const d = data || {};
   const m = (v) => money(v, d.finance?.base || "USD", lang);
-  // Managers see their queues and the business first; their own tasks come after.
-  const mine = d.persona && d.persona !== "employee" ? "order-last" : "";
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="min-h-8 text-2xl font-bold">
-          {today ? `${today.greeting}${lang === "ar" ? "، " : ", "}` : ""}
-          {user?.name?.split(" ")[0] || user?.email}
-        </h1>
-        <p className="mt-1 text-sm text-white/50">
-          {today ? `${today.date} · ` : ""}
-          {user?.roleName?.[lang]}
-        </p>
-      </div>
-
-      {user?.isCustomer && <CustomerHome />}
-
-      {!user?.isStaff && !user?.isCustomer && (
-        <div className="flex max-w-lg items-start gap-3 rounded-2xl border border-brand-orange/30 bg-brand-orange/10 p-5 text-sm text-white/80">
-          <Clock size={20} className="mt-0.5 shrink-0 text-brand-orange" />
-          {t("erp.pendingRole")}
-        </div>
-      )}
-
-      {user?.isStaff && <CheckInCard />}
-
-      {user?.isStaff && !data && <HomeSkeleton />}
-
-      {data && (
-        <>
-          {d.pendingSignups > 0 && (
-            <Link
-              href="/dashboard/staff?filter=pending"
-              className="animate-fade-up flex items-center gap-3 rounded-2xl border border-brand-orange/30 bg-brand-orange/10 p-4 text-sm hover:bg-brand-orange/15"
-            >
-              <UserPlus size={18} className="text-brand-orange" />
-              <span className="flex-1">{t("erp.home.pendingSignups", { n: d.pendingSignups })}</span>
-              <ArrowUpRight size={15} className="rtl:-scale-x-100" />
-            </Link>
-          )}
-
-          <NeedsYou needs={d.needs} persona={d.persona} />
-
-          <HeadlineTiles d={d} m={m} />
-
-          {d.officePulse && <OfficePulse p={d.officePulse} />}
-
-          <div className="grid gap-6 xl:grid-cols-2">
-            <Section title={t("erp.home.myTasks")} href="/dashboard/tasks" linkLabel={t("erp.home.all")} className={mine}>
+  // The parts of the page, each shown when this person's data has it. Their order and
+  // which ones show are the person's own (OverviewCustomizer, change request CR-4).
+  const tiles = data ? tileSet(d, m, t) : { all: {}, defaults: [] };
+  const layout = d.layout || { order: [], hidden: [], tiles: [] };
+  const tileKeys = layout.tiles?.length ? layout.tiles.filter((k) => tiles.all[k]) : tiles.defaults;
+  const blocks = {
+    needs: { full: true, el: <NeedsYou needs={d.needs} persona={d.persona} /> },
+    tiles: { full: true, el: <HeadlineTiles set={tiles} keys={tileKeys} /> },
+    officePulse: d.officePulse && { full: true, el: <OfficePulse p={d.officePulse} /> },
+    myTasks: { el: (
+            <Section title={t("erp.home.myTasks")} href="/dashboard/tasks" linkLabel={t("erp.home.all")}>
               <div className="space-y-2">
                 {d.myTasks?.list.map((task) => (
                   <Link key={task.id} href={`/dashboard/tasks?task=${task.id}`} className="flex items-center gap-3 rounded-xl border border-white/[0.06] px-3 py-2.5 text-sm hover:bg-white/[0.05]">
@@ -435,8 +410,9 @@ export default function DashboardOverview({ user }) {
                 {!d.myTasks?.list.length && <EmptyState compact text={t("erp.home.noTasks")} />}
               </div>
             </Section>
-
-            <Section title={t("notifications.title")} href="/dashboard/notifications" linkLabel={t("erp.home.all")} className={mine}>
+    ) },
+    notifications: { el: (
+            <Section title={t("notifications.title")} href="/dashboard/notifications" linkLabel={t("erp.home.all")}>
               <div className="space-y-2">
                 {d.notifications?.map((n) => (
                   <Link key={n.id} href={n.link || "/dashboard/notifications"} className="flex items-start gap-3 rounded-xl px-2 py-2 text-sm hover:bg-white/[0.05]">
@@ -450,9 +426,9 @@ export default function DashboardOverview({ user }) {
                 {!d.notifications?.length && <p className="py-6 text-center text-sm text-white/60">{t("erp.home.allCaughtUp")}</p>}
               </div>
             </Section>
-
-            {d.reviews && (
-              <Section title={`${t("erp.nav.reviews")} (${d.reviews.count})`} href="/dashboard/reviews" linkLabel={t("erp.home.all")}>
+    ) },
+    reviews: d.reviews && { el: (
+<Section title={`${t("erp.nav.reviews")} (${d.reviews.count})`} href="/dashboard/reviews" linkLabel={t("erp.home.all")}>
                 <div className="space-y-2">
                   {d.reviews.list.map((task) => (
                     <Link key={task.id} href={`/dashboard/reviews?task=${task.id}`} className="flex items-center gap-3 rounded-xl border border-white/[0.06] px-3 py-2.5 text-sm hover:bg-white/[0.05]">
@@ -468,10 +444,9 @@ export default function DashboardOverview({ user }) {
                   {!d.reviews.list.length && <p className="py-6 text-center text-sm text-white/60">{t("erp.home.nothingToReview")}</p>}
                 </div>
               </Section>
-            )}
-
-            {d.projects && (
-              <Section title={t("erp.home.projects", { n: d.projects.active })} href="/dashboard/analytics" linkLabel={t("erp.nav.analytics")}>
+    ) },
+    projects: d.projects && { el: (
+<Section title={t("erp.home.projects", { n: d.projects.active })} href="/dashboard/analytics" linkLabel={t("erp.nav.analytics")}>
                 {d.projects.atRisk > 0 && (
                   <p className="mb-3 flex items-center gap-2 text-sm text-[#ec835a]">
                     <Flame size={15} /> {t("erp.home.atRisk", { n: d.projects.atRisk })}
@@ -499,10 +474,9 @@ export default function DashboardOverview({ user }) {
                   {!d.projects.top.length && <EmptyState compact text={t("erp.projects.none")} />}
                 </div>
               </Section>
-            )}
-
-            {d.team && (
-              <Section title={t("erp.home.teamToday")} href="/dashboard/analytics" linkLabel={t("erp.home.board")}>
+    ) },
+    team: d.team && { el: (
+<Section title={t("erp.home.teamToday")} href="/dashboard/analytics" linkLabel={t("erp.home.board")}>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <StatTile label={t("erp.home.present")} value={`${d.team.present}/${d.team.total}`} />
                   <StatTile label={t("erp.home.workingNow")} value={d.team.working} />
@@ -510,10 +484,9 @@ export default function DashboardOverview({ user }) {
                   <StatTile label={t("erp.home.notIn")} value={Math.max(0, d.team.total - d.team.present - d.team.onLeave)} />
                 </div>
               </Section>
-            )}
-
-            {d.hr && (
-              <Section title={t("erp.nav.hr")} href="/dashboard/hr" linkLabel={t("erp.home.open")}>
+    ) },
+    hr: d.hr && { el: (
+<Section title={t("erp.nav.hr")} href="/dashboard/hr" linkLabel={t("erp.home.open")}>
                 <div className="space-y-3 text-sm">
                   <Link href="/dashboard/orders?type=leave" className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2.5 hover:bg-white/10">
                     <span className="flex items-center gap-2">
@@ -534,10 +507,9 @@ export default function DashboardOverview({ user }) {
                   ))}
                 </div>
               </Section>
-            )}
-
-            {d.finance && (
-              <Section title={t("erp.nav.finance")} href="/dashboard/finance" linkLabel={t("erp.home.open")}>
+    ) },
+    finance: d.finance && { el: (
+<Section title={t("erp.nav.finance")} href="/dashboard/finance" linkLabel={t("erp.home.open")}>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {d.finance.funds.map((f) => (
                     <div key={f.name?.en} className="rounded-xl bg-white/5 p-3">
@@ -571,7 +543,97 @@ export default function DashboardOverview({ user }) {
                   </p>
                 )}
               </Section>
-            )}
+    ) },
+  };
+  // Managers see their queues and the business first; their own tasks come after.
+  const defaultOrder =
+    d.persona && d.persona !== "employee"
+      ? ["needs", "tiles", "officePulse", "reviews", "projects", "team", "hr", "finance", "myTasks", "notifications"]
+      : ["needs", "tiles", "officePulse", "myTasks", "notifications", "reviews", "projects", "team", "hr", "finance"];
+  const [customizing, setCustomizing] = useState(false);
+  const [adding, setAdding] = useState(false);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start gap-3">
+      <div className="min-w-0 flex-1">
+        <h1 className="min-h-8 text-2xl font-bold">
+          {today ? `${today.greeting}${lang === "ar" ? "، " : ", "}` : ""}
+          {user?.name?.split(" ")[0] || user?.email}
+        </h1>
+        <p className="mt-1 text-sm text-white/50">
+          {today ? `${today.date} · ` : ""}
+          {user?.roleName?.[lang]}
+        </p>
+      </div>
+        {user?.isStaff && data && (
+          <div className="flex flex-wrap gap-2">
+            {/* Adding a task straight from here (change request CR-5). */}
+            <Button onClick={() => setAdding(true)}>
+              <Plus size={16} /> {t("erp.tasks.new")}
+            </Button>
+            <Button variant="ghost" onClick={() => setCustomizing(true)}>
+              <SlidersHorizontal size={16} /> {t("erp.home.customize.open")}
+            </Button>
+          </div>
+        )}
+      </div>
+      {customizing && (
+        <OverviewCustomizer
+          blocks={Object.keys(blocks).filter((k) => blocks[k])}
+          defaultOrder={defaultOrder}
+          tiles={tiles}
+          layout={layout}
+          readOnly={Boolean(user?.actingAs)}
+          onClose={() => setCustomizing(false)}
+          onSaved={(saved) => {
+            setData((x) => ({ ...x, layout: saved }));
+            setCustomizing(false);
+          }}
+        />
+      )}
+      {adding && (
+        <QuickNewTask
+          onClose={() => setAdding(false)}
+          onDone={() => {
+            setAdding(false);
+            load();
+          }}
+        />
+      )}
+
+      {user?.isCustomer && <CustomerHome />}
+
+      {!user?.isStaff && !user?.isCustomer && (
+        <div className="flex max-w-lg items-start gap-3 rounded-2xl border border-brand-orange/30 bg-brand-orange/10 p-5 text-sm text-white/80">
+          <Clock size={20} className="mt-0.5 shrink-0 text-brand-orange" />
+          {t("erp.pendingRole")}
+        </div>
+      )}
+
+      {user?.isStaff && <CheckInCard />}
+
+      {user?.isStaff && !data && <HomeSkeleton />}
+
+      {data && (
+        <>
+          {d.pendingSignups > 0 && (
+            <Link
+              href="/dashboard/staff?filter=pending"
+              className="animate-fade-up flex items-center gap-3 rounded-2xl border border-brand-orange/30 bg-brand-orange/10 p-4 text-sm hover:bg-brand-orange/15"
+            >
+              <UserPlus size={18} className="text-brand-orange" />
+              <span className="flex-1">{t("erp.home.pendingSignups", { n: d.pendingSignups })}</span>
+              <ArrowUpRight size={15} className="rtl:-scale-x-100" />
+            </Link>
+          )}
+
+          <div className="grid gap-6 xl:grid-cols-2">
+          {orderBlocks(blocks, layout, defaultOrder).map((b) => (
+            <div key={b.key} className={b.full ? "xl:col-span-2" : ""}>
+              {b.el}
+            </div>
+          ))}
           </div>
         </>
       )}

@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Bug, Eye, ExternalLink, MapPin, Sparkles } from "lucide-react";
+import { Bug, Eye, ExternalLink, ImagePlus, MapPin, Sparkles, X } from "lucide-react";
+import { uploadFile } from "@/lib/uploadFile";
 import { PAGES } from "@/lib/permissions";
 import { useLanguage } from "@/context/LanguageContext";
 import { api, errorText } from "@/lib/clientApi";
@@ -10,6 +11,8 @@ import Modal from "@/components/erp/ui/Modal";
 import { Button, ErrorText, Input, Label, Select } from "@/components/erp/ui/fields";
 import { useToast } from "@/components/erp/ui/Feedback";
 
+const CHANGES_FOLDER = "/octabuilders/changes";
+const MAX_IMAGES = 6;
 const area = "w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm outline-none focus:border-white/30";
 
 // The CEO's request to the programmer (POST /api/change-log): bug or feature, an
@@ -23,6 +26,9 @@ export default function ChangeRequestForm({ open, onClose, page, onSent, viewAs 
   const [summary, setSummary] = useState("");
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
+  // Pictures of the problem: chosen, dropped or pasted (a screenshot with Ctrl+V).
+  const [images, setImages] = useState([]);
+  const [uploading, setUploading] = useState(0);
   const [error, setError] = useState("");
   // The place, from the page they're on each time the form opens.
   const [place, setPlace] = useState(page);
@@ -38,16 +44,38 @@ export default function ChangeRequestForm({ open, onClose, page, onSent, viewAs 
     if (p) setPlace({ path: p.href, key: p.key, label: t(`erp.nav.${p.key}`), tab: "" });
   };
 
+  async function addFiles(files) {
+    const list = [...files].filter((f) => /^image\/(png|jpe?g|gif|webp)$/.test(f.type)).slice(0, MAX_IMAGES - images.length);
+    if (!list.length) return;
+    setError("");
+    setUploading((n) => n + list.length);
+    await Promise.all(
+      list.map(async (file) => {
+        try {
+          const ext = file.type.split("/")[1].replace("jpeg", "jpg");
+          const named = file.name && /\.[a-z0-9]+$/i.test(file.name) ? file : new File([file], `screenshot.${ext}`, { type: file.type });
+          const up = await uploadFile(named, { folder: CHANGES_FOLDER });
+          setImages((x) => (x.length < MAX_IMAGES ? [...x, { url: up.url, name: file.name || "" }] : x));
+        } catch (err) {
+          setError(errorText(t, err));
+        } finally {
+          setUploading((n) => n - 1);
+        }
+      })
+    );
+  }
+
   async function send() {
     if (!summary.trim()) return setError(t("errors.change_summary_required"));
     setBusy(true);
     setError("");
     try {
-      const { ticket } = await api("/api/change-log", { method: "POST", body: { type, summary, title, page: place } });
+      const { ticket } = await api("/api/change-log", { method: "POST", body: { type, summary, title, page: place, images } });
       toast({ text: t("erp.changes.sent", { code: ticket.code }) });
       setSummary("");
       setTitle("");
       setType("bug");
+      setImages([]);
       onSent?.(ticket);
       onClose();
     } catch (err) {
@@ -84,7 +112,67 @@ export default function ChangeRequestForm({ open, onClose, page, onSent, viewAs 
         <Input label={t("erp.changes.title")} value={title} onChange={setTitle} />
         <div>
           <Label>{t("erp.changes.summary")}</Label>
-          <textarea rows={5} value={summary} onChange={(e) => setSummary(e.target.value)} placeholder={t("erp.changes.summaryHint")} className={area} />
+          <textarea
+            rows={5}
+            value={summary}
+            onChange={(e) => setSummary(e.target.value)}
+            onPaste={(e) => {
+              const files = [...(e.clipboardData?.files || [])];
+              if (files.some((f) => f.type.startsWith("image/"))) {
+                e.preventDefault();
+                addFiles(files);
+              }
+            }}
+            placeholder={t("erp.changes.summaryHint")}
+            className={area}
+          />
+        </div>
+        {/* Pictures of the problem (change request CR-1). */}
+        <div
+          className="space-y-2"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            addFiles(e.dataTransfer.files);
+          }}
+        >
+          <Label>{t("erp.changes.images")}</Label>
+          <div className="flex flex-wrap gap-2">
+            {images.map((img) => (
+              <div key={img.url} className="relative h-20 w-20 overflow-hidden rounded-xl border border-white/10">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={img.url} alt={img.name} className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  aria-label={t("common.delete")}
+                  onClick={() => setImages((x) => x.filter((i) => i.url !== img.url))}
+                  className="absolute end-1 top-1 rounded-full bg-black/60 p-0.5 text-white hover:bg-red-500"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+            {Array.from({ length: uploading }, (_, i) => (
+              <div key={`u${i}`} className="h-20 w-20 animate-pulse rounded-xl bg-white/10" />
+            ))}
+            {images.length + uploading < MAX_IMAGES && (
+              <label className="flex h-20 w-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-white/20 text-[11px] text-white/55 hover:bg-white/5">
+                <ImagePlus size={18} />
+                {t("erp.changes.addImage")}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    addFiles(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            )}
+          </div>
+          <p className="text-[11px] text-white/45">{t("erp.changes.imagesHint")}</p>
         </div>
         {/* Where: the page they're on (and its tab), with a link — they may pick another. */}
         <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
@@ -111,7 +199,7 @@ export default function ChangeRequestForm({ open, onClose, page, onSent, viewAs 
           <Button variant="ghost" onClick={onClose}>
             {t("common.cancel")}
           </Button>
-          <Button onClick={send} loading={busy} disabled={!summary.trim()}>
+          <Button onClick={send} loading={busy} disabled={!summary.trim() || uploading > 0}>
             {t("erp.changes.send")}
           </Button>
         </div>

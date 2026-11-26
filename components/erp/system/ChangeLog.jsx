@@ -171,6 +171,7 @@ export default function ChangeLog() {
             </div>
 
             {(tk.title || tk.summary.includes("\n") || tk.summary.length > 120) && <p className="mt-3 whitespace-pre-wrap text-sm text-white/80">{tk.summary}</p>}
+            <TicketImages images={tk.images} />
 
             {tk.fix && (tk.fix.how || tk.fix.changes) && (
               <div className="mt-3 space-y-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-sm">
@@ -343,6 +344,7 @@ function FixModal({ ticket, onClose, onDone }) {
       {ticket && (
         <div className="space-y-4">
           <p className="whitespace-pre-wrap rounded-xl bg-white/[0.04] p-3 text-sm text-white/75">{ticket.summary}</p>
+          <TicketImages images={ticket.images} />
           <div>
             <Label>{t("erp.changes.how")}</Label>
             <textarea rows={4} value={how} onChange={(e) => setHow(e.target.value)} placeholder={t("erp.changes.howHint")} className={area} />
@@ -423,5 +425,20 @@ function LogModal({ entry, onClose, onDone }) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+// The pictures sent with a request: thumbnails, each opens full size.
+function TicketImages({ images }) {
+  if (!images?.length) return null;
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {images.map((img) => (
+        <a key={img.url} href={img.url} target="_blank" rel="noreferrer" className="block h-24 w-24 overflow-hidden rounded-xl border border-white/10 hover:border-white/40">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={img.url} alt={img.name} loading="lazy" className="h-full w-full object-cover" />
+        </a>
+      ))}
+    </div>
   );
 }

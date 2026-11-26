@@ -4,7 +4,8 @@ import { fail, forbidden, isObjectId, notFound, readJson } from "@/lib/apiUtils"
 import { decideWork } from "@/lib/hybridServer";
 import WorkRequest from "@/models/WorkRequest";
 
-// { decision: "approve" | "decline", note } by whoever decides it; "cancel" by its owner.
+// { decision: "approve" | "decline", note, hours? } by whoever decides it (hours: new work,
+// set by the stage's manager); "cancel" by its owner.
 export async function PATCH(request, { params }) {
   const user = await requireStaff();
   if (!user) return forbidden();
@@ -15,7 +16,7 @@ export async function PATCH(request, { params }) {
     const done = await WorkRequest.updateOne({ _id: id, by: user.id, status: "pending" }, { $set: { status: "cancelled" }, $unset: { lock: 1 } });
     return done.matchedCount ? NextResponse.json({ ok: true }) : fail("already_decided", 409);
   }
-  const res = await decideWork(user, id, b.decision, b.note);
+  const res = await decideWork(user, id, b.decision, b.note, b.hours ?? null);
   if (res.error === "forbidden") return forbidden();
   return res.error ? fail(res.error, 409, res.data || {}) : NextResponse.json(res);
 }

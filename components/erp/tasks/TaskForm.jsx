@@ -10,7 +10,6 @@ import { useConfirm } from "@/components/erp/ui/Feedback";
 import { Timer } from "lucide-react";
 import { ReviewBoxes } from "@/components/erp/projects/ProjectForm";
 
-const KINDS = ["task", "meeting", "personal"];
 
 // Create a task. `preset` fixes the project / stage when opened from a board
 // cell, `preset.assigneeId` the employee (free time on the Gantt), or `preset.parent`
@@ -24,11 +23,11 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
   const canAssign = user?.permissions?.includes("tasks.assign");
   const isScheduler = canRouteStages(user);
   const parent = preset.parent || null;
-  // Project work (and its hours) is given out by the GM / CEO; others add meetings,
-  // personal tasks, and steps (sub-tasks) of a task they work on.
-  const kinds = isScheduler || parent ? KINDS : KINDS.filter((k) => k !== "task");
+  // One kind of task on this form ("personal task" / "meeting" were removed, change
+  // request CR-6): project work given by the GM / CEO is a project task; anything else
+  // (no project, or added by someone who doesn't plan project hours) is kept as the
+  // old "personal" kind underneath, shown simply as a task.
   const [form, setForm] = useState({
-    kind: kinds[0],
     projectId: preset.projectId || "",
     stage: preset.stage || "",
     type: "",
@@ -48,9 +47,10 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
   const project = lookups.projects.find((p) => p.id === form.projectId);
   const stage = project?.stages.find((s) => s.key === form.stage);
   const fixedCell = Boolean(preset.stage);
+  const kind = parent || (isScheduler && project) ? "task" : "personal";
   // Project tasks need their working hours (the GM / CEO may give a due date instead).
   // An employee's sub-task is a step inside its task's time: no hours of its own.
-  const needsHours = form.kind === "task" && Boolean(project || parent?.project) && (isScheduler || !parent);
+  const needsHours = kind === "task" && Boolean(project || parent?.project) && (isScheduler || !parent);
   const missingHours = needsHours && !(Number(form.hours) >= 0.5);
   // The people the creator may give work to: the CEO anyone; a department manager the
   // employees of their departments (and themselves); everyone else only themselves.
@@ -71,7 +71,7 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
   const assigneeId = canAssign ? form.assigneeId : user?.id;
   const missingAssignee = !assigneeId;
   // Project work: the GM / CEO pick its reviewers (manager, GM / CEO, the project's customer).
-  const picksReview = isScheduler && form.kind === "task" && Boolean(project) && !parent;
+  const picksReview = isScheduler && kind === "task" && Boolean(project) && !parent;
   const review = { ...form.review, customer: Boolean(project?.customer) && form.review.customer };
   // The department manager always reviews (lib/reviewFlow): nothing can be missing.
   const missingReview = false;
@@ -82,6 +82,7 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
     try {
       const body = {
         ...form,
+        kind,
         type: form.type || stage?.taskType || "",
         assigneeId,
         dueAt: null,
@@ -113,23 +114,8 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
       )}
 
       {!fixedCell && !parent && (
-        <div className="flex gap-1 rounded-xl border border-white/10 p-1">
-          {kinds.map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => set("kind")(k)}
-              className={`flex-1 rounded-lg py-2 text-sm ${form.kind === k ? "bg-brand-orange text-white" : "text-white/60"}`}
-            >
-              {t(`erp.tasks.kind.${k}`)}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {!fixedCell && !parent && (
         <Select
-          label={`${t("erp.tasks.project")}${form.kind === "task" ? "" : ` ${t("dashboard.optional")}`}`}
+          label={`${t("erp.tasks.project")}${isScheduler ? "" : ` ${t("dashboard.optional")}`}`}
           value={form.projectId}
           onChange={(projectId) => setForm((f) => ({ ...f, projectId, stage: "" }))}
           placeholder="—"
@@ -154,7 +140,7 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
       )}
 
       <Input
-        label={`${t("erp.tasks.title")}${form.kind === "task" ? ` ${t("dashboard.optional")}` : ""}`}
+        label={`${t("erp.tasks.title")}${kind === "task" ? ` ${t("dashboard.optional")}` : ""}`}
         value={form.title}
         onChange={set("title")}
       />
@@ -165,7 +151,7 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
           value={form.type || stage?.taskType || ""}
           onChange={set("type")}
           placeholder="—"
-          options={lookups.settings.taskTypes.map((tt) => ({ value: tt.key, label: tt.name?.[lang] }))}
+          options={lookups.settings.taskTypes.filter((tt) => tt.key !== "meeting").map((tt) => ({ value: tt.key, label: tt.name?.[lang] }))}
         />
         {canAssign ? (
           <Select

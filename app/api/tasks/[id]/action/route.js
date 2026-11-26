@@ -11,7 +11,7 @@ import { replanPaused, setHoursLeft, trackDelays } from "@/lib/projectDelay";
 import { workMsBetween, addWorkHours, cancelNeedsApproval, holdsTime, isRedo, nextWorkMoment } from "@/lib/gantt";
 import { cancelTask, rejectCancel, requestCancel, restoreTask } from "@/lib/taskCancel";
 import { reviewTask, startReview } from "@/lib/taskReview";
-import { claimed, hybridPerson, pauseRunning } from "@/lib/hybridServer";
+import { claimed, pauseNeedsApproval, pauseRunning, requestPause } from "@/lib/hybridServer";
 import { closeItemsForTask } from "@/lib/officeServer";
 import {
   applyTransition,
@@ -39,7 +39,9 @@ const idOf = (v) => (v ? v.toString() : null);
 const ASSIGNEE_ACTIONS = ["start", "undo_start", "pause", "resume", "help", "submit", "hours_left"];
 
 // Body: { action, ...fields }
-//   start | pause | resume
+//   start | resume
+//   pause   { reason }                         → project work: asks the employee's manager
+//                                                (or the CEO); it keeps running until approved
 //   undo_start                                 → a start pressed by mistake (first 15 min):
 //                                                back to its plan as if never started
 //   cancel  { reason }                         → project work: the GM / CEO cancel it, anyone
@@ -93,6 +95,12 @@ async function act(user, id, body) {
   // A department manager may start (or resume) the work of their department's employees.
   const onBehalf = !isAssignee && ["start", "resume"].includes(action) && (await managesAssignee(user, task));
   if (!isAssignee && !onBehalf) return forbidden();
+
+  // Pausing project work is asked for first (lib/hybridServer.js requestPause).
+  if (action === "pause" && pauseNeedsApproval(user, task)) {
+    const res = await requestPause(user, task, body.reason);
+    return res.error ? fail(res.error, 409) : NextResponse.json({ requested: true, task: await enrichTask(task) });
+  }
 
   // The employee says how long the work still needs; the plan moves to match.
   if (action === "hours_left") {
@@ -153,15 +161,21 @@ async function act(user, id, body) {
     if (purchase) return fail("waiting_purchase", 409, { number: purchase.number });
   }
 
-  // An employee works on one task at a time: pause the running one first.
+  // An employee works on one task at a time. Project work they're on is paused only with
+  // their manager's (or the CEO's) approval, never by starting something else; a task
+  // without a project pauses by itself. A manager starting the work for them decides.
   let switchFrom = null;
   if ((action === "start" || action === "resume") && task.kind !== "meeting") {
-    const running = await Task.findOne({ assignee: task.assignee, status: "in_progress", kind: { $ne: "meeting" }, _id: { $ne: task._id } }, { number: 1 }).lean();
-    // Where employees start their own work, the one they were on is paused for them (below,
-    // once this one is sure to start).
+    const running = await Task.findOne({ assignee: task.assignee, status: "in_progress", kind: { $ne: "meeting" }, _id: { $ne: task._id } }, { number: 1, project: 1 }).lean();
     if (running) {
-      if (!(await hybridPerson(task.assignee))) return fail("another_task_running", 409, { number: running.number });
+      if (running.project && !onBehalf && pauseNeedsApproval(user, running)) return fail("another_task_running", 409, { number: running.number });
       switchFrom = running._id;
+    }
+    // Stopped by the end of the working day (not by an approved pause): that one goes on
+    // first, so the clock stopping overnight isn't a way round the approval.
+    if (!onBehalf && pauseNeedsApproval(user, task)) {
+      const stopped = await Task.findOne({ assignee: task.assignee, status: "on_hold", autoPausedAt: { $ne: null }, project: { $ne: null }, _id: { $ne: task._id } }, { number: 1 }).lean();
+      if (stopped) return fail("resume_paused_first", 409, { number: stopped.number });
     }
   }
   // Rejected work comes first: with a redo waiting, the next task to start is the redo.

@@ -19,11 +19,12 @@ import { conversationAccess } from "@/lib/messaging";
 import Task from "@/models/Task";
 import WorkProject from "@/models/WorkProject";
 import ProjectFile from "@/models/ProjectFile";
+import { fileRights } from "@/lib/projectFileAccess";
 import Message from "@/models/Message";
 import Conversation from "@/models/Conversation";
 
 const OPEN_STATUSES = ["todo", "in_progress", "on_hold", "help"];
-const PROJECT_FIELDS = { code: 1, name: 1, stages: 1, department: 1, serverFolder: 1, folderLink: 1, customer: 1 };
+const PROJECT_FIELDS = { code: 1, name: 1, stages: 1, department: 1, serverFolder: 1, folderLink: 1, customer: 1, fileAccess: 1 };
 
 // A token for the file gateway, for one screen:
 //   { for: "browse" }                  the Files page / picking files anywhere
@@ -66,13 +67,17 @@ export async function POST(request) {
     const project = await WorkProject.findById(body.id, PROJECT_FIELDS).lean();
     const access = projectAccess(user, project);
     if (!access) return forbidden();
+    // The levels the CEO gave on this project's files (lib/projectFileAccess.js).
+    const rights = fileRights(user, project);
+    if (!rights.view) return forbidden();
     folder = projectFolder(project, fs);
-    const files = await ProjectFile.find({ project: project._id }, { "versions.server": 1 }).lean();
+    const files = rights.download ? await ProjectFile.find({ project: project._id }, { "versions.server": 1 }).lean() : [];
     const versions = files.flatMap((f) => f.versions.map((v) => v.server).filter((x) => x?.path));
     // Anyone who can open the project adds files (as on the Files tab); its managers
-    // also tidy its folder.
-    grants = [...browse, ...refGrants(versions), ...legacyGrant(project.folderLink, fs)];
-    if (folder) grants.push([folder.vol, folder.path, access === "manage" ? "rmw" : "rw"]);
+    // (or, once restricted, whoever may delete) also tidy its folder.
+    grants = [...browse, ...refGrants(versions), ...(rights.download ? legacyGrant(project.folderLink, fs) : [])];
+    const mode = `${rights.download || rights.upload ? "r" : ""}${rights.delete ? "m" : ""}${rights.upload ? "w" : ""}`;
+    if (folder && mode) grants.push([folder.vol, folder.path, mode]);
   } else if (body.for === "message") {
     if (!isObjectId(body.id)) return notFound();
     const message = await Message.findById(body.id, { conversation: 1, attachments: 1, deletedAt: 1 }).lean();
