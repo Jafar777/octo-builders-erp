@@ -21,6 +21,7 @@ function TemplateEditor({ template, lookups, onSaved, onClose }) {
   const [form, setForm] = useState({
     name: template?.name || { ar: "", en: "" },
     department: template?.department || "",
+    rows: template?.rows || "",
     stages: template?.stages || [{ key: "", name: { ar: "", en: "" }, taskType: "other" }],
     active: template?.active !== false,
   });
@@ -50,6 +51,12 @@ function TemplateEditor({ template, lookups, onSaved, onClose }) {
         placeholder="—"
         options={lookups.departments.map((d) => ({ value: d.id, label: d.name?.[lang] }))}
       />
+      <Select
+        label={t("erp.rows.kind")}
+        value={form.rows}
+        onChange={(rows) => setForm((f) => ({ ...f, rows }))}
+        options={["", "spaces", "sheets"].map((k) => ({ value: k, label: t(`erp.rows.kinds.${k || "none"}`) }))}
+      />
       <div className="space-y-2">
         <Label>{t("erp.projects.stages")}</Label>
         {canRoute && <p className="text-xs text-white/60">{t("erp.projects.routingHint")}</p>}
@@ -73,6 +80,11 @@ function TemplateEditor({ template, lookups, onSaved, onClose }) {
             {canRoute && (
               <div className="sm:col-span-3">
                 <StageRouting stage={stage} departments={lookups.departments} onChange={(patch) => setStage(i, patch)} />
+              </div>
+            )}
+            {form.rows && (
+              <div className="sm:col-span-3">
+                <Toggle checked={Boolean(stage.optional)} onChange={(optional) => setStage(i, { optional })} label={t("erp.rows.optionalHint")} />
               </div>
             )}
           </div>

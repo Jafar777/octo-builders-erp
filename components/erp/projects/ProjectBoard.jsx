@@ -7,7 +7,7 @@ import ProjectFiles from "@/components/erp/projects/ProjectFiles";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeft, CalendarDays, ChevronDown, Lock, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarDays, ChevronDown, Lock, Pencil, Plus, Trash2 } from "lucide-react";
 import ServerFolderField from "@/components/erp/files/ServerFolderField";
 import { LinkOrPath, ServerFolderButton } from "@/components/erp/files/ServerRefs";
 import { useFileServer } from "@/components/erp/files/useFileServer";
@@ -19,7 +19,7 @@ import { api, errorText, peekApi } from "@/lib/clientApi";
 import { formatDate } from "@/lib/formatTime";
 import BilingualField from "@/components/dashboard/BilingualField";
 import Modal from "@/components/erp/ui/Modal";
-import { Button, Card, ErrorText, Input, Label, Select } from "@/components/erp/ui/fields";
+import { Button, Card, ErrorText, Input, Label, Select, Toggle } from "@/components/erp/ui/fields";
 import TaskRow, { StatusBadge } from "@/components/erp/tasks/TaskRow";
 import TaskForm from "@/components/erp/tasks/TaskForm";
 import TaskDrawer from "@/components/erp/tasks/TaskDrawer";
@@ -34,6 +34,8 @@ import { CustomerSelect } from "@/components/erp/projects/ProjectForm";
 import TraineeBadge from "@/components/erp/ui/TraineeBadge";
 import { useAsk } from "@/components/erp/ui/Feedback";
 import { EmptyState } from "@/components/erp/ui/DataTools";
+import RowsBoard, { RowsEditor } from "@/components/erp/projects/RowsBoard";
+import { rowLabel } from "@/lib/projectRows";
 
 const TABS = ["board", "tasks", "files", "delivery", "changes", "settings"];
 
@@ -42,16 +44,22 @@ function CellModal({ project, cell, canManage, canPlan, lookups, onOpenTask, onN
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
   const stage = project.stages.find((s) => s.key === cell.stage);
-  const state = project.cells[cell.stage];
-  const locked = project.locked?.includes(cell.stage);
+  // Spaces / sheets: one row's cell (`cell.item`, "" = the project as a whole), or the
+  // stage in every row (`cell.all`, from its heading).
+  const rows = Boolean(project.rows);
+  const lane = cell.item || "";
+  const row = rows && lane ? (project.items || []).find((i) => i.id === lane) : null;
+  const state = rows && !cell.all ? project.grid?.[lane]?.[cell.stage] : project.cells[cell.stage];
+  const locked = rows && !cell.all ? project.lockedCells?.[lane]?.includes(cell.stage) : project.locked?.includes(cell.stage);
   const assignee = lookups.people.find((p) => p.id === state?.assignee);
+  const allRows = (project.items || []).filter((i) => !i.archived).map((i) => i.id);
 
   async function override(status) {
     setError("");
     try {
       await api(`/api/work-projects/${project.id}/override`, {
         method: "POST",
-        body: { stage: cell.stage, status, reason },
+        body: { stage: cell.stage, status, reason, ...(rows ? { items: cell.all ? allRows : [lane] } : {}) },
       });
       onChanged();
       onClose();
@@ -63,7 +71,7 @@ function CellModal({ project, cell, canManage, canPlan, lookups, onOpenTask, onN
   return (
     <div className="space-y-5">
       <p className="text-sm text-white/60">
-        {project.name?.[lang]} · {stage?.name?.[lang]}
+        {[project.name?.[lang], row ? rowLabel(row) : rows && cell.all ? t("erp.rows.allRows") : rows ? t("erp.rows.whole") : "", stage?.name?.[lang]].filter(Boolean).join(" · ")}
         {state?.count > 1 && <span className="ms-2 text-white/60">({t("erp.projects.stageTasks", { count: state.count })})</span>}
       </p>
       <div className="flex flex-wrap items-center gap-2">
@@ -99,7 +107,7 @@ function CellModal({ project, cell, canManage, canPlan, lookups, onOpenTask, onN
           </Button>
         )}
         {/* Stage work and its hours are given out by the GM / CEO. */}
-        {project.status === "active" && !locked && canPlan && (
+        {project.status === "active" && !locked && canPlan && !cell.all && (
           <Button onClick={onNewTask}>
             <Plus size={16} /> {state?.taskId ? t("erp.projects.newRevision") : t("erp.tasks.new")}
           </Button>
@@ -109,6 +117,7 @@ function CellModal({ project, cell, canManage, canPlan, lookups, onOpenTask, onN
       {canManage && (
         <div className="space-y-3 border-t border-white/10 pt-4">
           <p className="text-sm font-medium text-white/70">{t("erp.projects.manualState")}</p>
+          {rows && cell.all && <p className="text-xs text-white/55">{t("erp.rows.allRowsNote", { n: allRows.length })}</p>}
           <Input label={t("erp.projects.reason")} value={reason} onChange={setReason} />
           <div className="flex flex-wrap gap-2">
             <Button variant="ghost" onClick={() => override("skip")} disabled={!reason.trim()}>
@@ -117,7 +126,7 @@ function CellModal({ project, cell, canManage, canPlan, lookups, onOpenTask, onN
             <Button variant="ghost" onClick={() => override("done")} disabled={!reason.trim()}>
               {t("erp.projects.markDone")}
             </Button>
-            {state?.override && (
+            {(state?.override || cell.all) && (
               <Button variant="danger" onClick={() => override("clear")}>
                 {t("erp.projects.clearOverride")}
               </Button>
@@ -163,7 +172,7 @@ function ScheduleHold({ project, tasks, onDone }) {
   );
 }
 
-function ProjectSettings({ project, lookups, onSaved }) {
+function ProjectSettings({ project, lookups, onSaved, onEditRows }) {
   const { t, lang } = useLanguage();
   const ask = useAsk();
   const { user } = useAuth();
@@ -264,6 +273,16 @@ function ProjectSettings({ project, lookups, onSaved }) {
         </div>
       </Card>
 
+      <Card className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="font-semibold">{t("erp.rows.kind")}</p>
+          <p className="text-sm text-white/60">{t(`erp.rows.kinds.${project.rows || "none"}`)}{project.rows ? ` · ${t(`erp.rows.${project.rows}.count`, { n: (project.items || []).filter((i) => !i.archived).length })}` : ""}</p>
+        </div>
+        <Button variant="ghost" onClick={onEditRows}>
+          <Pencil size={15} /> {t("common.edit")}
+        </Button>
+      </Card>
+
       <Card className="space-y-3">
         <p className="font-semibold">{t("erp.projects.stages")}</p>
         {canRoute && <p className="text-xs text-white/60">{t("erp.projects.routingHint")}</p>}
@@ -292,6 +311,7 @@ function ProjectSettings({ project, lookups, onSaved }) {
                   </button>
                 </div>
                 {canRoute && <StageRouting stage={stage} departments={lookups.departments} onChange={patch} />}
+                {project.rows && <Toggle checked={Boolean(stage.optional)} onChange={(optional) => patch({ optional })} label={t("erp.rows.optionalHint")} />}
               </div>
             );
           }}
@@ -354,6 +374,7 @@ export default function ProjectBoard({ projectId }) {
   const [tasks, setTasks] = useState(() => peekApi(`/api/tasks?view=project&project=${projectId}`)?.tasks || []);
   const [tab, setTab] = useState("board");
   const [cell, setCell] = useState(null);
+  const [editRows, setEditRows] = useState(false);
   const [newTaskFor, setNewTaskFor] = useState(null);
   const [openTaskId, setOpenTaskId] = useState(null);
   const [error, setError] = useState("");
@@ -399,7 +420,7 @@ export default function ProjectBoard({ projectId }) {
     const byId = new Map(tasks.map((x) => [x.id, x]));
     // Tasks and revisions of the same drawing (stage + name + type) group together even
     // when a revision isn't linked to the one before (some imported ones aren't).
-    const drawingKey = (x) => (["task", "revision"].includes(x.kind) ? `d:${x.stage?.key || ""}|${x.title || ""}|${x.type || ""}` : null);
+    const drawingKey = (x) => (["task", "revision"].includes(x.kind) ? `d:${x.stage?.key || ""}|${x.itemId || x.title || ""}|${x.type || ""}` : null);
     const rootOf = (x) => {
       let cur = x;
       for (let i = 0; i < 100 && cur.previousTaskId && byId.has(cur.previousTaskId); i++) cur = byId.get(cur.previousTaskId);
@@ -490,7 +511,11 @@ export default function ProjectBoard({ projectId }) {
 
       {canRoute && <ScheduleHold project={project} tasks={tasks} onDone={load} />}
 
-      {tab === "board" && (
+      {tab === "board" && project.rows && (
+        <RowsBoard project={project} lookups={lookups} canEdit={canManage} onCell={setCell} onEditRows={() => setEditRows(true)} />
+      )}
+
+      {tab === "board" && !project.rows && (
         <div className="overflow-x-auto rounded-2xl border border-white/10 p-3">
           <div className="grid min-w-[640px] gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(project.stages.length, 1)}, minmax(110px, 1fr))` }}>
             {project.stages.map((s) => {
@@ -574,7 +599,7 @@ export default function ProjectBoard({ projectId }) {
       {tab === "files" && <ProjectFiles project={project} />}
       {tab === "delivery" && <ProjectDelivery project={project} onOpenTask={setOpenTaskId} />}
       {tab === "changes" && <ProjectChanges projectId={project.id} onOpenTask={setOpenTaskId} />}
-      {tab === "settings" && canManage && <ProjectSettings key={project.id} project={project} lookups={lookups} onSaved={load} />}
+      {tab === "settings" && canManage && <ProjectSettings key={project.id} project={project} lookups={lookups} onSaved={load} onEditRows={() => setEditRows(true)} />}
 
       <Modal open={Boolean(cell)} onClose={() => setCell(null)} title={t("erp.projects.cell")}>
         {cell && (
@@ -591,8 +616,23 @@ export default function ProjectBoard({ projectId }) {
               setOpenTaskId(id);
             }}
             onNewTask={() => {
-              setNewTaskFor({ projectId, stage: cell.stage });
+              setNewTaskFor({ projectId, stage: cell.stage, ...(cell.item ? { itemId: cell.item } : {}) });
               setCell(null);
+            }}
+          />
+        )}
+      </Modal>
+
+      <Modal open={editRows} onClose={() => setEditRows(false)} title={t(project.rows ? `erp.rows.${project.rows}.edit` : "erp.rows.kind")} wide>
+        {editRows && (
+          <RowsEditor
+            project={project}
+            lookups={lookups}
+            onCancel={() => setEditRows(false)}
+            onSaved={() => {
+              setEditRows(false);
+              load();
+              lookups.reloadProjects?.();
             }}
           />
         )}

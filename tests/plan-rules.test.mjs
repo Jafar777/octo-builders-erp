@@ -97,5 +97,23 @@ ok("progress weighs stages by their hours", Math.abs(p - 0.75) < 1e-9, String(p)
 p = buildCells({ stages: [...stages, { key: "c", after: [] }], overrides: [] }, [task("a", "approved", 1, 6), task("b", "todo", 2, 2)]).progress;
 ok("a stage without hours counts as an average stage", Math.abs(p - 6 / 12) < 1e-9, String(p));
 
+// Rows (spaces / sheets): each row goes through the stages on its own.
+const rowsProject = { rows: "spaces", items: [{ _id: "r1", number: "GF-01", name: "Entrance" }, { _id: "r2", number: "GF-02", name: "Bath" }], stages: [{ key: "a", after: [] }, { key: "b", after: ["a"] }, { key: "c", after: ["b"], optional: true }], overrides: [] };
+const rt = (item, stage, status, n, hours = 0) => ({ ...task(stage, status, n, hours), item });
+let rb = buildCells(rowsProject, [rt("r1", "a", "approved", 1, 2), rt("r2", "a", "in_progress", 2, 2)]);
+ok("a row's next stage opens when its own first stage is done", !rb.lockedCells.r1.includes("b"), JSON.stringify(rb.lockedCells));
+ok("…while the other row still waits", rb.lockedCells.r2.includes("b"));
+ok("the stage is open somewhere, so not locked as a whole", !rb.locked.includes("b"));
+ok("an optional stage nobody was given isn't needed", rb.grid.r1.c.status === "none" && !rb.grid.r1.c.needed);
+ok("progress counts every row's needed cells", rb.total === 4 && rb.complete === 1, `${rb.total} ${rb.complete}`);
+ok("the stage as a whole shows how many rows are done", rb.cells.a.done === 1 && rb.cells.a.of === 2, JSON.stringify(rb.cells.a));
+rb = buildCells(rowsProject, [rt("r1", "a", "approved", 1), rt("r2", "a", "approved", 2), rt("r1", "c", "todo", 3)]);
+ok("optional work given to a row counts there", rb.grid.r1.c.needed && rb.total === 5, String(rb.total));
+rb = buildCells({ ...rowsProject, overrides: [{ item: "r2", stage: "a", status: "skip", at: d(1) }] }, [rt("r1", "a", "todo", 1)]);
+ok("Skip on one row releases that row only", !rb.lockedCells.r2.includes("b") && rb.lockedCells.r1.includes("b"), JSON.stringify(rb.lockedCells));
+rb = buildCells(rowsProject, [rt(null, "c", "todo", 9), rt("r1", "b", "todo", 1)]);
+ok("whole-project work waits for the whole stage before it", rb.lockedCells[""].includes("c"));
+ok("whole-project work counts in the progress", rb.grid[""].c.needed);
+
 console.log(fails ? `${fails} FAILED` : "ALL PASSED");
 if (fails) process.exit(1);

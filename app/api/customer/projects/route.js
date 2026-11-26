@@ -14,7 +14,7 @@ export async function GET() {
   const projects = await WorkProject.find({ customer: user.id, status: { $ne: "archived" } }).sort({ status: 1, dueDate: 1 }).lean();
   const tasks = await Task.find(
     { project: { $in: projects.map((p) => p._id) } },
-    { project: 1, stage: 1, revision: 1, status: 1, kind: 1, createdAt: 1, assignee: 1, number: 1, estimatedHours: 1, maxHours: 1, reviewLevel: 1, customerMilestone: 1, customerTitle: 1, title: 1, dueAt: 1 }
+    { project: 1, stage: 1, item: 1, revision: 1, status: 1, kind: 1, createdAt: 1, assignee: 1, number: 1, estimatedHours: 1, maxHours: 1, reviewLevel: 1, customerMilestone: 1, customerTitle: 1, title: 1, dueAt: 1 }
   ).lean();
   const extras = await Promise.all(projects.map((p) => customerExtras(p, tasks.filter((t) => t.project.toString() === p._id.toString()))));
   return NextResponse.json({

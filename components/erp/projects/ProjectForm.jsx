@@ -1,11 +1,12 @@
 "use client";
 
+import { parseRows } from "@/lib/projectRows";
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { api, errorText } from "@/lib/clientApi";
 import BilingualField from "@/components/dashboard/BilingualField";
-import { Button, ErrorText, Input, Select } from "@/components/erp/ui/fields";
+import { Button, ErrorText, Input, Label, Select } from "@/components/erp/ui/fields";
 import StageFlowEditor from "@/components/erp/projects/StageFlowEditor";
 import { stageAfter, stepByStep } from "@/lib/stageFlow";
 import { canRouteStages } from "@/components/erp/projects/StageRouting";
@@ -105,6 +106,10 @@ export default function ProjectForm({ lookups, intake = null, mode = "accept", i
     priority: initial?.priority || INTAKE_PRIORITY[intake?.project.priority] || "normal",
     tasks: initial?.tasks || {}, // { stageKey: { hours, assigneeId, review } } — one scheduled task per template stage
     folderLink: initial?.folderLink || "",
+    // Spaces / sheets templates: the list (pasted, one per line) and, for sheets, the
+    // interior project they draw. Both can be filled in later on the board too.
+    items: typeof initial?.items === "string" ? initial.items : "",
+    linkedProject: initial?.linkedProject || "",
   });
   // The template's stages in the chosen order, each with the stages it waits for.
   const [stages, setStages] = useState([]);
@@ -255,10 +260,38 @@ export default function ProjectForm({ lookups, intake = null, mode = "accept", i
         <Input label={t("erp.projects.folderLink")} value={form.folderLink} onChange={set("folderLink")} dir="ltr" />
       </div>
 
+      {template?.rows && (
+        <div className="space-y-3 rounded-xl border border-white/10 p-3">
+          {template.rows === "sheets" && (
+            <Select
+              label={t("erp.rows.linkedProject")}
+              value={form.linkedProject}
+              onChange={set("linkedProject")}
+              placeholder="—"
+              options={lookups.projects.filter((p) => p.rows === "spaces").map((p) => ({ value: p.id, label: `${p.code ? `${p.code} · ` : ""}${p.name?.[lang]}` }))}
+            />
+          )}
+          <div>
+            <Label>{t(`erp.rows.${template.rows}.paste`)}</Label>
+            <textarea
+              value={form.items}
+              onChange={(e) => set("items")(e.target.value)}
+              rows={5}
+              dir="ltr"
+              placeholder={template.rows === "sheets" ? "AR-001  LIST OF DRAWINGS\nAR-605-A  BF.06 - WC - PLAN" : "GF-01 Entrance\nGF-06 Bathroom"}
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 font-mono text-sm text-white outline-none placeholder:text-white/40 focus:border-white/30"
+            />
+            <p className="mt-1 text-xs text-white/50">
+              {t(`erp.rows.${template.rows}.count`, { n: parseRows(form.items, template.rows).length })} · {t("erp.rows.laterNote")}
+            </p>
+          </div>
+        </div>
+      )}
+
       {template && (
         <div className="rounded-xl border border-white/10 p-3">
           <p className="mb-1 text-sm font-medium text-white/70">{t("erp.plan.tasksTitle")}</p>
-          <p className="mb-3 text-xs text-white/50">{t("erp.plan.tasksHint")}</p>
+          <p className="mb-3 text-xs text-white/50">{template.rows ? t(`erp.rows.${template.rows}.planHint`) : t("erp.plan.tasksHint")}</p>
           {/* The customer's review for all tasks at once (projects with a customer). */}
           {hasCustomer && (
             <div className="mb-3 rounded-lg bg-white/[0.04] px-3 py-2">

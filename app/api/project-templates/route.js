@@ -8,6 +8,7 @@ import { projectAccess, serializeTemplate } from "@/lib/projects";
 import { getTaskSettings } from "@/lib/settings";
 import { isBilingualComplete } from "@/lib/validateBilingual";
 import ProjectTemplate from "@/models/ProjectTemplate";
+import { ROW_KINDS } from "@/lib/projectRows";
 import WorkProject from "@/models/WorkProject";
 
 export async function GET() {
@@ -29,7 +30,7 @@ export async function POST(request) {
   if (isObjectId(body.fromProjectId)) {
     const project = await WorkProject.findById(body.fromProjectId).lean();
     if (!project || !projectAccess(user, project)) return fail("invalid_project");
-    data = { department: project.department, stages: project.stages };
+    data = { department: project.department, stages: project.stages, rows: project.rows || "" };
   } else {
     const settings = await getTaskSettings();
     const cleaned = cleanStages(body.stages, settings.taskTypes.map((t) => t.key));
@@ -39,6 +40,7 @@ export async function POST(request) {
     data = {
       department: isObjectId(body.department) ? body.department : null,
       stages: routed.stages,
+      rows: ROW_KINDS.includes(body.rows) ? body.rows : "",
     };
   }
 

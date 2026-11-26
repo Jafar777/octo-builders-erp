@@ -20,7 +20,9 @@ async function waitingIds(projectId) {
 }
 
 // Manual cell state, like the Excel "تجاوز يدوي" / "إنجاز يدوي".
-// Body: { stage, status: "skip" | "done" | "clear", reason }
+// Body: { stage, status: "skip" | "done" | "clear", reason, items? }. Projects with rows
+// (spaces / sheets): `items` = the rows it's for ("" = the project as a whole), so one
+// click can skip Final Render for every space.
 export async function POST(request, { params }) {
   const user = await requireStaff();
   if (!user) return forbidden();
@@ -37,17 +39,22 @@ export async function POST(request, { params }) {
   const reason = String(body.reason || "").trim().slice(0, 500);
   if (body.status !== "clear" && !reason) return fail("reason_required");
 
+  const rowIds = new Set((project.items || []).map((i) => i._id.toString()));
+  const lanes = project.rows ? [...new Set((Array.isArray(body.items) ? body.items : [body.itemId || ""]).map((x) => String(x || "")))] : [""];
+  if (!lanes.length || lanes.some((l) => l && !rowIds.has(l))) return fail("invalid_row");
+  const laneOf = (o) => (o.item && rowIds.has(o.item.toString()) ? o.item.toString() : "");
+
   const waitingBefore = await waitingIds(project._id);
-  project.overrides = project.overrides.filter((o) => o.stage !== stage.key);
+  project.overrides = project.overrides.filter((o) => o.stage !== stage.key || !lanes.includes(laneOf(o)));
   if (body.status !== "clear") {
-    project.overrides.push({ stage: stage.key, status: body.status, reason, by: user.id, at: new Date() });
+    for (const lane of lanes) project.overrides.push({ item: lane || null, stage: stage.key, status: body.status, reason, by: user.id, at: new Date() });
   }
   await project.save();
 
   await audit(user, "project.cell_override", {
     entityType: "project",
     entityId: project._id,
-    summary: `${stage.name.en} → ${body.status}`,
+    summary: `${stage.name.en} → ${body.status}${project.rows ? ` (${lanes.length})` : ""}`,
     details: { reason },
   });
   await publish([departmentChannel(project.department.toString()), projectChannel(project._id.toString())], "project:updated", {

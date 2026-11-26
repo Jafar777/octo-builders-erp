@@ -23,6 +23,7 @@ const WorkRequestSchema = new mongoose.Schema(
     project: { type: ObjectId, ref: "WorkProject", default: null },
     stage: { type: String, default: "" },
     title: { type: String, default: "" },
+    item: { type: mongoose.Schema.Types.ObjectId, default: null }, // the project row (space / sheet)
     type: { type: String, default: "" },
     hours: { type: Number, default: 0 },
     again: { type: String, default: "" },

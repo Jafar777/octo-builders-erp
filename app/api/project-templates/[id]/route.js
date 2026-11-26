@@ -7,6 +7,7 @@ import { serializeTemplate } from "@/lib/projects";
 import { getTaskSettings } from "@/lib/settings";
 import { isBilingualComplete } from "@/lib/validateBilingual";
 import ProjectTemplate from "@/models/ProjectTemplate";
+import { ROW_KINDS } from "@/lib/projectRows";
 
 async function load(params, user) {
   if (!user || !hasPermission(user, "projects.manage")) return { error: forbidden() };
@@ -33,6 +34,7 @@ export async function PATCH(request, { params }) {
     name,
     department: isObjectId(body.department) ? body.department : null,
     stages: routed.stages,
+    ...(ROW_KINDS.includes(body.rows) ? { rows: body.rows } : {}),
     active: body.active !== false,
   });
   await template.save();

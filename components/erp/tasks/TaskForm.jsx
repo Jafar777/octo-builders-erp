@@ -1,5 +1,6 @@
 "use client";
 
+import { rowLabel } from "@/lib/projectRows";
 import { useState } from "react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
@@ -30,6 +31,8 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
   const [form, setForm] = useState({
     projectId: preset.projectId || "",
     stage: preset.stage || "",
+    // Spaces / sheets projects: the row the work is for ("" = the project as a whole).
+    itemId: preset.itemId || "",
     type: "",
     title: preset.title || "",
     // Chosen in the list (a preset employee from the Gantt's free time, else nobody yet).
@@ -47,6 +50,7 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
   const project = lookups.projects.find((p) => p.id === form.projectId);
   const stage = project?.stages.find((s) => s.key === form.stage);
   const fixedCell = Boolean(preset.stage);
+  const row = project?.rows ? (project.items || []).find((i) => i.id === form.itemId) || null : null;
   const kind = parent || (isScheduler && project) ? "task" : "personal";
   // Project tasks need their working hours (the GM / CEO may give a due date instead).
   // An employee's sub-task is a step inside its task's time: no hours of its own.
@@ -88,6 +92,7 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
         dueAt: null,
         hours: needsHours ? Number(form.hours) || 0 : 0,
       };
+      if (!row) delete body.itemId;
       if (body.kind !== "task" && !body.projectId) {
         body.stage = "";
       }
@@ -117,7 +122,7 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
         <Select
           label={`${t("erp.tasks.project")}${isScheduler ? "" : ` ${t("dashboard.optional")}`}`}
           value={form.projectId}
-          onChange={(projectId) => setForm((f) => ({ ...f, projectId, stage: "" }))}
+          onChange={(projectId) => setForm((f) => ({ ...f, projectId, stage: "", itemId: "" }))}
           placeholder="—"
           options={openProjects.map((p) => ({ value: p.id, label: `${p.code ? `${p.code} · ` : ""}${p.name?.[lang]}` }))}
         />
@@ -133,17 +138,30 @@ export default function TaskForm({ lookups, preset = {}, onCreated, onCancel }) 
         />
       )}
 
+      {project?.rows && !fixedCell && !parent && (
+        <Select
+          label={t(`erp.rows.${project.rows}.one`)}
+          value={form.itemId}
+          onChange={set("itemId")}
+          placeholder={t("erp.rows.whole")}
+          options={(project.items || []).filter((i) => !i.archived).map((i) => ({ value: i.id, label: rowLabel(i) }))}
+        />
+      )}
+
       {fixedCell && project && (
         <p className="rounded-xl bg-white/5 px-3 py-2 text-sm text-white/70">
-          {project.name?.[lang]} · {stage?.name?.[lang]}
+          {[project.name?.[lang], row ? rowLabel(row) : "", stage?.name?.[lang]].filter(Boolean).join(" · ")}
         </p>
       )}
 
-      <Input
-        label={`${t("erp.tasks.title")}${kind === "task" ? ` ${t("dashboard.optional")}` : ""}`}
-        value={form.title}
-        onChange={set("title")}
-      />
+      {/* A row's work is called after the row. */}
+      {!row && (
+        <Input
+          label={`${t("erp.tasks.title")}${kind === "task" ? ` ${t("dashboard.optional")}` : ""}`}
+          value={form.title}
+          onChange={set("title")}
+        />
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Select

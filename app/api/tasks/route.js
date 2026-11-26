@@ -8,6 +8,7 @@ import { holdsTime, HOUR, readyTime } from "@/lib/gantt";
 import { cascadeFrom, clearOverlaps, findOverlap, freeSlot, getWorkCalendar } from "@/lib/ganttServer";
 import { trackDelays } from "@/lib/projectDelay";
 import { syncStageDependencies } from "@/lib/taskSchedule";
+import { rowLabel } from "@/lib/projectRows";
 import { withWorkDepartments } from "@/lib/roles";
 import { canRouteStages, isStageLocked, projectAccess, stageDepartment } from "@/lib/projects";
 import { getTaskSettings } from "@/lib/settings";
@@ -116,15 +117,22 @@ export async function POST(request) {
 
   let project = null;
   let stage = null;
+  let item = null;
   if (isObjectId(body.projectId)) {
     project = await WorkProject.findById(body.projectId).lean();
     if (!project || !projectAccess(user, project)) return fail("invalid_project");
     if (["finished", "archived"].includes(project.status)) return fail("project_closed");
+    // Projects whose work repeats over spaces / sheets: the row it's for (none = the
+    // project as a whole).
+    if (project.rows && body.itemId) {
+      item = (project.items || []).find((i) => String(i._id) === String(body.itemId) && !i.archived) || null;
+      if (!item) return fail("invalid_row");
+    }
     if (body.stage) {
       stage = project.stages.find((s) => s.key === body.stage);
       if (!stage) return fail("invalid_cell");
-      // A stage waiting for the earlier stages can't get work yet.
-      if (await isStageLocked(project, stage.key)) return fail("stage_waiting", 409);
+      // A stage waiting for the earlier stages can't get work yet (in its own row).
+      if (await isStageLocked(project, stage.key, null, item?._id || null)) return fail("stage_waiting", 409);
     }
   } else if (kind === "task" && !parent) {
     return fail("project_required");
@@ -173,7 +181,7 @@ export async function POST(request) {
   if (kind === "task" && project && stage && !body.duplicateOk) {
     const { hybrid } = await getSettings();
     if (Object.keys(hybrid?.departments || {}).length) {
-      const key = placeKey(project._id, stage.key, body.title);
+      const key = placeKey(project._id, stage.key, item ? rowLabel(item) : body.title);
       const open = (await Task.find({ project: project._id, stage: stage.key, kind: { $in: ["task", "revision"] }, status: { $in: ["todo", "in_progress", "on_hold", "help", "submitted"] } }, { number: 1, project: 1, stage: 1, title: 1 }).lean()).find((x) => placeKey(x.project, x.stage, x.title) === key);
       if (open) return fail("place_open", 409, { number: open.number });
     }
@@ -211,8 +219,10 @@ export async function POST(request) {
   const task = await Task.create({
     number: await nextNumber("task"),
     kind,
-    title: String(body.title || "").trim().slice(0, 200),
+    // A row's work is called after the row (renaming the row renames it too).
+    title: item ? rowLabel(item) : String(body.title || "").trim().slice(0, 200),
     project: project?._id || null,
+    item: item?._id || null,
     stage: stage?.key || "",
     department,
     type,

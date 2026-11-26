@@ -15,6 +15,9 @@ export const StageSchema = new mongoose.Schema(
     department: { type: mongoose.Schema.Types.ObjectId, ref: "Department", default: null },
     waitForPrevious: { type: Boolean, default: false },
     after: { type: [String], default: undefined },
+    // Projects with rows (spaces / sheets): an optional stage is only worked where it was
+    // given work (lib/projectRows.js); the others go through every row.
+    optional: { type: Boolean, default: false },
   },
   { _id: false }
 );
@@ -26,6 +29,8 @@ const ProjectTemplateSchema = new mongoose.Schema(
     name: BilingualText,
     department: { type: mongoose.Schema.Types.ObjectId, ref: "Department", default: null },
     stages: [StageSchema],
+    // What the work repeats over: "" (nothing), "spaces" or "sheets" (lib/projectRows.js).
+    rows: { type: String, enum: ["", "spaces", "sheets"], default: "" },
     items: [{ type: String }],
     active: { type: Boolean, default: true },
   },

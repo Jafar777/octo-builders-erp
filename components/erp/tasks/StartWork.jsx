@@ -44,9 +44,11 @@ export default function StartWork({ lookups, onStarted, onOpenTask, onClose }) {
 
   const project = projects?.find((p) => p.id === form.projectId);
   const stage = project?.stages.find((s) => s.key === form.stage);
-  const title = form.title === "+" ? form.other.trim() : form.title;
+  // Spaces / sheets projects: the work is picked by row ("#<id>"; none = the project as a whole).
+  const itemId = project?.rows && form.title.startsWith("#") ? form.title.slice(1) : "";
+  const title = itemId ? "" : form.title === "+" ? form.other.trim() : form.title;
   const picked = Boolean(stage && (form.title !== "+" || form.other.trim()));
-  const ask = { projectId: form.projectId, stage: form.stage, title, type: form.type, hours: form.hours, reason: form.reason, again: form.again, urgent: form.urgent };
+  const ask = { projectId: form.projectId, stage: form.stage, title, itemId, type: form.type, hours: form.hours, reason: form.reason, again: form.again, urgent: form.urgent };
   const asked = JSON.stringify({ ...ask, reason: Boolean(form.reason.trim()) });
 
   // What's there, read again whenever the choice changes.
@@ -134,11 +136,15 @@ export default function StartWork({ lookups, onStarted, onOpenTask, onClose }) {
         />
         {stage && (
           <Select
-            label={t("erp.startWork.place")}
+            label={project.rows ? t(`erp.rows.${project.rows}.one`) : t("erp.startWork.place")}
             value={form.title}
             onChange={(v) => set({ title: v, again: "", reason: "" })}
-            placeholder={t("erp.startWork.wholeStage")}
-            options={[...stage.titles.map((x) => ({ value: x, label: x })), { value: "+", label: t("erp.startWork.newPlace") }]}
+            placeholder={project.rows ? t("erp.rows.whole") : t("erp.startWork.wholeStage")}
+            options={
+              project.rows
+                ? (project.items || []).map((x) => ({ value: `#${x.id}`, label: x.label }))
+                : [...stage.titles.map((x) => ({ value: x, label: x })), { value: "+", label: t("erp.startWork.newPlace") }]
+            }
           />
         )}
         {stage && form.title === "+" && <Input label={t("erp.startWork.newPlaceName")} value={form.other} onChange={(other) => set({ other })} />}

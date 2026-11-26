@@ -21,7 +21,7 @@ const TaskSchema = new mongoose.Schema(
     kind: { type: String, enum: TASK_KINDS, default: "task" },
     title: { type: String, default: "" }, // free text for meetings / personal tasks
     project: { type: ObjectId, ref: "WorkProject", default: null },
-    item: { type: ObjectId, default: null }, // former board row (old data only; not used)
+    item: { type: ObjectId, default: null }, // the project's row it works on (space / sheet: WorkProject.items)
     stage: { type: String, default: "" }, // WorkProject.stages.key
     department: { type: ObjectId, ref: "Department", default: null },
     type: { type: String, default: "" }, // settings.tasks.taskTypes key

@@ -55,19 +55,28 @@ const WorkProjectSchema = new mongoose.Schema(
       ],
     },
     notes: { type: String, default: "" },
-    // Board: one row of stages. (`items` = former board rows, no longer used; kept so old data survives.)
+    // Board: the stages, once for the whole project, or — when the work repeats over
+    // spaces or sheets (`rows`, lib/projectRows.js) — for every entry of `items`.
     stages: [StageSchema],
+    rows: { type: String, enum: ["", "spaces", "sheets"], default: "" },
+    // Sheets: the interior project whose spaces they draw (a sheet may point to one).
+    linkedProject: { type: ObjectId, ref: "WorkProject", default: null },
     items: [
       new mongoose.Schema({
-        name: { type: String, required: true },
+        // A space: code (GF-06) + name (Bathroom). A sheet: number (AR-605-A) + name.
+        number: { type: String, default: "" },
+        name: { type: String, default: "" },
         order: { type: Number, default: 0 },
+        // A sheet: the space it draws (an item of `linkedProject`).
+        space: { type: ObjectId, default: null },
+        archived: { type: Boolean, default: false },
       }),
     ],
     // Manual cell states from the Excel: "تجاوز يدوي" (skip) / "إنجاز يدوي" (done).
     overrides: [
       new mongoose.Schema(
         {
-          item: { type: ObjectId, default: null }, // former board row (old data only)
+          item: { type: ObjectId, default: null }, // the row (space / sheet); none = the project as a whole
           stage: { type: String, required: true },
           status: { type: String, enum: ["skip", "done"], required: true },
           reason: { type: String, default: "" },

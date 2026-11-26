@@ -262,6 +262,7 @@ async function act(user, id, body) {
       kind: "help",
       title: String(body.note || "").trim().slice(0, 200) || `#${task.number}`,
       project: task.project,
+      item: task.item || null,
       stage: task.stage,
       department: task.department,
       type: task.type,

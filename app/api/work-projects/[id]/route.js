@@ -5,7 +5,8 @@ import { audit } from "@/lib/audit";
 import { canDelete, canDeleteIn, trashProject } from "@/lib/trash";
 import { COMPANY_TASKS_CHANNEL } from "@/lib/tasks";
 import { applyFlow, applyStageRouting, cleanCustomer, cleanProjectFields, cleanStages } from "@/lib/projectPayload";
-import { buildCells, checkStageHandoffs, dueRiskOf, officeTz, projectAccess, projectChannel, serializeProject } from "@/lib/projects";
+import { buildCells, checkStageHandoffs, dueRiskOf, officeTz, projectAccess, projectChannel, serializeItems, serializeProject } from "@/lib/projects";
+import { laneStatus } from "@/lib/boardCells";
 import { projectScore } from "@/lib/projectHealth";
 import { loadFinance } from "@/lib/finance";
 import { publish } from "@/lib/realtime/server";
@@ -75,6 +76,31 @@ async function delayLog(project) {
     .reverse();
 }
 
+// Spaces ↔ sheets (separate projects): an interior project's spaces show the sheets that
+// draw them, with each sheet's state; a sheets project gets the spaces it may point to.
+async function linkedRows(project) {
+  if (project.rows === "spaces") {
+    const sheetProjects = await WorkProject.find({ linkedProject: project._id, rows: "sheets" }, { name: 1, stages: 1, items: 1, rows: 1, overrides: 1 }).lean();
+    if (!sheetProjects.length) return { sheetsBySpace: {} };
+    const tasks = await Task.find({ project: { $in: sheetProjects.map((p) => p._id) } }, { project: 1, stage: 1, item: 1, revision: 1, status: 1, kind: 1, createdAt: 1, assignee: 1, number: 1, estimatedHours: 1, maxHours: 1 }).lean();
+    const sheetsBySpace = {};
+    for (const sp of sheetProjects) {
+      const { grid } = buildCells(sp, tasks.filter((t) => String(t.project) === String(sp._id)));
+      for (const row of sp.items || []) {
+        if (!row.space || row.archived) continue;
+        (sheetsBySpace[String(row.space)] ||= []).push({ projectId: String(sp._id), id: String(row._id), number: row.number, name: row.name, status: laneStatus(grid?.[String(row._id)]) });
+      }
+    }
+    return { sheetsBySpace };
+  }
+  if (project.rows === "sheets" && project.linkedProject) {
+    const linked = await WorkProject.findById(project.linkedProject, { name: 1, items: 1 }).lean();
+    if (!linked) return { linkedSpaces: [] };
+    return { linkedName: linked.name, linkedSpaces: serializeItems(linked.items).filter((i) => !i.archived) };
+  }
+  return {};
+}
+
 async function load(params) {
   const { id } = await params;
   return isObjectId(id) ? WorkProject.findById(id) : null;
@@ -92,7 +118,7 @@ export async function GET(request, { params }) {
 
   const tasks = await Task.find(
     { project: project._id },
-    { stage: 1, revision: 1, status: 1, kind: 1, createdAt: 1, assignee: 1, number: 1, dueAt: 1, submittedAt: 1, estimatedHours: 1, maxHours: 1 }
+    { stage: 1, item: 1, revision: 1, status: 1, kind: 1, createdAt: 1, assignee: 1, number: 1, dueAt: 1, submittedAt: 1, estimatedHours: 1, maxHours: 1 }
   ).lean();
   const board = buildCells(project.toObject(), tasks);
   // Project KPI: delivery + quality, plus the budget part for people who may see finance
@@ -109,7 +135,10 @@ export async function GET(request, { params }) {
     end: project.forecastEnd || (project.status === "finished" ? project.finishedAt : null),
   });
 
-  return NextResponse.json({ project: serializeProject(project.toObject(), { ...board, kpi, delivery: await delivery(project), dueRisk: dueRiskOf(project, await officeTz()) }), access });
+  return NextResponse.json({
+    project: serializeProject(project.toObject(), { ...board, ...(await linkedRows(project)), kpi, delivery: await delivery(project), dueRisk: dueRiskOf(project, await officeTz()) }),
+    access,
+  });
 }
 
 export async function PATCH(request, { params }) {
